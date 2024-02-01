@@ -1,0 +1,137 @@
+fmod CLIENT-ID is
+  sort ClientId .
+endfm
+
+view ClientId from TRIV to CLIENT-ID is
+  sort Elt to ClientId .
+endv
+
+fmod MQTTZ-CRYPTO-KEY-VALUE is
+  pr CLIENT-ID .
+  pr TEE-ATTRIBUTE .
+
+--- encrypt data D with the cryptographic key of PI
+  op keyAttrValue : ClientId -> AttrContent [ctor] .
+endfm
+
+fmod TOPIC is
+  sort Topic .
+endfm
+
+view Topic from TRIV to TOPIC is
+  sort Elt to Topic .
+endv
+
+fmod MQTT-MSG is
+  pr LIST{Data} .
+  pr TOPIC .
+  pr CLIENT-ID .
+
+  var DATA : List{Data} .
+  vars PUB SUB : ClientId .
+  var TOPIC : Topic .
+
+  sort MqttMsg .
+
+  op data : Nat ClientId -> Data [ctor] .
+  op msg_from_to_ : List{Data} ClientId Topic -> MqttMsg [ctor] .
+  op msg_from_to_ : List{Data} Topic ClientId -> MqttMsg [ctor] .
+
+  op getTopic : MqttMsg -> Topic .
+  eq getTopic(msg DATA from PUB to TOPIC) = TOPIC .
+  eq getTopic(msg DATA from TOPIC to SUB) = TOPIC .
+endfm
+
+view MqttMsg from TRIV to MQTT-MSG is
+  sort Elt to MqttMsg .
+endv
+
+omod MQTTZ-MSG is
+  pr MQTT-MSG .
+  pr CLIENT-ID .
+  pr TOPIC .
+
+  msg pubMqttMsg : MqttMsg ClientId -> Msg .
+  msg recvPubMqttMsg : ClientId Topic -> Msg .
+
+  msg subMqttMsg : MqttMsg ClientId -> Msg .
+  msg recvSubMqttMsg : ClientId Topic -> Msg .
+endom
+
+mod MQTTZ-CONSTANTS is
+  pr NAT .
+  pr APP-ID .
+  pr TA-INSTANCE-ID .
+  pr CLIENT-ID .
+  pr CONFIGURATION .
+
+  op mqttzBroker : -> Oid [ctor] .
+  ops pub sub : Nat -> ClientId [ctor] .
+  op ra : -> Oid [ctor] .
+  op ta : -> TaInstId [ctor] .
+
+  op REENCRYPT : -> AppId [ctor] .
+endm
+
+mod MQTTZ-PROGRAM-DECL is 
+  pr IMP-PROGRAM .
+
+  op cmd : -> Var [ctor] .
+
+  op algo : -> Var [ctor] .
+  op mode : -> Var [ctor] .
+  op keySize : -> Var [ctor] .
+  op opHandle : -> Var [ctor] .
+  op keyHandle : -> Var [ctor] .
+  op AesCipher : -> Var [ctor] .
+
+  op allocResources : -> FuncId [ctor] .
+  op session : -> Var [ctor] .
+  op sess : -> Var [ctor] .
+  op attr : -> Var [ctor] .
+  op res : -> Var [ctor] .
+
+  op setAesKey : -> FuncId [ctor] .
+  op key : -> Var [ctor] .
+
+  op setAesIv : -> FuncId [ctor] .
+  op iv : -> Var [ctor] .
+
+  op readRawObject : -> FuncId [ctor] .
+  op cliId : -> Var [ctor] .
+  op data : -> Var [ctor] .
+  op object : -> Var [ctor] .
+  op objectInfo : -> Var [ctor] .
+
+  op cipherBuffer : -> FuncId [ctor] .
+  op encData : -> Var [ctor] .
+  op decData : -> Var [ctor] .
+
+  op saveKey : -> FuncId [ctor] .
+  op cliKey : -> Var [ctor] .
+  op objDataFlag : -> Var [ctor] .
+
+  op getKey : -> FuncId [ctor] .
+  op payloadReencryption : -> FuncId [ctor] .
+  op oriCliKey : -> Var [ctor] .
+  op oriCliId : -> Var [ctor] .
+  op oriCliIv : -> Var [ctor] .
+  op oriCliData : -> Var [ctor] .
+  op destCliId : -> Var [ctor] .
+  op destCliData : -> Var [ctor] .
+
+  op destCliKey : -> Var [ctor] .
+
+  op destCliIv : -> Var [ctor] .
+  op command : -> Var [ctor] .
+  op sessAlgo : -> Var [ctor] .
+  op sessMode : -> Var [ctor] .
+  op sessKeySize : -> Var [ctor] .
+  op sessOpHandle : -> Var [ctor] .
+  op sessKeyHandle : -> Var [ctor] .
+
+  op sessionContext : -> Var [ctor] .
+  op ret : -> Var [ctor] .
+
+  op main : -> FuncId [ctor] .
+endm

@@ -1,0 +1,45 @@
+==========================================
+reduce in NAT : 1 + 2 .
+rewrites: 1
+result NzNat: 3
+==========================================
+reduce in NAT : 1 + 1 .
+rewrites: 1
+result NzNat: 2
+==========================================
+reduce in NAT : N:Nat + 1 + 1 .
+rewrites: 1
+result NzNat: N:Nat + 2
+==========================================
+reduce in NAT : sd(2, 3) .
+rewrites: 1
+result NzNat: 1
+==========================================
+reduce in NAT : sd(3, 10) .
+rewrites: 1
+result NzNat: 7
+==========================================
+reduce in NAT : sd(4, 10) .
+rewrites: 1
+result NzNat: 6
+==========================================
+reduce in NAT : 1 * 2 .
+rewrites: 1
+result NzNat: 2
+==========================================
+reduce in NAT : 1 * 1 .
+rewrites: 1
+result NzNat: 1
+==========================================
+reduce in NAT : 10 quo 4 .
+rewrites: 1
+result NzNat: 2
+==========================================
+reduce in NAT : 10 rem 4 .
+rewrites: 1
+result NzNat: 2
+==========================================
+reduce in NAT : 10 ^ 4 .
+rewrites: 1
+result NzNat: 10000
+Bye.

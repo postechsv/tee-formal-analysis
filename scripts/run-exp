@@ -1,0 +1,35 @@
+#!/bin/bash
+
+run() {
+
+    case $1 in
+        table2) prog="normal" ;;
+        table3) prog="-patch" ;;
+        *) echo "error: wrong table"; exit 65 ;;
+    esac
+
+    tht=("non" "oom" "msg")
+
+    cmds=()
+
+    for v in {1..6}
+    do
+        for t in "${tht[@]}"
+        do
+            cmds+=("./run p$v $t $prog $1/maude-files $1/logs -silent")
+        done
+    done
+
+    case $2 in
+        -non-parallel)  
+            for mm in "${cmds[@]}"
+            do
+                . ${mm:0:-8}
+            done ;;
+        *) parallel --bar ::: "${cmds[@]}" ;;
+    esac
+
+}
+
+# arg 1: table, 2: parallel
+run $1 $2

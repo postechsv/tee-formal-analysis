@@ -1,0 +1,4 @@
+set show timing off .
+set show advisories off .
+
+red 1 .

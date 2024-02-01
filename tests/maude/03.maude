@@ -1,0 +1,15 @@
+set show timing off .
+set show advisories off .
+
+select STRING .
+
+red ascii("A") .
+red ascii("AB") .
+
+red length("AAA") .
+red length("") .
+red length("abcdefghijklmnopqrstuvwxyz") .
+
+red substr("abcdefghijklmnopqrstuvwxyz", 10, 5) .
+red substr("abcdefghijklmnopqrstuvwxyz", 1000000000000000000, 5) .
+red substr("abcdefghijklmnopqrstuvwxyz", 10, 500000000000000000) .

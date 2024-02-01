@@ -1,0 +1,93 @@
+		     \||||||||||||||||||/
+		   --- Welcome to Maude ---
+		     /||||||||||||||||||\
+	    Maude 3.3.1 built: Apr 13 2023 16:10:31
+	     Copyright 1997-2023 SRI International
+		   Fri Jan  5 02:22:55 2024
+op _`,_ left-identity collapse from AttributeSet to Attribute is unequal.
+op __ left-identity collapse from [State] to State is unequal.
+op __ left-identity collapse from NeList{Data} to Data is unequal.
+op __ right-identity collapse from NeList{Data} to Data is unequal.
+op __ left-identity collapse from [RaRequest?,List{RaRequest}] to RaRequest? is
+    unequal.
+op __ right-identity collapse from [RaRequest?,List{RaRequest}] to RaRequest?
+    is unequal.
+op __ left-identity collapse from [Set{TaObjectId},TaInstId?,List{ClientId},
+    Oid] to Set{TaObjectId} is unequal.
+op __ right-identity collapse from [Set{TaObjectId},TaInstId?,List{ClientId},
+    Oid] to Set{TaObjectId} is unequal.
+op _`,_ left-identity collapse from Map{Topic,List{ClientId}} to Entry{Topic,
+    List{ClientId}} is unequal.
+op __ left-identity collapse from NeList{MqttMsg} to MqttMsg is unequal.
+op __ right-identity collapse from NeList{MqttMsg} to MqttMsg is unequal.
+op _`,_ left-identity collapse from [Value?,ExpList,DeclList,K] to Value? is
+    unequal.
+op _`,_ right-identity collapse from [Value?,ExpList,DeclList,K] to Value? is
+    unequal.
+op __ left-identity collapse from NeList{SmcArgument} to SmcArgument is
+    unequal.
+op __ right-identity collapse from NeList{SmcArgument} to SmcArgument is
+    unequal.
+op _`,_ left-identity collapse from NeSet{TeeAttribute} to TeeAttribute is
+    unequal.
+op __ left-identity collapse from [List{CryptoKey},Set{CryptoKey}] to Set{
+    CryptoKey} is unequal.
+op __ right-identity collapse from [List{CryptoKey},Set{CryptoKey}] to Set{
+    CryptoKey} is unequal.
+op _`,_ left-identity collapse from NeSet{DataFlag} to DataFlag is unequal.
+op _`,_ left-identity collapse from NeSet{ObjectUsage} to ObjectUsage is
+    unequal.
+op _`,_ left-identity collapse from [List{CryptoKey},Set{CryptoKey}] to List{
+    CryptoKey} is unequal.
+op _`,_ left-identity collapse from NeSet{TeeApiParam} to TeeApiParam is
+    unequal.
+op _`,_ left-identity collapse from Map{DataPosition,Data} to Entry{
+    DataPosition,Data} is unequal.
+op _`,_ left-identity collapse from NeSet{AttrId} to AttrId is unequal.
+op _`,_ left-identity collapse from Map{SessionId,TaInstId} to Entry{SessionId,
+    TaInstId} is unequal.
+op _`,_ left-identity collapse from NeSet{FileId} to FileId is unequal.
+op _`,_ left-identity collapse from Map{AppId,Set{FileId}} to Entry{AppId,Set{
+    FileId}} is unequal.
+op _`,_ left-identity collapse from Map{AppId,StorageStatus} to Entry{AppId,
+    StorageStatus} is unequal.
+op _`,_ left-identity collapse from Map{SessionId,List{SmcArgument}} to Entry{
+    SessionId,List{SmcArgument}} is unequal.
+op _`,_ left-identity collapse from [Set{TaObjectId},TaInstId?,List{ClientId},
+    Oid] to TaInstId? is unequal.
+op _`,_ left-identity collapse from Map{AppId,Set{TaObjectId}} to Entry{AppId,
+    Set{TaObjectId}} is unequal.
+op __ left-identity collapse from NeList{Service} to Service is unequal.
+op __ right-identity collapse from NeList{Service} to Service is unequal.
+op __ left-identity collapse from NeList{ServiceReturn} to ServiceReturn is
+    unequal.
+op __ right-identity collapse from NeList{ServiceReturn} to ServiceReturn is
+    unequal.
+op _~>_ left-identity collapse from [Value?,ExpList,DeclList,K] to Value? is
+    unequal.
+op _~>_ right-identity collapse from [Value?,ExpList,DeclList,K] to Value? is
+    unequal.
+op __ left-identity collapse from KConfig to KConfigItem is unequal.
+op _;_ left-identity collapse from Map{Var,Nat} to Entry{Var,Nat} is unequal.
+op _`,_ left-identity collapse from Map{Label,Stmt} to Entry{Label,Stmt} is
+    unequal.
+op _;_ left-identity collapse from Map{Nat,Value?} to Entry{Nat,Value?} is
+    unequal.
+op _;;_ left-identity collapse from [Value?,ExpList,DeclList,K] to Value? is
+    unequal.
+op _;;_ right-identity collapse from [Value?,ExpList,DeclList,K] to Value? is
+    unequal.
+op __ left-identity collapse from NeList{InvokeMessage} to InvokeMessage is
+    unequal.
+op __ right-identity collapse from NeList{InvokeMessage} to InvokeMessage is
+    unequal.
+op __ left-identity collapse from TransitionList to Transition is unequal.
+op __ right-identity collapse from TransitionList to Transition is unequal.
+==========================================
+reduce in ANALYSIS : modelCheck(scenario(mqttzHostPatched, mqttzTaPatched,
+    none), p2) .
+ModelChecker: Property automaton has 6 states.
+ModelCheckerSymbol: Examined 346754 system states.
+rewrites: 82438522 in 294820ms cpu (294817ms real) (279623 rewrites/second)
+result Bool: true
+Bye.

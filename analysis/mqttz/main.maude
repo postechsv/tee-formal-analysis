@@ -1,0 +1,21 @@
+load ../../formal-model/main
+load consts
+load client
+load broker
+load broker-ta
+load broker-ra
+
+mod MQTTZ is
+  pr MQTTZ-BROKER-BEHAVIOR .
+  pr MQTTZ-RA-PROGRAM .
+  pr MQTTZ-RA-BEHAVIOR .
+  pr MQTTZ-TA-PROGRAM .
+  pr MQTTZ-TA-PROGRAM-PATCHED .
+  pr PUBLISHER-BEHAVIOR .
+  pr SUBSCRIBER-BEHAVIOR .
+  pr MQTTZ-RA-BEHAVIOR-INVISIBLE .
+  pr PUBLISHER-BEHAVIOR-INVISIBLE .
+  pr SUBSCRIBER-BEHAVIOR-INVISIBLE .
+  pr MQTTZ-BROKER-BEHAVIOR-INVISIBLE .
+  pr IMP-SEMANTICS .
+endm

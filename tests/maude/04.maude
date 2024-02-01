@@ -1,0 +1,16 @@
+set show timing off .
+set show advisories off .
+
+select NAT .
+
+red s 0 + s s 0 .
+red s 0 + s 0 .
+red _+_(s 0, N:Nat, s 0) .
+red sd(s s 0, s s s 0) .
+red sd(s_^3(0), s_^10(0)) .
+red sd(s_^10(0), s_^4(0)) .
+red s 0 * s s 0 .
+red s 0 * s 0 .
+red s_^10(0) quo s_^4(0) .
+red s_^10(0) rem s_^4(0) .
+red s_^10(0) ^ s_^4(0) .

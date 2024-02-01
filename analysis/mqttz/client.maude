@@ -1,0 +1,106 @@
+omod CLIENT is
+  pr CLIENT-ID .
+  subsort ClientId < Oid .
+endom
+
+omod SUBSCRIBER is 
+  pr LIST{MqttMsg} .
+  class Subscriber | recv-msg-queue : List{MqttMsg} .
+endom
+
+omod SUBSCRIBER-BEHAVIOR is 
+  pr SUBSCRIBER .
+  pr CLIENT .
+  pr MQTTZ-MSG .
+
+  var SUB : ClientId .
+  var MSG : MqttMsg .
+  var MSGS : List{MqttMsg} .
+
+  rl [recv-msg] :
+    subMqttMsg(MSG, SUB)
+    < SUB : Subscriber | recv-msg-queue : MSGS >
+    => 
+    < SUB : Subscriber | recv-msg-queue : MSGS MSG >
+    recvSubMqttMsg(SUB, getTopic(MSG)) 
+  .
+
+endom
+
+omod SUBSCRIBER-BEHAVIOR-INVISIBLE is 
+  pr SUBSCRIBER-BEHAVIOR .
+endom
+
+omod PUBLISHER is 
+  pr NAT .
+  pr LIST{Data} .
+  pr TOPIC .
+
+  class Publisher | collected-data : List{Data}, 
+                    data-counter : Nat, max-data : Nat,
+                    topic : Topic, sending : Bool .
+endom
+
+omod PUBLISHER-BEHAVIOR is
+  pr CLIENT . 
+  pr PUBLISHER .
+  pr MQTTZ-MSG .
+  pr ALGORITHM-IDENTIFIER .
+  pr CRYPTO-KEY .
+  pr MQTTZ-CRYPTO-KEY-VALUE .
+  pr ENCRYPTION .
+
+  var N M : Nat .
+  var TOPIC : Topic .
+  var CLIENT : ClientId .
+  var DATA : Data .
+  var PUB : ClientId .
+  var DATALIST : List{Data} .
+
+--- MQTTZ only use one algorithm.
+
+  op encrypt : List{Data} ClientId -> List{Data} .
+  eq encrypt(DATA , CLIENT) = encrypted(DATA , TEE-ALG-AES-CBC-NOPAD , 
+                                        key(teeAttribute(TEE-ATTR-SECRET-VALUE , keyAttrValue(CLIENT)))) .
+
+  crl [collect-data] :
+    < PUB : Publisher | collected-data : DATALIST, data-counter : N, max-data : M >
+    =>
+    < PUB : Publisher | collected-data : (DATALIST data(N, PUB)), 
+                        data-counter : N + 1 >
+  if N < M .
+
+  rl [send-msg] :
+    < PUB : Publisher | collected-data : (DATA DATALIST), sending : false, topic : TOPIC >
+    =>
+    < PUB : Publisher | collected-data : DATALIST, sending : true >
+    pubMqttMsg(msg encrypt(DATA, PUB) from PUB to TOPIC, PUB)
+  .
+
+  rl [send-msg-done] :
+    recvPubMqttMsg(PUB, TOPIC)
+    < PUB : Publisher | sending : true, topic : TOPIC >
+    =>
+    < PUB : Publisher | sending : false >
+  .
+
+endom
+
+omod PUBLISHER-BEHAVIOR-INVISIBLE is
+  pr PUBLISHER-BEHAVIOR .
+
+  var N M : Nat .
+  var TOPIC : Topic .
+  var CLIENT : ClientId .
+  var DATA : Data .
+  var PUB : ClientId .
+  var DATALIST : List{Data} .
+
+  ceq
+    < PUB : Publisher | collected-data : DATALIST, data-counter : N, max-data : M >
+    =
+    < PUB : Publisher | collected-data : (DATALIST data(N, PUB)), 
+                        data-counter : N + 1 >
+  if N < M .
+
+endom

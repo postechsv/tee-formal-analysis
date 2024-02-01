@@ -1,0 +1,77 @@
+fmod ATTACK-TARGET is
+  pr TOPIC .
+  pr CLIENT-ID .
+
+  sort AttackTarget .
+  op _::>_ : Topic ClientId -> AttackTarget [ctor] .
+endfm
+
+view AttackTarget from TRIV to ATTACK-TARGET is
+  sort Elt to AttackTarget .
+endv
+
+fmod EXPLOIT is
+  pr MQTT-MSG .
+  pr CLIENT-ID .
+
+  sort Exploit .
+  op _::[___] : ClientId List{Data} ClientId Topic -> Exploit [ctor] .
+endfm
+
+view Exploit from TRIV to EXPLOIT is
+  sort Elt to Exploit .
+endv
+
+omod INTRUDER is
+  pr SET{Exploit} .
+  pr SET{AttackTarget} .
+
+  class Intruder | attack-list : Set{AttackTarget},
+                   exploit-list : Set{Exploit} .
+endom
+
+omod MSG-THREAT is
+  pr MQTTZ-MSG .
+  pr INTRUDER .
+  pr MQTTZ-BROKER .
+
+  var TOPIC : Topic .
+  vars PUB SUB : ClientId .
+  var DATA : List{Data} .
+  vars BI INT : Oid .
+  var SUBS : List{ClientId} .
+  var PMSG : Configuration .
+  var ATKLIST : Set{AttackTarget} .
+  var MSG : MqttMsg .
+  var EXPL : Set{Exploit} .
+
+  op learnBefore : ClientId Topic Set{AttackTarget} -> Bool .
+  eq learnBefore(SUB, TOPIC, (TOPIC ::> SUB, ATKLIST)) = true .
+  eq learnBefore(SUB, TOPIC, ATKLIST) = false [owise] . 
+
+  op exploitedBefore : ClientId ClientId Data Topic Set{Exploit} -> Bool .
+  eq exploitedBefore(PUB, SUB, DATA, TOPIC, (PUB ::[DATA SUB TOPIC], EXPL)) = true .
+  eq exploitedBefore(PUB, SUB, DATA, TOPIC, EXPL) = false [owise] . 
+
+  crl [learn-attack-targets] :
+    recvSubMqttMsg(SUB, TOPIC)
+    < INT : Intruder | attack-list : ATKLIST >
+    => 
+    < INT : Intruder | attack-list : TOPIC ::> SUB , ATKLIST > 
+    recvSubMqttMsg(SUB, TOPIC)
+  if not learnBefore(SUB, TOPIC, ATKLIST) .
+
+  crl [message-modification-threat] :
+    pubMqttMsg(msg DATA from PUB to TOPIC, PUB)
+    < INT : Intruder | exploit-list : EXPL, attack-list : (TOPIC ::> SUB , ATKLIST) >
+    => 
+    < INT : Intruder | exploit-list : (PUB ::[DATA SUB TOPIC], EXPL) > 
+    pubMqttMsg(msg DATA from SUB to TOPIC, PUB)
+  if not exploitedBefore(PUB, SUB, DATA, TOPIC, EXPL) .
+
+
+  op int : -> Oid [ctor] .
+  op initInt : -> Configuration .
+  eq initInt = < int : Intruder | attack-list : empty, exploit-list : empty > .
+
+endom

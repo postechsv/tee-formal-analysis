@@ -1,0 +1,27 @@
+This file explains requirements for our artifact.
+
+
+======================================================
+1. Hardware Requirements
+======================================================
+
+- A minimum system requirement of the host machine is a quad-core CPU 
+  having at least 4GB memory.
+
+- (Mac specific) MacOS hardware requirements: Intel, M1 Mac.
+  * Since Maude is not compatible with M2 Mac cpus, our artifact can be run on 
+    Intel or M1 Macs.
+
+
+
+
+======================================================
+2. Software Requirements
+======================================================
+
+- Supported OS: Linux and MacOS
+  * Since Maude does not support Windows OS, our artifact also requires one of these OSes.
+
+- Python version 3.8 or newer: https://www.python.org/downloads/
+
+- 3rd Party Utilities: unzip, parallel

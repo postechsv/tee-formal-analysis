@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+import argparse
+import csv
+import os
+from functools import reduce
+from typing import List
+
+type_sort = {"NON" : 1, "MSG" : 2, "OOM" : 3}
+
+styles = [
+    "table { text-align: center; padding: 3px 3px 5px 3px; border-top: 2px solid; border-bottom: 2px solid; border-spacing: 0px;}",
+    "th { border-bottom: 1px solid; padding: 3px 10px 5px 10px;}", "td {padding: 10px 10px 5px 10px;}",
+    ".draw {border-bottom: 1px solid;}", ".left { text-align: left; }", ".t-draw {border-bottom: 2px solid;}",
+    "mjx-container[display=\"block\"] { display: inline; margin: 1em 0;}",
+]
+
+
+def write_table(table: str, file_name: str):
+    html_string = ("<html>\n<head>\n\n<style>{}</style>\n</head><body>{}</body>\n</html>".format("\n".join(styles),
+                                                                                                   table))
+    f = open(file_name, "w")
+    f.write(html_string)
+    f.close()
+
+
+def read_from_csv(file_name: str) -> List[List[str]]:
+    if os.path.isdir(file_name):
+        raise ValueError("\'{}\' is not a file".format(file_name))
+
+    if not os.path.exists(file_name):
+        raise ValueError("\'{}\' does not exist (script uses the csv file to make table)".format(file_name))
+
+    csv_data = list()
+    with open(file_name, newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',')
+        for row in reader:
+            csv_data.append(row)
+
+    return csv_data[1:]
+
+
+def find_data_from_csv(data: List[List[str]], *keywords) -> List[List[str]]:
+    search_result = list()
+    no_keyword = len(keywords) == 0
+    for row in data:
+        if no_keyword:
+            search_result.append(row.copy())
+            continue
+
+        query = reduce(lambda x, y: x in row and y in row, keywords)
+        if query:
+            search_result.append(row.copy())
+    return search_result
+
+def grouping(data: List[List[str]]):
+    groups, category = dict(), set()
+
+    for csv_row in data:
+        if len(csv_row) > 0:
+            groups[csv_row[0]] = dict()
+            category.add((csv_row[0], csv_row[1]))
+
+    for p, ty in category:
+        found = find_data_from_csv(data, p, ty)
+        if len(found) < 1:
+            continue
+
+        if len(found) == 1:
+            groups[p][ty] = sorted(found, key=lambda x: type_sort[x[1]])[0]
+
+    return groups
+
+
+def gen_html_paper(data: List[List[str]]):
+    groups = grouping(data)
+
+    html = list()
+    sorted_p = sorted(groups.keys())
+    for p in sorted_p:
+        rows = groups[p]
+        sorted_ty = sorted(rows.keys(), key=lambda x: type_sort[x])
+
+        for index, ty in enumerate(sorted_ty):
+            if index == 0:
+                html.append(
+                    """<tr>
+                        <td rowspan=\"3\" class=\"t-draw\"><strong>{}</strong></td>
+                        """.format(p.upper())
+                )
+
+            row = rows[ty]
+            if index == len(sorted_ty) - 1:
+                html.append("\n".join(map(lambda x: f"<td class=\"t-draw\">{x}</td>", row[1:])))
+            else:
+                html.append("\n".join(map(lambda x: f"<td>{x}</td>", row[1:])))
+            html.append("</tr>")
+
+    table = """
+    <table>
+<thead>
+  <tr>
+    <th>Prop.</th>
+    <th>Type</th>
+    <th>Safe?</th>
+    <th>|S|</th>
+    <th>Time</th>
+  </tr>
+</thead>
+<tbody>
+{}
+</tbody>
+    """.format("\n".join(html))
+
+    return table
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file", nargs="?", metavar="D", type=str, help="a report file")
+    args = parser.parse_args()
+
+    try:
+        log_data = list()
+
+        if args.file is None:
+            raise Exception("should provide a report file")
+
+        if not os.path.isfile(args.file):
+            raise ValueError("\'{}\' is not a file (should provide a csv file).".format(args.file))
+
+        if not os.path.exists(args.file):
+            raise ValueError("\'{}\' does not exist".format(args.file))
+
+        log_file_name = args.file.replace("/", "").replace(".csv", "").replace("..", "").replace("-report", "").replace(".", "")
+        table_name = "{}.html".format(log_file_name)
+
+        print("generate a table ...")
+        d = read_from_csv(args.file)
+        write_table(gen_html_paper(d), table_name)
+
+        print("write \'{}\' using the report file \'{}\'".format(table_name, args.file))
+
+    except Exception as err:
+        print("error: {}".format(err))

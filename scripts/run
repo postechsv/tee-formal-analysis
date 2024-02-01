@@ -1,0 +1,84 @@
+#!/bin/bash
+
+exec_dir=$(pwd)/../3rd_party
+
+# OS detection
+OS_NAME=$(uname -s)
+
+if [ $OS_NAME == "Darwin" ]; then
+    maude_bin="$exec_dir/Darwin64/maude.darwin64" # add maude executable path
+else
+    maude_bin="$exec_dir/Linux64/maude.linux64" # add maude executable path
+fi
+
+run() {
+    case $6 in
+        -silent) verbose=false ;;
+        *)       verbose=true ;;
+    esac
+
+    case $1 in
+        p1) p="p1" ;;
+        p2) p="p2" ;;
+        p3) p="p3" ;;
+        p4) p="p4" ;;
+        p5) p="p5" ;;
+        p6) p="p6" ;;
+        *) echo "error: wrong property"; exit 65 ;;
+    esac
+
+    case $2 in
+        oom) int="none" intRule="pr OOM-THREAT .";;
+        msg) int="initInt" intRule="pr MSG-THREAT .";;
+        non) int="none" intRule="";;
+        *) echo "error: wrong threat"; exit 65 ;;
+    esac
+
+    case $3 in
+        -patch) raProg="mqttzHostPatched" taProg="mqttzTaPatched" prn="_patch" ;;
+        *) raProg="mqttzHost" taProg="mqttzTA" prn="" ;;
+    esac
+
+    main=$(<"../analysis/cmd/main.maude")
+    analysis="mod ANALYSIS is pr ANALYSIS-CMD . $intRule endm"
+    cmd="set verbose on .\nred modelCheck(scenario($raProg, $taProg, $int),$p) ."
+
+    name=`echo "$1"_"$2""$prn" | tr '-' '_'`
+
+    if [[ -n "$4" ]]
+    then
+        mf="$4"
+    else
+        mf="./maude-files"
+    fi
+
+    mkdir -p $mf
+    (
+        echo -e "$main\n$analysis\n$cmd\n" >& "$mf/$name".maude
+    )
+
+    if [ "$verbose" = true ]
+    then
+        echo "write a maude file at" "$mf/$name".maude
+    fi
+
+    if [[ -n "$5" ]]
+    then
+        of="$5"
+    else
+        of="./logs"
+    fi
+
+    mkdir -p $of
+    (
+        $maude_bin < "$mf/$name.maude" >& "$of/$name".txt
+    )
+
+    if [ "$verbose" = true ]
+    then
+        echo "write an output file at" "$of/$name".txt
+    fi
+}
+
+# arg 1: LTL property, 2: threat, 3: TA prog, 4: maude file dir, 5: out file dir, 6: silent
+run $1 $2 $3 $4 $5 $6

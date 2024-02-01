@@ -1,0 +1,33 @@
+load aux
+
+mod BASE-SCENARIO is
+  pr SCENARIO-AUX .
+  pr SCENARIO-TOPICS .
+
+  vars RAPROG TAPROG : Program .
+  var THREAT : Configuration .
+
+  op clients : -> List{ClientId} .
+  eq clients = pub(1) pub(2) sub(1) sub(2) .
+
+  op initBroker : Program -> Configuration .
+  eq initBroker(RAPROG, TAPROG) = 
+  < mqttzBroker : MqttzBroker | pub-msg-queue : nil ,
+                                ra-req-queue : nil ,                                
+                                ra-ret-queue : nil ,
+                                cur-ra-req : noRaReq ,
+                                subscriber-list : (ElectricityConsumption |-> sub(1) sub(2),
+                                                   BuildingTemperature |-> sub(2)) ,
+                                execution-envs : {initRa(RAPROG)} | 
+                                                 {initTa(TAPROG) initTrustedOS(clients)
+                                                  shareKeys(clients)},
+                                wait-receiving : false > 
+  .
+
+  op scenario : Program Program Configuration -> Configuration .
+  eq scenario(RAPROG, TAPROG, THREAT) 
+   = initPub(1, 1, ElectricityConsumption) initSub(1) 
+     initPub(2, 2, BuildingTemperature) initSub(2)
+     initBroker(RAPROG, TAPROG) THREAT .
+
+endm

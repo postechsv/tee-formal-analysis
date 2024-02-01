@@ -1,0 +1,41 @@
+To run the artifact, the followings are required:
+
+- Python version 3 or newer: https://www.python.org/downloads/
+
+- Utilities: parallel, make
+
+    Use the following command to install these utilities.
+
+    * Ubuntu
+    
+      $sudo apt update && apt install parallel make -y
+    
+    * MacOS
+
+      $brew install parallel make
+
+To install our artifact, follow the below instruction steps:
+
+1. Run 'make' at the top directory:
+
+  - ~/tee-formal-spec$ make
+  
+2. Use the following command to run smoke tests for our installation:
+  
+  - ~/tee-formal-spec$ make test
+
+  This command requires sudo permission.
+
+3. If the tests succeed, you will see the following messages:
+
+  start smoke test ...
+  [exec] Python: pass
+  [exec] GNU-Parallel: pass
+  [exec] Maude:
+    ./tests/maude/01.maude: pass
+    ./tests/maude/02.maude: pass
+    ./tests/maude/03.maude: pass
+    ./tests/maude/04.maude: pass
+
+Remark: On macOS, the Mac system may block the Maude executable. To resolve this issue, navigate 
+to the settings > security & privacy tab and grant permission to the Maude executable.

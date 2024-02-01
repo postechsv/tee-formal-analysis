@@ -1,0 +1,17 @@
+load ../analysis/mqttz/main
+load ../analysis/scenario/base
+load ../analysis/LTL/properties
+load ../analysis/threats/main
+--- load meta
+
+mod ANALYSIS-CMD is
+  pr MQTTZ .
+  pr INVISIBLE-REDUCTION .
+  pr BASE-SCENARIO .
+  pr LTL-PROPERTIES .
+  pr MODEL-CHECKER .
+endm
+mod ANALYSIS is pr ANALYSIS-CMD .  endm
+set verbose on .
+red modelCheck(scenario(mqttzHostPatched, mqttzTaPatched, none),p3) .
+

@@ -1,0 +1,80 @@
+omod SCENARIO-AUX is
+  pr MQTTZ .
+  pr ID-GEN .
+  pr RICH-APP .
+  pr TRUST-APP .
+  pr MQTTZ-DATA .
+  pr MQTTZ-CONSTANTS .
+  pr CLIENT .
+
+  vars N M : Nat .
+  var ID : ClientId .
+  var IL : List{ClientId} .
+  var TOPIC : Topic .
+  var P : Program .
+
+------------------------------------------------------------
+--- Initialization Functions
+------------------------------------------------------------
+
+  ops keyObj streamId : ClientId -> TaObjectId [ctor] . 
+
+  op keyIds : List{ClientId} -> Set{FileId} .
+  eq keyIds(ID IL) = (fileName(ID) , keyIds(IL)) .
+  eq keyIds(nil) = empty .
+
+  op osId : -> Oid .
+  op initTrustedOS : List{ClientId} -> Configuration .
+  eq initTrustedOS(IL) 
+  = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> ta) , session-counter : 1 ,
+                           storage : REENCRYPT |-> keyIds(IL) , storage-status : (REENCRYPT |-> storageNormal) ,
+                           service-request-ta : noAppId , service-request-ta-inst : noInstId ,
+                           service-in : nil , service-out : nil ,
+                           temporary-objects : empty > .
+
+  op initRa : Program -> Configuration .
+  eq initRa(P) = < ra : RichApp | proc : none , prog : P , running : false , 
+                                  invoke-req-queue : nil , invoke-ret-queue : nil > .
+
+  op initTa : Program -> Configuration .
+  eq initTa(P) = < ta : TrustApp | proc : none , prog : P , running : false ,
+                                   app-status : normal , api-call : noCall , api-return : noReturn ,
+                                   current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
+                                   trust-app-id : REENCRYPT ,
+                                   task : noTask , task-counter : 0 > .
+
+  op shareKeys : List{ClientId} -> Configuration .
+  eq shareKeys(ID IL) = sharedKey(ID) shareKeys(IL) .
+  eq shareKeys(nil) = none .
+
+  op sharedKey : ClientId -> Configuration .
+  eq sharedKey(ID) = 
+    < keyObj(ID) : PersistentObject | handle-set : none , object-type : TEE-TYPE-DATA , max-object-size : 0 Bits  , 
+                                      file-id : fileName(ID) , trust-app-id : REENCRYPT ,
+                                      attribute-set : empty , object-usage-set : empty , data-stream-id : streamId(ID) >
+    < streamId(ID) : DataStreamObject | data-size : dataSize(1) , content : newContent(attrContentData(keyAttrValue(ID))) >
+  .
+
+  --- op initTa : List{ClientId} -> Configuration .
+  --- eq initTa(IL) = makeTa(1) makeTeeOs(IL) makeKey(IL) .
+
+  op initPub : Nat Nat Topic -> Configuration .
+  eq initPub(N, M, TOPIC)
+   = < pub(N) : Publisher | collected-data : nil, data-counter : 0, max-data : M, topic : TOPIC, sending : false > .
+
+  op initSub : Nat -> Configuration .
+  eq initSub(N)
+   = < sub(N) : Subscriber | recv-msg-queue : nil > .
+
+endom
+
+
+mod SCENARIO-TOPICS is
+  pr TOPIC .
+------------------------------------------------------------
+--- Topics
+------------------------------------------------------------
+
+  op ElectricityConsumption : -> Topic [ctor] .
+  op BuildingTemperature : -> Topic [ctor] .
+endm

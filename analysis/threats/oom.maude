@@ -1,0 +1,19 @@
+omod OOM-THREAT is
+  pr BASE-SCENARIO .
+
+  var TI : TaInstId .
+  vars PUB SUB : ClientId .
+  var TOPIC : Topic .
+  var DATA : List{Data} .
+  var INT : Oid .
+  var SUBS : List{ClientId} .
+  var PMSG : Configuration .
+  var SMAP : Map{Topic,List{ClientId}} .
+
+  rl [out-of-memory-threat] :
+    < TI : TaKernel | app-status : normal > 
+    => 
+    < TI : TaKernel | app-status : outOfMemory >
+  .
+
+endom

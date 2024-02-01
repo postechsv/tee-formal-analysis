@@ -1,0 +1,272 @@
+This README file explains the artifact of our paper "Formal Specification of Trusted Execution Environment APIs", including how to install it and reproduce the experiments of the paper.
+
+
+
+
+======================================================
+1. Artifact Overview
+======================================================
+
+
+This artifact includes the following:
+
+  (1) instructions on how to run our artifact,
+  (2) scripts to reproduce the experiments of our paper, and
+  (3) our formal models and the raw log files for the experiments.
+
+This artifact consists of the following files and directories:
+
+- INSTALL         : an instruction file for installation instructions,
+- LICENSE         : the license of the artifact,
+- REQUIREMENTS    : hardware and software requirements for the artifact,
+- formal-model  	: the source codes of our TEE API formal model,
+- analysis      	: the source codes for formal analysis of the MQT-TZ benchmark,
+- paper-logs      : the raw log files for the experiments shown in the paper,
+- scripts         : the scripts to reproduce the experiments of our paper,
+- tests           : files for rudimentary testing,
+- Makefile        : a makefile for setting permissions for executables and running rudimentary test,
+- 3rd_party       : Maude executables for MacOS and Linux,
+- paper.pdf       : a copy of the accepted paper (pre-print).
+
+
+
+
+======================================================
+2. Running the Artifact
+======================================================
+
+
+To run the artifact without Docker, the followings are required:
+
+- Python version 3.8 or newer: https://www.python.org/downloads/
+
+- Utilities: parallel, make
+
+    Use the following command to install these utilities.
+
+    * Ubuntu
+    
+      $sudo apt update && apt install parallel make -y
+    
+    * MacOS
+
+      $brew install parallel make
+
+To install our artifact, follow the below instruction steps:
+
+1. Run 'make' at the top directory:
+
+  - ~/tee-formal-spec$ make
+  
+2. Use the following command to run smoke tests for our installation:
+  
+  - ~/tee-formal-spec$ make test
+
+  This command requires sudo permission.
+
+3. If the tests succeed, you will see the following messages:
+
+  start smoke test ...
+  [exec] Python: pass
+  [exec] GNU-Parallel: pass
+  [exec] Maude:
+    ./tests/maude/01.maude: pass
+    ./tests/maude/02.maude: pass
+    ./tests/maude/03.maude: pass
+    ./tests/maude/04.maude: pass
+
+Remark: On macOS, the Mac system may block the Maude executable. To resolve this issue, navigate 
+to the settings > security & privacy tab and grant permission to the Maude executable.
+
+
+
+
+======================================================
+3. Reproducing the Experiments
+======================================================
+
+
+To reproduce the experiments of our paper (Table 2 and 3), follow the instructions:
+
+1. Go to the 'scripts' directory.
+
+   ~/tee-formal-spec$ cd ./scripts
+
+2. Use the 'run-exp' script to reproduce each experiment (in parallel).
+   For example, to reproduce the Table 2 of our paper, use the following command:
+
+   ~/tee-formal-spec/scripts$ ./run-exp table2             	  # Reproducing Table 2 of our paper, in parallel.
+
+   The script can also reproduce experiments in non-parallel. 
+   To run the script in non-parallel, set the option '-non-parallel'.
+   For example, to reproduce the Table 3 of our paper in non-parallel, use the following command:
+
+   ~/tee-formal-spec/scripts$ ./run-exp table3 -non-parallel   # Reproducing Table 3 of our paper, in non-parallel.
+
+The above commands create two directories: (1) 'table2' and (2) 'table3', where each directory contains raw log files 
+in the 'logs' directory and Maude files, used for each experiment, in the 'maude-files' directory. 
+We explain more details of these two directories in Section 5.
+
+Remark: We conducted the reproduction on an Intel Mac (dual-core Intel Core i5 and 8GB memory) in parallel 
+        and it took around 30 minutes to complete each experiment. In total, it took an hour to finish the experiments.
+
+3. Use the 'gen-report' script to create a spread sheet report file from the log files.
+   For example, to create a report file for the 'table2' directory, use the following command:
+
+   ~/tee-formal-spec/scripts$ ./gen-report ./table2
+
+The above command creates a 'table2-report.csv' file, which contains the data for the Table 2 of our paper.
+
+4. Then, use the 'gen-table' script to create a html table from the report file.
+   For example, to create a html table for the 'table2-report.csv', use the following command:
+
+   ~/tee-formal-spec/scripts$ ./gen-table ./table2-report.csv
+
+The above command creates a 'table2.html' file, which is the same table of our paper.
+
+Note: When you logout from the Docker container, the docker container and all its data are deleted immediately.
+
+
+
+
+======================================================
+4. Running the Scenarios
+======================================================
+
+
+We also provide the 'run' script in the 'scripts' directory to run each scenario 
+of the experiments (i.e., each row of the Tables of our paper). 
+
+The script takes three arguments:
+
+  (1) an LTL property of interest  (provided in 'analysis/LTL/properties.maude')
+  (2) a threat model               (provided in 'analysis/threats/')
+  (3) a flag indicating whether to use the code-level patch (optional)
+
+To run specific scenario, use the 'run' script. For example, we can use the following commands: 
+
+   ~/tee-formal-spec/scripts$ ./run p1 msg
+   ~/tee-formal-spec/scripts$ ./run p1 oom -patch
+   ~/tee-formal-spec/scripts$ ./run p2 non
+
+to run the following scenarios, respectively:
+
+   - verifying the property p1 under the message modification threat,
+   - verifying the property p1 under the out-of-memory threat with the code-level patch, and
+   - verifying the property p2 with no threats.
+
+The script creates two subdirectories: (1) 'maude-files' and (2) 'logs', where 'maude-file' contains Maude files used 
+for the analysis and 'logs' contains the result log files. We explain more details of the two directories in Section 5.
+
+
+
+
+======================================================
+5. Log Files for the Experiments
+======================================================
+
+
+The directory 'paper-logs' of the top artifact directory contains the log files for the experiments.
+There are two subdirectories in the 'paper-logs' directory: (1) 'table2', and (2) 'table3', containing experimental 
+results shown in paper's Table 2 and Table 3, respectively. Each subdirectory contains two directories: (1) 'maude-files', and (2) 'logs',
+where 'maude-files' includes the formal models and analysis codes, used for running the experiments, and 'logs' contains the result files:
+
+Files in 'maude-files'
+
+  - p{i}_non.maude 	: Model with no threats (NON). 
+  - p{i}_msg.maude 	: Model with the message modification threat (MSG) .
+  - p{i}_oom.maude 	: Model with the out-of-memory threat (OOM). 
+
+Files in 'logs'
+
+  - p{i}_non.txt 		: txt files containing the results of the experiments with NON.
+  - p{i}_msg.txt 		: txt files containing the results of the experiments with MSG.
+  - p{i}_oom.txt 		: txt files containing the results of the experiments with OOM.
+
+
+
+
+======================================================
+6. The Structure of the TEE API Formal Model Directory
+======================================================
+
+
+The directory 'formal-model' of the top artifact directory contains the source code for our formal model of TEE APIs.
+Below is a brief description of each file separated into three categories.
+
+- Formal model of the TEE API behavior
+
+  - generic.maude.      	: Generic object with its behaviors.
+  - transient.maude     	: Transient object with its behaviors. 
+  - persistent.maude    	: Persistent object with its behaviors.
+  - data-stream.maude   	: Data stream object with its behaviors.
+  - enumerator.maude    	: Enumerator object with its behaviors.
+  - cryptographic.maude 	: Cryptographic operation with its behavior.
+
+- Formal model of the TEE infrastructure
+  
+  - objects.maude       	: Common storage objects (e.g., superclass object of transient and persistent objects).
+  - handle.maude        	: Handle objects. 
+  - constants.maude     	: Partial constants described in Global Platform spec.
+  - data.maude          	: Functions handling data stream.
+  - tee-data-type.maude 	: Data structures for TEE APIs described in Global Platform spec.
+  - os.maude            	: Trusted OS object with its behavior and Device objects.
+  - tee-client.maude    	: Trusted OS behaviors handling TEE Client API.
+  - app.maude           	: Abstract program application object.
+  - ree-app.maude       	: Rich application (RA) with its behaviors.
+  - tee-app.maude      	  : Trusted application (TA) with its behaviors.
+  - tee-kernel.maude    	: Trusted application kernel object.
+  - tee-msg.maude       	: Message used for invoking TEE storage APIs.
+  - tee-panic.maude    	  : TEE API panic.
+
+- Programming language semantics using the K framework
+
+  - tee-api.maude   : TEE APIs defined in Global Platform spec. Sec 5,6.
+  - imp.maude       : Syntax and semantics of the language.
+  - k-prelude.maude : K-framework foundation.
+  - tee-imp.maude   : TEE API specific language semantics.
+
+The main.maude file is the main maude file that includes all of the above-mentioned files.
+
+
+
+
+======================================================
+7. The Structure of the MQT-TZ Benchmark Directory
+======================================================
+
+
+The directory 'analysis' of the top artifact directory contains the files used to formally analyze our MQT-TZ benchmark.
+There are six subdirectories in 'analysis': 
+
+  - mqttz     	: Maude source codes of MQT-TZ.
+  - scenario  	: MQT-TZ scenarios used in the analysis.
+  - LTL       	: LTL properties.
+  - threats	    : Threat models.
+  - cmd       	: Maude commands for the analysis.
+  - script      : Translation script and auxiliary files.
+
+Below are brief descriptions of each file in each subdirectory.
+
+- Formal model of MQT-TZ (files in 'mqttz')
+
+  - broker-ra.maude 	: MQT-TZ RA program.
+  - broker-ta.maude 	: MQT-TZ TA programs (with/without patch and optimization).
+  - broker.maude    	: MQT-TZ broker object and its behavior.
+  - client.maude    	: MQT-TZ publisher & subscriber client objects and their behaviors.
+  - consts.maude    	: Data structures for MQT-TZ.
+
+- MQT-TZ scenarios (files in 'scenario')
+
+  - aux.maude   	: Functions used to initialize scenarios.
+  - base.maude  	: Our base MQT-TZ scenario explained in the paper Section 6.2.
+
+- LTL properties (files in 'properties')
+
+  - properties.maude    	: LTL properties as shown in paper's Table 1.
+  - propositions.maude  	: Propositions used to define LTL properties.
+
+- Threat models (files in threats)
+
+  - msg.maude  	    : Message modification threat model.
+  - oom.maude   	  : Out-of-memory threat model.

@@ -1,0 +1,86 @@
+fmod RA-REQUEST is
+  pr MQTT-MSG .
+  pr CLIENT-ID .
+
+  sorts RaRequest RaRequest? .
+  subsort RaRequest < RaRequest? .
+
+  op {_,_} : MqttMsg ClientId -> RaRequest [ctor] .
+  op {_,_,_} : MqttMsg MqttMsg ClientId -> RaRequest [ctor] .
+  op noRaReq : -> RaRequest? [ctor] .
+endfm
+
+view RaRequest from TRIV to RA-REQUEST is
+  sort Elt to RaRequest .
+endv
+
+omod MQTTZ-BROKER is
+  pr LIST{RaRequest} .
+  pr MAP{Topic,List{ClientId}} * (op undefined to unknown) .
+  pr LIST{MqttMsg} .
+  pr EXECUTION-ENV .
+
+  class MqttzBroker | execution-envs : Env,
+                      pub-msg-queue : List{MqttMsg},
+                      ra-req-queue : List{RaRequest}, 
+                      ra-ret-queue : List{RaRequest},
+                      cur-ra-req : RaRequest?,
+                      subscriber-list : Map{Topic,List{ClientId}},
+                      wait-receiving : Bool .
+
+endom
+
+omod MQTTZ-BROKER-BEHAVIOR is
+  pr MQTTZ-BROKER .
+  pr ENCRYPTION .
+  pr MQTTZ-CRYPTO-KEY-VALUE .
+  pr MQTTZ-MSG .
+
+  var BI : Oid .
+  vars PUB SUB : ClientId .
+  vars MSG MSG' : MqttMsg .
+  var MSGS : List{MqttMsg} .
+  var REQ : List{RaRequest} .
+  var TOPIC : Topic .
+
+  rl [recv-pub-msg] :
+     pubMqttMsg(MSG, PUB)
+     < BI : MqttzBroker | pub-msg-queue : MSGS >
+     => 
+     < BI : MqttzBroker | pub-msg-queue : MSGS MSG >
+     recvPubMqttMsg(PUB, getTopic(MSG))
+  .
+
+  rl [send-sub-msg] :
+    < BI : MqttzBroker | ra-ret-queue : {MSG, MSG', SUB} REQ, wait-receiving : false >
+    => 
+    < BI : MqttzBroker | ra-ret-queue : {MSG, MSG', SUB} REQ, wait-receiving : true > 
+    subMqttMsg(MSG', SUB)
+  .
+
+  rl [send-sub-msg-done] :
+    recvSubMqttMsg(SUB, TOPIC)
+    < BI : MqttzBroker | ra-ret-queue : {MSG, MSG', SUB} REQ, wait-receiving : true >
+    => 
+    < BI : MqttzBroker | ra-ret-queue : REQ, wait-receiving : false > 
+  .
+
+endom
+
+omod MQTTZ-BROKER-BEHAVIOR-INVISIBLE is
+  pr MQTTZ-BROKER-BEHAVIOR .
+
+  var BI : Oid .
+  vars PUB SUB : ClientId .
+  vars MSG MSG' : MqttMsg .
+  var MSGS : List{MqttMsg} .
+  var REQ : List{RaRequest} .
+
+  --- eq
+  ---   < BI : MqttzBroker | ra-ret-queue : {MSG, MSG', SUB} REQ, wait-receiving : false >
+  ---   =
+  ---   < BI : MqttzBroker | ra-ret-queue : {MSG, MSG', SUB} REQ, wait-receiving : true > 
+  ---   subMqttMsg(MSG, SUB)
+  --- .
+
+endom

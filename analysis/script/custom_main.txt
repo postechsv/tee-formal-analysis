@@ -1,0 +1,17 @@
+    main (command, sessAlgo, sessMode, sessKeySize, sessOpHandle, sessKeyHandle, oriCliId, oriCliIv, oriCliData, destCliId, destCliData) {
+      struct AesCipher session ;
+      session . algo := sessAlgo ;
+      session . mode := sessMode ;
+      session . keySize := sessKeySize ;
+      session . opHandle := sessOpHandle ;
+      session . keyHandle := sessKeyHandle ;
+
+      var ret ;
+      if (command === # TA-REENCRYPT) {
+        ret := payloadReencryption(session, oriCliId, oriCliIv, oriCliData, destCliId, destCliData)
+      } else {
+        ret := # 404
+      } ;
+
+      return ret
+    }

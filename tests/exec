@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+import platform
+import subprocess
+
+test_dir = "./tests/maude"
+exec_dir = "./3rd_party"
+
+def check_python_version():
+    result = subprocess.run(["python3", "-V"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # >= python 3.8.6
+    base_py_major, base_py_minor, base_py_else = 3, 0, 0
+    [py_major_str, py_minor_str, py_else_str] = str(result.stdout.decode('utf-8')) \
+        .replace("Python", "").replace("\n", "").replace(" ", "").split(".")
+
+    py_major, py_minor, py_else = int(py_major_str), int(py_minor_str), int(py_else_str)
+    py_err_msg = "supports Python version >= {}.{}.{} ({}.{}.{} not supported)" \
+        .format(base_py_major, base_py_minor, base_py_else, py_major, py_minor, py_else)
+
+    if py_major >= base_py_major:
+        if py_minor >= base_py_minor:
+            if py_minor == base_py_minor:
+                if py_else < base_py_else:
+                    raise ValueError(py_err_msg)
+        else:
+            raise ValueError(py_err_msg)
+    else:
+        raise ValueError(py_err_msg)
+
+
+def check_parallel_version():
+    result = subprocess.run(["parallel", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    respond = str(result.stdout.decode('utf-8'))
+    if "GNU parallel" not in respond:
+        ValueError("GNU Parallel is not available (check: \"parallel --version\")")
+
+
+def check_program():
+    print("[exec] Python", end='')
+    check_python_version()
+    print(": pass")
+    print("[exec] GNU-Parallel", end='')
+    check_parallel_version()
+    print(": pass")
+
+
+def check_maude():
+    sys = platform.system()
+    maude_exec = f"{exec_dir}/Darwin64/maude.darwin64" if "Darwin" in sys else f"{exec_dir}/Linux64/maude.linux64"
+
+    print("[exec] Maude:")
+    test_files = ["01.maude", "02.maude", "03.maude", "04.maude"]
+    for test_file in test_files:
+        input_file = "{}/{}".format(test_dir, test_file)
+        output_file = "{}/{}.expected".format(test_dir, test_file)
+
+        print("  {}".format(input_file), end='')
+        with open(input_file, "r") as input:
+            result = subprocess.run([maude_exec, "-no-banner", "-no-advise"],
+                                    stdin=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    encoding='utf-8', text=True)
+            f = open(output_file, "r")
+            expected = "".join(f.readlines())
+            if expected != result.stdout:
+                raise ValueError()
+            f.close()
+        print(": pass")
+
+
+if __name__ == "__main__":
+    try:
+        check_program()
+        check_maude()
+
+    except FileNotFoundError as err:
+        exec_file = str(err).split("\'")[1]
+        print(": fail (cannot find {} executable file)".format(exec_file))
+    except ValueError as e:
+        print(": fail")
+    except Exception as e:
+        print(": fail ({})".format(e))

@@ -1,0 +1,576 @@
+fmod MQTTZ-DATA is
+  pr CRYPTO-KEY-SIZE .
+
+  op TA-AES-KEY-SIZE : -> CryptoKeySize [ctor] .
+  eq TA-AES-KEY-SIZE = 256 Bits .
+
+  op TA-AES-MODE-ENCODE : -> Nat [ctor] .
+  eq TA-AES-MODE-ENCODE = 1 .
+  op TA-AES-MODE-DECODE : -> Nat [ctor] .
+  eq TA-AES-MODE-DECODE = 0 .
+
+  op TA-REENCRYPT : -> Nat [ctor] .
+  eq TA-REENCRYPT = 3 .
+endfm
+
+mod MQTTZ-TA-PROGRAM-DECL is
+  pr TEE-IMP-STRUCT-DECL .
+  pr MQTTZ-DATA .
+  pr MQTTZ-CONSTANTS .
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr MQTTZ-PROGRAM-DECL .
+
+  ops err exit : -> Label [ctor] .
+  op dummyIv : -> List{Data} [ctor] .
+endm
+
+mod MQTTZ-TA-PROGRAM is
+  pr MQTTZ-TA-PROGRAM-DECL .
+
+  op mqttzTA : -> Program [ctor] .
+
+--- This program is translated automatically from the "preprocessed-ta.c" file using the translation script "translate.py"
+
+  eq mqttzTA = 
+    struct {
+        var objectType ;
+        var objectSize ;
+        var maxObjectSize ; 
+        var objectUsage ;
+        var dataSize ; 
+        var dataPosition ; 
+        var handleFlags 
+    } TeeObjectInfo ;
+
+    struct {
+      var algo ;
+      var mode ;
+      var keySize ;
+      var opHandle ;
+      var keyHandle 
+    } AesCipher ;
+
+    allocResources (session, mode)
+    {
+      struct AesCipher sess ;
+      var attr ;
+      var res ;
+      sess := session ;
+      sess . algo := # TEE-ALG-AES-CBC-NOPAD ;
+      sess . keySize := # TA-AES-KEY-SIZE ;
+            if (mode === # TA-AES-MODE-ENCODE) {
+        sess . mode := # TEE-MODE-ENCRYPT
+      } else {
+        if (mode === # TA-AES-MODE-DECODE) {
+          sess . mode := # TEE-MODE-DECRYPT
+        } else {
+          return # TEE-ERROR-BAD-PARAMETERS
+        }
+      }  ;
+
+      if (! (sess . opHandle === # TEE-HANDLE-NULL)) {
+            FreeOperation(sess . opHandle ;  sess . opHandle)
+        }  ;
+      AllocateOperation(sess . algo, sess . mode, sess . keySize  ; res, sess . opHandle) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+        sess . opHandle := # TEE-HANDLE-NULL ;
+        goto err
+      }  ;
+      if (! (sess . keyHandle === # TEE-HANDLE-NULL)) {
+            FreeTransientObject(sess . keyHandle ; sess . keyHandle)
+        }  ;
+      AllocateTransientObject(# TEE-TYPE-AES, sess . keySize  ; res, sess . keyHandle) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+        sess . keyHandle := # TEE-HANDLE-NULL ;
+        goto err
+      }  ;
+      InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attr) ;
+      PopulateTransientObject(sess . keyHandle, attr  ; res) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+            goto err
+        }  ;
+      SetOperationKey(sess . opHandle, sess . keyHandle  ; res) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+            goto err
+        }  ;
+      return res ;
+      err :
+        if (! (sess . opHandle === # TEE-HANDLE-NULL)) {
+            FreeOperation(sess . opHandle ;  sess . opHandle)
+        }  ;
+        sess . opHandle := # TEE-HANDLE-NULL ;
+        if (! (sess . keyHandle === # TEE-HANDLE-NULL)) {
+            FreeTransientObject(sess . keyHandle ;  sess . keyHandle)
+        }  ;
+        sess . keyHandle := # TEE-HANDLE-NULL ;
+        return res
+    }  ;
+
+    setAesKey (session, key)
+    {
+      struct AesCipher sess ;
+      var attr ;
+      var res ;
+      sess := session ;
+
+      
+        InitRefAttribute(# TEE-ATTR-SECRET-VALUE, key  ; attr) ;
+      ResetTransientObject(sess . keyHandle  ;   ) ;
+      PopulateTransientObject(sess . keyHandle, attr  ; res) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+      return res
+    }  ;
+        ResetOperation(sess . opHandle  ;   ) ;
+        SetOperationKey(sess . opHandle, sess . keyHandle  ; res) ;
+        if (! (res === # TEE-SUCCESS))
+        {
+            return res
+        }  ;
+        return res
+    }  ;
+    
+    setAesIv (session, iv)
+    {
+      struct AesCipher sess ;
+      sess := session ;
+      CipherInit(sess . opHandle, iv  ;   ) ;
+      return # TEE-SUCCESS
+    }  ;
+
+    readRawObject (cliId, data)
+    {
+      var object ; 
+      struct TeeObjectInfo objectInfo ;
+      var res ;
+      OpenPersistentObject(# TEE-STORAGE-PRIVATE, cliId, # (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-SHARE-READ)  ; res , object) ;
+      if (! (res === # TEE-SUCCESS)) {
+    		return res
+    	}  ;
+      GetObjectInfo1(object  ; res, objectInfo) ;
+      if (! (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+      ReadObjectData(object, objectInfo . dataSize  ; res, data) ;
+      if (! (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+      exit :
+        CloseObject(object  ; object) ;
+        return res
+    }  ;
+
+    cipherBuffer (sess, encData, decData)
+    {
+      struct AesCipher session ;
+      session :=  sess ;
+      if (session . opHandle === # TEE-HANDLE-NULL) {
+            return # TEE-ERROR-BAD-STATE
+        }  ;
+      var res ;
+      CipherUpdate(session . opHandle, encData  ; res , decData) ;
+      return res
+    }  ;
+
+    saveKey (cliId, cliKey)
+    {
+      var objDataFlag ;
+      var res ;
+        var object ; 
+      objDataFlag := # (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-ACCESS-WRITE, TEE-DATA-FLAG-ACCESS-WRITE-META, TEE-DATA-FLAG-OVERWRITE) ;
+      object  := # handleId(0, ta)  ; 
+      CreatePersistentObject(# TEE-STORAGE-PRIVATE, cliId, objDataFlag, # TEE-HANDLE-NULL, # noData, # dataSize(0), object  ; res , object) ;
+            if (! (res === # TEE-SUCCESS)) {
+                return # 1
+      }  ;
+        WriteObjectData(object, cliKey  ; res ) ;
+        if (! (res === # TEE-SUCCESS))
+        {
+            CloseAndDeletePersistentObject1(object  ; res , object) ;
+            return # 1
+        }  ;
+      CloseObject(object  ;  object) ;
+      return # 0
+    }  ;
+
+    getKey (cliId, cliKey)
+    {
+        var res ;
+        res := readRawObject(cliId, cliKey) ;
+        if (! (res === # TEE-SUCCESS))
+        {
+        res := saveKey(cliId, cliKey) ;
+        return # 0
+      }  ;
+      return # 0
+    }  ;
+
+    
+    payloadReencryption (session, oriCliId, oriCliIv, oriCliData, destCliId, destCliData)
+    {
+      var res ;
+      var oriCliKey ;
+      oriCliKey := # randomAttrVal ;
+      res := getKey(oriCliId, oriCliKey) ;
+      if (! (res === # 0))
+        {
+        res := # TEE-ERROR-OUT-OF-MEMORY ;
+        goto exit
+      }  ;
+      res := allocResources(session, # TA-AES-MODE-DECODE) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      }  ;
+      res := setAesKey(session, oriCliKey) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      }  ;
+      res := setAesIv(session, oriCliIv) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      }  ;
+      var decData ;
+      decData := # noData ;
+      res := cipherBuffer(session, oriCliData, decData) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      }  ;
+        var destCliIv ;
+        destCliIv := # dummyIv ;
+        var destCliKey ;
+        destCliKey := # randomAttrVal ;
+      res := getKey(destCliId, destCliKey) ;
+      if (! (res === # 0))
+        {
+        res := # TEE-ERROR-OUT-OF-MEMORY ;
+        goto exit
+      }  ;
+      res := allocResources(session, # TA-AES-MODE-ENCODE) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      }  ;
+      res := setAesKey(session, destCliKey) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      }  ;
+        res := setAesIv(session, destCliIv) ;
+      if (! (res === # TEE-SUCCESS))
+        {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      }  ;
+      res := cipherBuffer(session, decData, destCliData) ;
+      if (!  (res === # TEE-SUCCESS))
+        {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      }  ;
+      res := # TEE-SUCCESS ;
+      goto exit ;
+      exit :
+        return res
+    }  ;
+
+    
+    main (command, sessAlgo, sessMode, sessKeySize, sessOpHandle, sessKeyHandle, oriCliId, oriCliIv, oriCliData, destCliId, destCliData) {
+      struct AesCipher session ;
+      session . algo := sessAlgo ;
+      session . mode := sessMode ;
+      session . keySize := sessKeySize ;
+      session . opHandle := sessOpHandle ;
+      session . keyHandle := sessKeyHandle ;
+
+      var ret ;
+      if (command === # TA-REENCRYPT) {
+        ret := payloadReencryption(session, oriCliId, oriCliIv, oriCliData, destCliId, destCliData)
+      } else {
+        ret := # 404
+      } ;
+
+      return ret
+    }
+  .
+
+endm
+
+mod MQTTZ-TA-PROGRAM-PATCHED is
+  pr MQTTZ-TA-PROGRAM-DECL .
+
+  op mqttzTaPatched : -> Program [ctor] .
+  eq mqttzTaPatched = 
+    struct {
+        var objectType ;
+        var objectSize ;
+        var maxObjectSize ; 
+        var objectUsage ;
+        var dataSize ; 
+        var dataPosition ; 
+        var handleFlags 
+    } TeeObjectInfo ;
+
+    struct {
+      var algo ;
+      var mode ;
+      var keySize ;
+      var opHandle ;
+      var keyHandle 
+    } AesCipher ;
+
+    allocResources (session, mode) {
+      struct AesCipher sess ;
+      var attr ;
+      var res ;
+
+      sess := session ;
+      sess . algo := # TEE-ALG-AES-CBC-NOPAD ;
+      sess . keySize := # TA-AES-KEY-SIZE ;
+      
+      if (mode === # TA-AES-MODE-ENCODE) {
+        sess . mode := # TEE-MODE-ENCRYPT
+      } else {
+        if (mode === # TA-AES-MODE-DECODE) {
+          sess . mode := # TEE-MODE-DECRYPT
+        } else {
+          return # TEE-ERROR-BAD-PARAMETERS
+        }
+      } ;
+
+      if (! (sess . opHandle === # TEE-HANDLE-NULL)) { FreeOperation(sess . opHandle ; sess . opHandle) } ;
+      
+      AllocateOperation(sess . algo, sess . mode, sess . keySize ; res, sess . opHandle) ;
+      if (! (res === # TEE-SUCCESS)) {
+        sess . opHandle := # TEE-HANDLE-NULL ;
+        goto err
+      } ;
+
+      if (! (sess . keyHandle === # TEE-HANDLE-NULL)) { FreeTransientObject(sess . keyHandle ; sess . keyHandle) } ;
+      AllocateTransientObject(# TEE-TYPE-AES, sess . keySize ; res, sess . keyHandle) ;
+      if (! (res === # TEE-SUCCESS)) {
+        sess . keyHandle := # TEE-HANDLE-NULL ;
+        goto err
+      } ;
+
+      InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal ; attr) ;
+      PopulateTransientObject(sess . keyHandle, attr ; res) ;
+      if (! (res === # TEE-SUCCESS)) { goto err } ;
+
+      SetOperationKey(sess . opHandle, sess . keyHandle ; res) ;
+      if (! (res === # TEE-SUCCESS)) { goto err } ;
+
+      return res ;
+      err :
+        if (! (sess . opHandle === # TEE-HANDLE-NULL)) { FreeOperation(sess . opHandle ; sess . opHandle) } ;
+        sess . opHandle := # TEE-HANDLE-NULL ;
+
+        if (! (sess . keyHandle === # TEE-HANDLE-NULL)) { FreeTransientObject(sess . keyHandle ; sess . keyHandle) } ;
+        sess . keyHandle := # TEE-HANDLE-NULL ;
+        return res
+    } ;
+
+    setAesKey (session, key) {
+      struct AesCipher sess ;
+      var attr ;
+      var res ;
+      sess := session ;
+
+      InitRefAttribute(# TEE-ATTR-SECRET-VALUE, key ; attr) ;
+      ResetTransientObject(sess . keyHandle ;) ;
+      PopulateTransientObject(sess . keyHandle, attr ; res) ;
+      if (! (res === # TEE-SUCCESS)) { return res } ;
+
+      ResetOperation(sess . opHandle ;) ;
+      SetOperationKey(sess . opHandle, sess . keyHandle ; res) ;
+      if (! (res === # TEE-SUCCESS)) { return res } ;
+
+      return res
+    } ;
+
+    setAesIv (session, iv) {
+      struct AesCipher sess ;
+      sess := session ;
+
+      CipherInit(sess . opHandle, iv ;) ;
+      return # TEE-SUCCESS
+    } ;
+
+    readRawObject (cliId, data) {
+      var object ; 
+      struct TeeObjectInfo objectInfo ;
+      var res ;
+
+      OpenPersistentObject(# TEE-STORAGE-PRIVATE, cliId, # (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-SHARE-READ) ; res, object) ;
+      if (! (res === # TEE-SUCCESS)) { return res } ;
+
+      
+      GetObjectInfo1(object ; res, objectInfo) ;
+      if (! (res === # TEE-SUCCESS)) { goto exit } ;
+
+      ReadObjectData(object, objectInfo . dataSize ; res, data) ;
+      if (! (res === # TEE-SUCCESS)) { goto exit } ;
+
+      exit :
+        CloseObject(object ; object) ;
+        return res
+    } ;
+
+    cipherBuffer (sess, encData, decData) {
+      struct AesCipher session ;
+      session := sess ;
+
+      if (session . opHandle === # TEE-HANDLE-NULL) { return # TEE-ERROR-BAD-STATE } ;
+
+      var res ;
+      CipherUpdate(session . opHandle , encData ; res, decData) ;
+      return res
+    } ;
+
+    saveKey (cliId, cliKey) {
+      var objDataFlag ;
+      var res ; var object ; 
+      objDataFlag := # (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-ACCESS-WRITE, TEE-DATA-FLAG-ACCESS-WRITE-META, TEE-DATA-FLAG-OVERWRITE) ;
+      
+      --- dummy
+      object := # handleId(0, ta) ; 
+      CreatePersistentObject(# TEE-STORAGE-PRIVATE, cliId, objDataFlag, # TEE-HANDLE-NULL,
+                             # noData, # dataSize(0), object ;
+                             res, object) ;
+      if (! (res === # TEE-SUCCESS)) { return # 1 } ;
+
+      WriteObjectData(object, cliKey ; res) ;
+      if (! (res === # TEE-SUCCESS)) {
+        CloseAndDeletePersistentObject1(object ; res, object) ;
+        return # 1
+      } ;
+
+      CloseObject(object ; object) ;
+      return # 0
+    } ;
+
+    getKey (cliId, cliKey) {
+      if (! (readRawObject(cliId, cliKey) === # TEE-SUCCESS)) {
+        var res ;
+        res := saveKey(cliId, cliKey) ;
+        return # 0
+      } ;
+      return # 0
+    } ;
+
+    payloadReencryption (session, oriCliId, oriCliIv, oriCliData, destCliId, destCliData) {
+      var res ;
+      --- Get origin client key from secure storage.
+      var oriCliKey ; oriCliKey := # randomAttrVal ;
+      res := getKey(oriCliId, oriCliKey) ;
+      if (! (res === # 0)) {
+        res := # TEE-ERROR-OUT-OF-MEMORY ;
+        goto exit
+      } ;
+
+      --- Allocate cryptographic operation in Decrypt mode and key transient object (with dummy key).
+      res := allocResources(session, # TA-AES-MODE-DECODE) ;
+      if (! (res === # TEE-SUCCESS)) {
+        res := # TEE-ERROR-OUT-OF-MEMORY ;
+        goto exit
+      } ;
+
+      --- Set operation key using origin client key.
+      res := setAesKey(session, oriCliKey) ;
+      if (! (res === # TEE-SUCCESS)) {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      } ;
+
+      --- Set symmetric cipher initialization vector.
+      res := setAesIv(session, oriCliIv) ;
+      if (! (res === # TEE-SUCCESS)) {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      } ;
+
+      --- Decrypt encrypted origin client data.
+      var decData ; decData := # noData ;
+      res := cipherBuffer(session, oriCliData, decData) ;
+      if (! (res === # TEE-SUCCESS)) {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      } ;
+
+      --- Get destination client key from secure storage.
+      var destCliKey ; destCliKey := # randomAttrVal ;
+      res := getKey(destCliId, destCliKey) ;
+      if (! (res === # 0)) {
+        res := # TEE-ERROR-OUT-OF-MEMORY ;
+        goto exit
+      } ;
+
+      --- Allocate cryptographic operation in Encrypt mode and key transient object (with dummy key).
+      res := allocResources(session, # TA-AES-MODE-ENCODE) ;
+      if (! (res === # TEE-SUCCESS)) {
+        res := # TEE-ERROR-OUT-OF-MEMORY ;
+        goto exit
+      } ;
+
+      --- Set operation key using destination client key.
+      res := setAesKey(session, destCliKey) ;
+      if (! (res === # TEE-SUCCESS)) {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      } ;
+
+      --- Set dummy symmetric cipher initialization vector.
+      var destCliIv ; destCliIv := # dummyIv ;
+      res := setAesIv(session, destCliIv) ;
+      if (! (res === # TEE-SUCCESS)) {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      } ;
+
+      --- Re-encrypt decrypted origin client data.
+      res := cipherBuffer(session, decData, destCliData) ;
+      if (! (res === # TEE-SUCCESS)) {
+        res := # TEE-ERROR-GENERIC ;
+        goto exit
+      } ;
+
+      res := # TEE-SUCCESS ;
+      goto exit ;
+
+      exit :
+        return res
+    } ;
+
+    main (command, sessAlgo, sessMode, sessKeySize, sessOpHandle, sessKeyHandle, oriCliId, oriCliIv, oriCliData, destCliId, destCliData) {
+      struct AesCipher session ;
+      session . algo := sessAlgo ;
+      session . mode := sessMode ;
+      session . keySize := sessKeySize ;
+      session . opHandle := sessOpHandle ;
+      session . keyHandle := sessKeyHandle ;
+
+      var ret ;
+      if (command === # TA-REENCRYPT) {
+        ret := payloadReencryption(session, oriCliId, oriCliIv, oriCliData, destCliId, destCliData)
+      } else {
+        ret := # 404
+      } ;
+
+      return ret
+    }
+  .
+endm

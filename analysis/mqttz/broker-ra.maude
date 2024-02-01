@@ -1,0 +1,286 @@
+mod MQTTZ-RA-PROGRAM is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr MQTTZ-PROGRAM-DECL .
+  pr MQTTZ-DATA .
+  pr MQTTZ-CRYPTO-KEY-VALUE .
+  pr MQTTZ-CONSTANTS .
+
+  op anyAlgo : -> AlgorithmIdentifier [ctor] .
+  op anyMode : -> OperationMode [ctor] .
+  op anyKeySize : -> CryptoKeySize [ctor] .
+  op anyData : -> Data [ctor] .
+
+  op mqttzHost : -> Program [ctor] .
+  eq mqttzHost =
+    struct {
+      var algo ;
+      var mode ;
+      var keySize ;
+      var opHandle ;
+      var keyHandle 
+    } AesCipher ;
+
+    main(oriCliId , oriCliData , destCliId) {
+      var ret ; var sess ;
+      --- TeecOpenSession(# taInst(1) ; 'ret , 'sess) ;
+      sess := # sessionId(0) ;
+
+      struct AesCipher sessionContext ;
+      sessionContext . algo := # anyAlgo ;
+      sessionContext . mode := # anyMode ;
+      sessionContext . keySize := # anyKeySize ;
+      sessionContext . opHandle := # TEE-HANDLE-NULL ;
+      sessionContext . keyHandle := # TEE-HANDLE-NULL ;
+      var oriCliIv ; oriCliIv := # randomData ;
+      var cmd ; cmd := # TA-REENCRYPT ;
+
+      var destCliData ; destCliData := # anyData ;
+      TeecInvokeCommand(sess, # main, (cmd, sessionContext . algo, sessionContext . mode, 
+                        sessionContext . keySize, sessionContext . opHandle, sessionContext . keyHandle,
+                        oriCliId, oriCliIv, oriCliData, destCliId, destCliData) ; ret) ;
+
+      --- var 'ret2 ;
+      --- TeecCloseSession('sess ; 'ret2) ;
+      return destCliData
+    }
+  .
+
+  op mqttzHostPatched : -> Program [ctor] .
+  eq mqttzHostPatched =
+    struct {
+      var algo ;
+      var mode ;
+      var keySize ;
+      var opHandle ;
+      var keyHandle 
+    } AesCipher ;
+
+    main(oriCliId , oriCliData , destCliId) {
+      var ret ; var sess ;
+      --- TeecOpenSession(# taInst(1) ; 'ret , 'sess) ;
+      sess := # sessionId(0) ;
+
+      struct AesCipher sessionContext ;
+      sessionContext . algo := # anyAlgo ;
+      sessionContext . mode := # anyMode ;
+      sessionContext . keySize := # anyKeySize ;
+      sessionContext . opHandle := # TEE-HANDLE-NULL ;
+      sessionContext . keyHandle := # TEE-HANDLE-NULL ;
+      var oriCliIv ; oriCliIv := # randomData ;
+      var cmd ; cmd := # TA-REENCRYPT ;
+
+      var destCliData ; destCliData := # anyData ;
+      TeecInvokeCommand(sess, # main, (cmd, sessionContext . algo, sessionContext . mode, 
+                        sessionContext . keySize, sessionContext . opHandle, sessionContext . keyHandle,
+                        oriCliId, oriCliIv, oriCliData, destCliId, destCliData) ; ret) ;
+
+      --- var 'ret2 ;
+      --- TeecCloseSession('sess ; 'ret2) ;
+      if (ret === # TEE-ERROR-OUT-OF-MEMORY || ret === # TEE-ERROR-TARGET-DEAD){
+        return # 404
+      } ;
+      return destCliData
+    }
+  .
+endm
+
+omod MQTTZ-RA-BEHAVIOR is
+  pr MQTTZ-BROKER .
+  pr MQTTZ-RA-PROGRAM .
+
+  vars BI RI : Oid .
+  vars MSG MSG' : MqttMsg .
+  var MSGS : List{MqttMsg} .
+  vars CLIENT PUB SUB : ClientId .
+  vars CLIST SUBS : List{ClientId} .
+  var TOPIC : Topic .
+  var DATA : List{Data} .
+  var REQ : List{RaRequest} .
+  var SMAP : Map{Topic,List{ClientId}} .
+  vars REE TEE : Configuration .
+  var P : Program .
+  var KS : KConfig .
+  vars V V1 V2 V3 : Value .
+  var VL : ValueList .
+  var RC : ReturnCode .
+
+  op fileName : ClientId -> FileId [ctor] .
+
+  op makeReqs : MqttMsg List{ClientId} -> List{RaRequest} .
+  eq makeReqs(MSG , nil) = nil .
+  eq makeReqs(MSG , CLIENT CLIST) = {MSG , CLIENT} makeReqs(MSG , CLIST) .
+  --- eq makeReqs(msg DATA from PUB to TOPIC , CLIENT CLIST) = {msg DATA from CLIENT to TOPIC , CLIENT} makeReqs(msg DATA from PUB to TOPIC , CLIST) .
+
+  rl [make-ra-request] :
+    < BI : MqttzBroker | pub-msg-queue : (msg DATA from PUB to TOPIC) MSGS,
+                         ra-req-queue : REQ, subscriber-list : (TOPIC |-> SUBS , SMAP) >
+    => 
+    < BI : MqttzBroker | pub-msg-queue : MSGS,
+                         ra-req-queue : (REQ makeReqs(msg DATA from PUB to TOPIC , SUBS)) > 
+  .
+
+  --- var CLIENTS : List{ClientId} .
+  --- var SUBLIST : Map{Topic,List{ClientId}} .
+  --- vars LQ RQ : 
+
+  --- rl [attack] :
+  ---   < BI : MqttzBroker | subscriber-list : (TOPIC |-> (CLI CLIENTS), SUBLIST),
+  ---                        pub-msg-queue : (PUB |-> (LQ (msg DATA from PUB to TOPIC) RQ), PMAP) >
+  ---   => 
+  ---   < BI : MqttzBroker | pub-msg-queue : (PUB |-> (LQ (msg DATA from CLI to TOPIC) RQ), PMAP) >
+  --- .
+
+
+  msg reqRA : MqttMsg ClientId -> Msg .
+  msg waitReqRA : MqttMsg ClientId -> Msg .
+  msg retRA : MqttMsg ClientId -> Msg .
+  msg ignoreRA : ClientId -> Msg .
+
+  rl [send-ra-request] :
+    < BI : MqttzBroker | ra-req-queue : {MSG , SUB} REQ , cur-ra-req : noRaReq , 
+                         execution-envs : {REE} | {TEE} >
+    => 
+    < BI : MqttzBroker | ra-req-queue : REQ, cur-ra-req : {MSG , SUB} ,
+                         execution-envs : {REE reqRA(MSG , SUB)} | {TEE} > 
+  .
+
+  rl [accept-ra-request] :
+    reqRA(msg DATA from PUB to TOPIC , SUB)
+    < RI : RichApp | proc : none , prog : P , running : false >
+    => 
+    < RI : RichApp | proc : execute(P , main , (# fileName(PUB) , # DATA , # fileName(SUB))) , running : true >
+    waitReqRA(msg DATA from PUB to TOPIC , SUB)
+  .
+
+  op extractData : ValueList -> List{Data} .
+  eq extractData((# DATA , V1 , V2 , V3)) = DATA .
+  eq extractData(VL) = anyData [owise] .
+
+  op normalFinish : ValueList -> Bool .
+  eq normalFinish((# DATA , V1 , V2 , V3)) = true .
+  eq normalFinish((V , V1 , V2 , V3)) = false [owise] .
+
+  --- rl [return-ra-request] :
+  ---   waitReqRA(msg DATA from PUB to TOPIC , SUB)
+  ---   < RI : RichApp | proc : (k(.K) KS) , running : true >
+  ---   => 
+  ---   < RI : RichApp | proc : none , running : false >
+  ---   retRA(msg extractData(readReturn(main, KS)) from TOPIC to SUB , SUB) 
+  --- .
+
+  crl [return-ra-request] :
+    waitReqRA(msg DATA from PUB to TOPIC , SUB)
+    < RI : RichApp | proc : (k(.K) KS) , running : true >
+    => 
+    < RI : RichApp | proc : none , running : false >
+    retRA(msg extractData(readReturn(main, KS)) from TOPIC to SUB , SUB) 
+  if normalFinish(readReturn(main, KS)) .
+
+  crl [return-ra-request] :
+    waitReqRA(msg DATA from PUB to TOPIC , SUB)
+    < RI : RichApp | proc : (k(.K) KS) , running : true >
+    => 
+    < RI : RichApp | proc : none , running : false >
+    ignoreRA(SUB)
+  if not normalFinish(readReturn(main, KS)) .
+
+  rl [ra-request-finish] :
+    < BI : MqttzBroker | ra-ret-queue : REQ , cur-ra-req : {MSG , SUB} ,
+                         execution-envs : {REE retRA(MSG' , SUB)} | {TEE} >
+    => 
+    < BI : MqttzBroker | ra-ret-queue : (REQ {MSG, MSG', SUB}), cur-ra-req : noRaReq ,
+                         execution-envs : {REE} | {TEE} > 
+  .
+
+  rl [ra-request-finish] :
+    < BI : MqttzBroker | cur-ra-req : {MSG , SUB} ,
+                         execution-envs : {REE ignoreRA(SUB)} | {TEE} >
+    => 
+    < BI : MqttzBroker | cur-ra-req : noRaReq ,
+                         execution-envs : {REE} | {TEE} > 
+  .
+
+endom
+
+omod MQTTZ-RA-BEHAVIOR-INVISIBLE is
+  pr MQTTZ-RA-BEHAVIOR .
+
+  vars BI RI : Oid .
+  vars MSG MSG' : MqttMsg .
+  var MSGS : List{MqttMsg} .
+  vars CLIENT PUB SUB : ClientId .
+  vars CLIST SUBS : List{ClientId} .
+  var TOPIC : Topic .
+  var DATA : List{Data} .
+  var REQ : List{RaRequest} .
+  var SMAP : Map{Topic,List{ClientId}} .
+  vars REE TEE : Configuration .
+  var P : Program .
+  var KS : KConfig .
+
+  eq
+    < BI : MqttzBroker | pub-msg-queue : (msg DATA from PUB to TOPIC) MSGS,
+                         ra-req-queue : REQ, subscriber-list : (TOPIC |-> SUBS , SMAP) >
+    =
+    < BI : MqttzBroker | pub-msg-queue : MSGS,
+                         ra-req-queue : (REQ makeReqs(msg DATA from PUB to TOPIC , SUBS)) > 
+  .
+
+  --- eq
+  ---   < BI : MqttzBroker | ra-req-queue : {MSG , SUB} REQ , cur-ra-req : noRaReq , 
+  ---                        execution-envs : {REE} | {TEE} >
+  ---   =
+  ---   < BI : MqttzBroker | ra-req-queue : REQ, cur-ra-req : {MSG , SUB} ,
+  ---                        execution-envs : {REE reqRA(MSG , SUB)} | {TEE} > 
+  --- .
+
+  eq
+    reqRA(msg DATA from PUB to TOPIC , SUB)
+    < RI : RichApp | proc : none , prog : P , running : false >
+    =
+    < RI : RichApp | proc : execute(P , main , (# fileName(PUB) , # DATA , # fileName(SUB))) , running : true >
+    waitReqRA(msg DATA from PUB to TOPIC , SUB)
+  .
+
+  --- eq
+  ---   waitReqRA(msg DATA from PUB to TOPIC , SUB)
+  ---   < RI : RichApp | proc : (k(.K) KS) , running : true >
+  ---   = 
+  ---   < RI : RichApp | proc : none , running : false >
+  ---   retRA(msg extractData(readReturn(main, KS)) from TOPIC to SUB , SUB) 
+  --- .
+
+  ceq
+    waitReqRA(msg DATA from PUB to TOPIC , SUB)
+    < RI : RichApp | proc : (k(.K) KS) , running : true >
+    =
+    < RI : RichApp | proc : none , running : false >
+    retRA(msg extractData(readReturn(main, KS)) from TOPIC to SUB , SUB) 
+    if normalFinish(readReturn(main, KS))
+  .
+
+  ceq 
+    waitReqRA(msg DATA from PUB to TOPIC , SUB)
+    < RI : RichApp | proc : (k(.K) KS) , running : true >
+    = 
+    < RI : RichApp | proc : none , running : false >
+    ignoreRA(SUB)
+  if not normalFinish(readReturn(main, KS)) .
+
+  --- eq
+  ---   < BI : MqttzBroker | ra-ret-queue : REQ , cur-ra-req : {MSG , SUB} ,
+  ---                        execution-envs : {REE retRA(MSG' , SUB)} | {TEE} >
+  ---   =
+  ---   < BI : MqttzBroker | ra-ret-queue : (REQ {MSG' , SUB}), cur-ra-req : noRaReq ,
+  ---                        execution-envs : {REE} | {TEE} > 
+  --- .
+
+  --- eq
+  ---   < BI : MqttzBroker | cur-ra-req : {MSG , SUB} ,
+  ---                        execution-envs : {REE ignoreRA(SUB)} | {TEE} >
+  ---   = 
+  ---   < BI : MqttzBroker | cur-ra-req : noRaReq ,
+  ---                        execution-envs : {REE} | {TEE} > 
+  --- .
+endom

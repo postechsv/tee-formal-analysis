@@ -1,0 +1,35 @@
+==========================================
+reduce in STRING : ascii("A") .
+rewrites: 1
+result NzNat: 65
+==========================================
+reduce in STRING : ascii("AB") .
+rewrites: 0
+result [FindResult]: ascii("AB")
+==========================================
+reduce in STRING : length("AAA") .
+rewrites: 1
+result NzNat: 3
+==========================================
+reduce in STRING : length("") .
+rewrites: 1
+result Zero: 0
+==========================================
+reduce in STRING : length("abcdefghijklmnopqrstuvwxyz") .
+rewrites: 1
+result NzNat: 26
+==========================================
+reduce in STRING : substr("abcdefghijklmnopqrstuvwxyz", 10, 5) .
+rewrites: 1
+result String: "klmno"
+==========================================
+reduce in STRING : substr("abcdefghijklmnopqrstuvwxyz", 1000000000000000000, 5)
+    .
+rewrites: 1
+result String: ""
+==========================================
+reduce in STRING : substr("abcdefghijklmnopqrstuvwxyz", 10, 500000000000000000)
+    .
+rewrites: 1
+result String: "klmnopqrstuvwxyz"
+Bye.

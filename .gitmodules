@@ -1,0 +1,3 @@
+[submodule "formal-model"]
+	path = formal-model
+	url = git@github.com:tee-verify/tee-formal-model.git

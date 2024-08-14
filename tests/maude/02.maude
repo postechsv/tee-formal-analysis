@@ -1,6 +1,6 @@
 set show timing off .
 set show advisories off .
 
-load ../../formal-model/main
+load ../../formal-model/src/main
 
 red 1 .

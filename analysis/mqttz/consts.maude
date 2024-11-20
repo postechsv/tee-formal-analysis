@@ -1,18 +1,32 @@
-fmod CLIENT-ID is
-  sort ClientId .
-endfm
-
-view ClientId from TRIV to CLIENT-ID is
-  sort Elt to ClientId .
-endv
-
-fmod MQTTZ-CRYPTO-KEY-VALUE is
-  pr CLIENT-ID .
+mod MQTTZ-CRYPTO-KEY-VALUE is
+  pr NAT .
+  pr CONFIGURATION .
   pr TEE-ATTRIBUTE .
 
---- encrypt data D with the cryptographic key of PI
-  op keyAttrValue : ClientId -> AttrContent [ctor] .
+  op keyAttrValue : Oid -> AttrContent [ctor] .
+endm
+
+------------------------------------------------------------
+--- 'MQT-TZ Subscription'
+------------------------------------------------------------
+
+fmod SUBSCRIPTION is
+  sort SubId .
 endfm
+
+view SubId from TRIV to SUBSCRIPTION is
+  sort Elt to SubId .
+endv
+
+mod CLIENT-SUBSCRIPTION is
+  pr SUBSCRIPTION .
+  pr CONFIGURATION .
+  op {_} : Oid -> SubId [ctor] .
+endm
+
+------------------------------------------------------------
+--- 'MQT-TZ Topic'
+------------------------------------------------------------
 
 fmod TOPIC is
   sort Topic .
@@ -22,56 +36,114 @@ view Topic from TRIV to TOPIC is
   sort Elt to Topic .
 endv
 
-fmod MQTT-MSG is
-  pr LIST{Data} .
-  pr TOPIC .
-  pr CLIENT-ID .
+------------------------------------------------------------
+--- 'MQTTZ Message'
+------------------------------------------------------------
 
-  var DATA : List{Data} .
-  vars PUB SUB : ClientId .
-  var TOPIC : Topic .
-
-  sort MqttMsg .
-
-  op data : Nat ClientId -> Data [ctor] .
-  op msg_from_to_ : List{Data} ClientId Topic -> MqttMsg [ctor] .
-  op msg_from_to_ : List{Data} Topic ClientId -> MqttMsg [ctor] .
-
-  op getTopic : MqttMsg -> Topic .
-  eq getTopic(msg DATA from PUB to TOPIC) = TOPIC .
-  eq getTopic(msg DATA from TOPIC to SUB) = TOPIC .
+fmod MSG-REQ is 
+  sorts Req ReqId ReqArg .
 endfm
 
-view MqttMsg from TRIV to MQTT-MSG is
-  sort Elt to MqttMsg .
+view ReqArg from TRIV to MSG-REQ is
+  sort Elt to ReqArg .
 endv
 
-omod MQTTZ-MSG is
-  pr MQTT-MSG .
-  pr CLIENT-ID .
+fmod INFRA-MSG-REQ is
+  pr MSG-REQ .
+  pr LIST{ReqArg} .
+
+  --- var REQ : ReqId .
+
+  op _[_] : ReqId List{ReqArg} -> Req [ctor] .        
+  op _[]  : ReqId -> Req [ctor] .
+
+  --- eq REQ[] = REQ[nil] .
+endfm
+
+omod INFRA-MSG is
+  pr INFRA-MSG-REQ .
+  msg msg_from_to_ : Req Oid Oid -> Msg .
+endom
+
+fmod MQTTZ-MSG is
+  sorts MqttzMsg .
+endfm
+
+view MqttzMsg from TRIV to MQTTZ-MSG is
+  sort Elt to MqttzMsg .
+endv
+
+omod MQTTZ-MSG-BASE is 
+  pr INFRA-MSG .
+  pr MQTTZ-MSG .
+  pr DATA .
   pr TOPIC .
 
-  msg pubMqttMsg : MqttMsg ClientId -> Msg .
-  msg recvPubMqttMsg : ClientId Topic -> Msg .
+  op [_] : Msg -> MqttzMsg [ctor] .
 
-  msg subMqttMsg : MqttMsg ClientId -> Msg .
-  msg recvSubMqttMsg : ClientId Topic -> Msg .
+--- Msg
+  op mqttz : -> ReqId [ctor] .
+  op mqttzReceived : -> ReqId [ctor] .
+  op mqttzRecvConfirmed : -> ReqId [ctor] .
+
+--- Msg Args
+  op reqArg : Data -> ReqArg [ctor] .
+  op reqArg : Topic -> ReqArg [ctor] .
+  op reqArg : Oid -> ReqArg [ctor] .
+  op reqArg : Nat -> ReqArg [ctor] .
 endom
+
+omod MQTTZ-MSG-AUX is 
+  pr MQTTZ-MSG-BASE .
+
+  var N : Nat .
+  var DATA : Data .
+  var TOPIC : Topic .
+  vars PUB SENDER RECEIVER : Oid .
+  var MQTTZ-ARGS : List{ReqArg} .
+
+  op getTopic : Msg -> Topic .
+  eq getTopic(msg mqttz[reqArg(DATA) reqArg(TOPIC) reqArg(N)] from SENDER to RECEIVER) = TOPIC .
+
+  op getData : Msg -> Data .
+  eq getData(msg mqttz[reqArg(DATA) reqArg(TOPIC) reqArg(N)] from SENDER to RECEIVER) = DATA .
+
+  op getSender : Msg -> Oid .
+  eq getSender(msg mqttz[MQTTZ-ARGS] from SENDER to RECEIVER) = SENDER .  
+
+  op getReceiver : Msg -> Oid .
+  eq getReceiver(msg mqttz[MQTTZ-ARGS] from SENDER to RECEIVER) = RECEIVER . 
+
+  op getPublisher : Msg -> Oid .
+  eq getPublisher(msg mqttz[reqArg(DATA) reqArg(PUB) reqArg(N)] from SENDER to RECEIVER) = PUB . 
+
+  op getMsgIndex : Msg -> Nat .
+  eq getMsgIndex(msg mqttz[MQTTZ-ARGS reqArg(N)] from SENDER to RECEIVER) = N .
+endom
+
+------------------------------------------------------------
+--- 'MQT-TZ Auxiliary Constants'
+------------------------------------------------------------
 
 mod MQTTZ-CONSTANTS is
   pr NAT .
   pr APP-ID .
+  pr DATA .
   pr TA-INSTANCE-ID .
-  pr CLIENT-ID .
   pr CONFIGURATION .
 
-  op mqttzBroker : -> Oid [ctor] .
-  ops pub sub : Nat -> ClientId [ctor] .
+  op bk : Nat -> Oid [ctor] .
+  ops pub sub : Nat -> Oid [ctor] .
   op ra : -> Oid [ctor] .
   op ta : -> TaInstId [ctor] .
+  op data : Nat -> Data [ctor] .
 
   op REENCRYPT : -> AppId [ctor] .
 endm
+
+------------------------------------------------------------
+--- 'MQT-TZ Program Variables'
+------------------------------------------------------------
 
 mod MQTTZ-PROGRAM-DECL is 
   pr IMP-PROGRAM .

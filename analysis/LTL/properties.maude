@@ -6,52 +6,74 @@ mod LTL-PROPERTIES is
   pr SCENARIO-TOPICS .
 
 
-  ops p1 p2 p3 p4 p5 p6 : -> Formula .
+  ops p1a p1b p2a p2b p3a p3b p4 p5 p6 : -> Formula .
+  op testF : -> Formula .
 
---- P1: If no resource error occurs in brokers, subscribers should receive them in the near future.
+--- P1: If no memory error occurs in brokers, subscribers should receive them in the near future.
 
-  eq p1 =
-       ([] ~ resErrDetected(pub(2), sub(2), 0)) -> [] (pubSentMsg(pub(2), 0) -> <> subReceiveMsg(sub(2), pub(2), 0))
-    /\ ([] ~ resErrDetected(pub(2), sub(2), 1)) -> [] (pubSentMsg(pub(2), 1) -> <> subReceiveMsg(sub(2), pub(2), 1))
-    /\ ([] ~ resErrDetected(pub(1), sub(1), 0)) -> [] (pubSentMsg(pub(1), 0) -> <> subReceiveMsg(sub(1), pub(1), 0))
-    /\ ([] ~ resErrDetected(pub(1), sub(2), 0)) -> [] (pubSentMsg(pub(1), 0) -> <> subReceiveMsg(sub(2), pub(1), 0)) .
+  eq p1a =
+    ([] ~ memErr.TA) -> 
+    ([] (send.P(1,1) -> <> recv.S(2,1,pub(1)))) .
+
+  eq p1b =
+    ([] ~ memErr.TA) -> 
+    ([] (
+         ((send.P(1,1) /\ topic.P(1,sub(1))) -> <> recv.S(1,1,pub(1)))
+      /\ ((send.P(1,1) /\ topic.P(1,sub(2))) -> <> recv.S(2,1,pub(1)))
+      /\ ((send.P(2,1) /\ topic.P(2,sub(2))) -> <> recv.S(2,1,pub(2)))
+      /\ ((send.P(2,2) /\ topic.P(2,sub(2))) -> <> recv.S(2,2,pub(2))))  
+    ) .
+
+--- CE: <> (panic and <> receive)
 
 --- P2: If TAs panicked, subscribers should not receive any messages.
 
-  eq p2 =
-    [] ((panicTA(pub(2), sub(2), 0) -> [] ~ subReceiveMsg(sub(2), pub(2), 0))
-     /\ (panicTA(pub(2), sub(2), 1) -> [] ~ subReceiveMsg(sub(2), pub(2), 1))
-     /\ (panicTA(pub(1), sub(1), 0) -> [] ~ subReceiveMsg(sub(1), pub(1), 0))
-     /\ (panicTA(pub(1), sub(2), 0) -> [] ~ subReceiveMsg(sub(2), pub(1), 0))
-    ) .
+  eq p2a =
+    [] (panic.TA -> [] ~ (recv.S(1,1,pub(1)) /\ recv.S(1,2,pub(1)))) .
+
+  eq p2b =
+    [] (panic.TA -> 
+      [] (
+         (reEncReq(1) -> [] ~ reEncSucc(1))
+      /\ (reEncReq(2) -> [] ~ reEncSucc(2))
+      /\ (reEncReq(3) -> [] ~ reEncSucc(3))
+      /\ (reEncReq(4) -> [] ~ reEncSucc(4)))) .
 
 --- P3: If any resource error occurs in brokers, subscribers should not receive any messages.
 
-  eq p3 =
-    [] ((resErrDetected(pub(2), sub(2), 0) -> [] (~ subReceiveMsg(sub(2), pub(2), 0)))
-     /\ (resErrDetected(pub(2), sub(2), 1) -> [] (~ subReceiveMsg(sub(2), pub(2), 1)))
-     /\ (resErrDetected(pub(1), sub(1), 0) -> [] (~ subReceiveMsg(sub(1), pub(1), 0)))
-     /\ (resErrDetected(pub(1), sub(2), 0) -> [] (~ subReceiveMsg(sub(2), pub(1), 0)))
-    ) .
+  eq p3a =
+    [] ((memErr.TA /\ running.TA) -> [] ~ (recv.S(1,1,pub(1)) /\ recv.S(1,2,pub(1)))) .
+
+  eq p3b =
+    --- [] ((memErr.TA /\ running.TA) -> [] ~ send.B) .
+    [] ((memErr.TA /\ running.TA) -> 
+      [] ((reEncReq(1) -> [] ~ reEncSucc(1))
+       /\ (reEncReq(2) -> [] ~ reEncSucc(2))
+       /\ (reEncReq(3) -> [] ~ reEncSucc(3))
+       /\ (reEncReq(4) -> [] ~ reEncSucc(4)))) .
+
+  eq testF =
+    --- [] ((memErr.TA /\ running.TA) -> [] ~ send.B) .
+    [] ((memErr.TA /\ running.TA) -> 
+        [] (reEncReq(1) -> [] ~ reEncSucc(1))) .
+    
 
 --- P4: When the broker TA starts running, it should eventually terminate.
 
-  eq p4 = 
-    [] ((taStart(1) -> <> taTerminate(1))
-     /\ (taStart(2) -> <> taTerminate(2))
-     /\ (taStart(3) -> <> taTerminate(3))
-     /\ (taStart(4) -> <> taTerminate(4))
-    ) .
+  eq p4 =
+    [] (start.TA -> <> term.TA) .
 
 --- P5: If subscribers receive messages from publishers, messages sent from each publisher are in order.
 
   eq p5 =
-    [] ((inQueue(pub(1), data(0, pub(1))) -> <> inQueue(sub(1), pub(1), data(0, pub(1))))
-     /\ (inQueue(pub(1), data(0, pub(1))) -> <> inQueue(sub(2), pub(1), data(0, pub(1))))
-     /\ (inQueue(pub(2), data(0, pub(2)) data(1, pub(2))) -> <> inQueue(sub(2), pub(2), data(0, pub(2)) data(1, pub(2))))
-    ) .
+    [] (
+       (topic.P(1,sub(1)) -> [] (inOrderQueue.S(1,pub(1))))
+    /\ (topic.P(1,sub(2)) -> [] (inOrderQueue.S(2,pub(1))))
+    /\ (topic.P(2,sub(1)) -> [] (inOrderQueue.S(1,pub(2))))
+    /\ (topic.P(2,sub(2)) -> [] (inOrderQueue.S(2,pub(2))))) .
 
 --- P6: The number of tasks handled by each TA cannot exceed five.
 
-  eq p6 = [] ~ numOfTaskExceed(5) .
+  eq p6 = 
+    [] ~ numTaskExceed.TA(5) .
 endm

@@ -1,29 +1,43 @@
 omod CLIENT is
-  pr CLIENT-ID .
-  subsort ClientId < Oid .
+  class Client | broker : Oid .
 endom
 
 omod SUBSCRIBER is 
-  pr LIST{MqttMsg} .
-  class Subscriber | recv-msg-queue : List{MqttMsg} .
+  pr CLIENT .
+  pr LIST{MqttzMsg} .
+
+  class Subscriber | buffer : List{MqttzMsg}, receiving : Bool .
+
+  subclass Subscriber < Client .
 endom
 
 omod SUBSCRIBER-BEHAVIOR is 
   pr SUBSCRIBER .
   pr CLIENT .
-  pr MQTTZ-MSG .
+  pr MQTTZ-MSG-BASE .
 
-  var SUB : ClientId .
-  var MSG : MqttMsg .
-  var MSGS : List{MqttMsg} .
+  vars BI SUB : Oid .
+  var BUFFER : List{MqttzMsg} .
+  var MQTTZ-ARGS : List{ReqArg} .
 
-  rl [recv-msg] :
-    subMqttMsg(MSG, SUB)
-    < SUB : Subscriber | recv-msg-queue : MSGS >
+  --- rl [recv-msg] :
+  ---   subMqttMsg(MSG, SUB)
+  ---   < SUB : Subscriber | recv-msg-queue : MSGS >
+  ---   => 
+  ---   < SUB : Subscriber | recv-msg-queue : MSGS MSG >
+  ---   recvSubMqttMsg(SUB, getTopic(MSG)) 
+  --- .
+
+  rl [sub-try-recv-message]:
+    < SUB : Subscriber | buffer : BUFFER, receiving : false > (msg mqttz[MQTTZ-ARGS] from BI to SUB)
     => 
-    < SUB : Subscriber | recv-msg-queue : MSGS MSG >
-    recvSubMqttMsg(SUB, getTopic(MSG)) 
-  .
+    < SUB : Subscriber | buffer : BUFFER [msg mqttz[MQTTZ-ARGS] from BI to SUB], receiving : true >
+    (msg mqttzReceived[] from SUB to BI) .
+
+  rl [sub-recv-message-success]:
+    < SUB : Subscriber | receiving : true > (msg mqttzRecvConfirmed[] from BI to SUB)
+    => 
+    < SUB : Subscriber | receiving : false > .
 
 endom
 
@@ -33,18 +47,20 @@ endom
 
 omod PUBLISHER is 
   pr NAT .
-  pr LIST{Data} .
   pr TOPIC .
+  pr CLIENT .
 
-  class Publisher | collected-data : List{Data}, 
-                    data-counter : Nat, max-data : Nat,
+  class Publisher | cur-data : Nat, max-data : Nat, 
                     topic : Topic, sending : Bool .
+
+  subclass Publisher < Client .
 endom
 
 omod PUBLISHER-BEHAVIOR is
   pr CLIENT . 
   pr PUBLISHER .
-  pr MQTTZ-MSG .
+  pr MQTTZ-MSG-BASE .
+  pr MQTTZ-CONSTANTS .
   pr ALGORITHM-IDENTIFIER .
   pr CRYPTO-KEY .
   pr MQTTZ-CRYPTO-KEY-VALUE .
@@ -52,37 +68,28 @@ omod PUBLISHER-BEHAVIOR is
 
   var N M : Nat .
   var TOPIC : Topic .
-  var CLIENT : ClientId .
-  var DATA : Data .
-  var PUB : ClientId .
+  var CLIENT : Oid .
+  vars DATA RAND-DATA : Data .
+  var BI PUB : Oid .
   var DATALIST : List{Data} .
 
 --- MQTTZ only use one algorithm.
 
-  op encrypt : List{Data} ClientId -> List{Data} .
-  eq encrypt(DATA , CLIENT) = encrypted(DATA , TEE-ALG-AES-CBC-NOPAD , 
-                                        key(teeAttribute(TEE-ATTR-SECRET-VALUE , keyAttrValue(CLIENT)))) .
+  op mkRandomEncryptedData : Oid Nat -> Data .
+  eq mkRandomEncryptedData(PUB, N) = encrypted(data(N), TEE-ALG-AES-CBC-NOPAD, 
+                                               key(teeAttribute(TEE-ATTR-SECRET-VALUE , keyAttrValue(PUB)))) .
 
   crl [collect-data] :
-    < PUB : Publisher | collected-data : DATALIST, data-counter : N, max-data : M >
+    < PUB : Publisher | cur-data : N, max-data : M, sending : false, topic : TOPIC, broker : BI >
     =>
-    < PUB : Publisher | collected-data : (DATALIST data(N, PUB)), 
-                        data-counter : N + 1 >
-  if N < M .
+    < PUB : Publisher | cur-data : N + 1, sending : true >
+    (msg mqttz[reqArg(RAND-DATA) reqArg(TOPIC) reqArg(N + 1)] from PUB to BI)
+  if N < M /\ RAND-DATA := mkRandomEncryptedData(PUB, N + 1) .
 
-  rl [send-msg] :
-    < PUB : Publisher | collected-data : (DATA DATALIST), sending : false, topic : TOPIC >
-    =>
-    < PUB : Publisher | collected-data : DATALIST, sending : true >
-    pubMqttMsg(msg encrypt(DATA, PUB) from PUB to TOPIC, PUB)
-  .
-
-  rl [send-msg-done] :
-    recvPubMqttMsg(PUB, TOPIC)
-    < PUB : Publisher | sending : true, topic : TOPIC >
-    =>
-    < PUB : Publisher | sending : false >
-  .
+  rl [pub-send-message-success]:
+    < PUB : Publisher | sending : true > (msg mqttzReceived[] from BI to PUB)
+    => 
+    < PUB : Publisher | sending : false > .
 
 endom
 
@@ -91,16 +98,16 @@ omod PUBLISHER-BEHAVIOR-INVISIBLE is
 
   var N M : Nat .
   var TOPIC : Topic .
-  var CLIENT : ClientId .
+  var CLIENT : Oid .
   var DATA : Data .
-  var PUB : ClientId .
+  var PUB : Oid .
   var DATALIST : List{Data} .
 
-  ceq
-    < PUB : Publisher | collected-data : DATALIST, data-counter : N, max-data : M >
-    =
-    < PUB : Publisher | collected-data : (DATALIST data(N, PUB)), 
-                        data-counter : N + 1 >
-  if N < M .
+  --- ceq
+  ---   < PUB : Publisher | collected-data : DATALIST, data-counter : N, max-data : M >
+  ---   =
+  ---   < PUB : Publisher | collected-data : (DATALIST data(N, PUB)), 
+  ---                       data-counter : N + 1 >
+  --- if N < M .
 
 endom

@@ -6,28 +6,22 @@ mod BASE-SCENARIO is
 
   vars RAPROG TAPROG : Program .
   var THREAT : Configuration .
+  var BI : Oid .
 
-  op clients : -> List{ClientId} .
-  eq clients = pub(1) pub(2) sub(1) sub(2) .
+  op clients : -> List{SubId} .
+  eq clients = {pub(1)} {pub(2)} {sub(1)} {sub(2)} .
 
-  op initBroker : Program -> Configuration .
-  eq initBroker(RAPROG, TAPROG) = 
-  < mqttzBroker : MqttzBroker | pub-msg-queue : nil ,
-                                ra-req-queue : nil ,                                
-                                ra-ret-queue : nil ,
-                                cur-ra-req : noRaReq ,
-                                subscriber-list : (ElectricityConsumption |-> sub(1) sub(2),
-                                                   BuildingTemperature |-> sub(2)) ,
-                                execution-envs : {initRa(RAPROG)} | 
-                                                 {initTa(TAPROG) initTrustedOS(clients)
-                                                  shareKeys(clients)},
-                                wait-receiving : false > 
-  .
+  op initBroker : Program Oid -> Configuration .
+  eq initBroker(RAPROG, TAPROG, BI) = 
+  < BI : Broker | in-buffer : nil, out-buffer : nil, re-enc-queue : nil,
+                  subscriptions : (topic(1) |-> {sub(1)} {sub(2)}, topic(2) |-> {sub(2)}) ,
+                  infra : {initRa(RAPROG)} | {initTa(TAPROG) initTrustedOS(clients) shareKeys(clients)},
+                  is-running : false, wait-recv : false, counter : 0 > .
 
   op scenario : Program Program Configuration -> Configuration .
   eq scenario(RAPROG, TAPROG, THREAT) 
-   = initPub(1, 1, ElectricityConsumption) initSub(1) 
-     initPub(2, 2, BuildingTemperature) initSub(2)
-     initBroker(RAPROG, TAPROG) THREAT .
+   = initPub(1, 1, topic(1), bk(1)) initSub(1, bk(1)) 
+     initPub(2, 2, topic(2), bk(1)) initSub(2, bk(1))
+     initBroker(RAPROG, TAPROG, bk(1)) THREAT .
 
 endm

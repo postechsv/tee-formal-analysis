@@ -8,23 +8,24 @@ omod SCENARIO-AUX is
   pr CLIENT .
 
   vars N M : Nat .
-  var ID : ClientId .
-  var IL : List{ClientId} .
+  var ID : Oid .
+  var IL : List{SubId} .
   var TOPIC : Topic .
   var P : Program .
+  var BI : Oid .
 
 ------------------------------------------------------------
 --- Initialization Functions
 ------------------------------------------------------------
 
-  ops keyObj streamId : ClientId -> TaObjectId [ctor] . 
+  ops keyObj streamId : Oid -> TaObjectId [ctor] . 
 
-  op keyIds : List{ClientId} -> Set{FileId} .
-  eq keyIds(ID IL) = (fileName(ID) , keyIds(IL)) .
+  op keyIds : List{SubId} -> Set{FileId} .
+  eq keyIds({ID} IL) = (fileName(ID) , keyIds(IL)) .
   eq keyIds(nil) = empty .
 
   op osId : -> Oid .
-  op initTrustedOS : List{ClientId} -> Configuration .
+  op initTrustedOS : List{SubId} -> Configuration .
   eq initTrustedOS(IL) 
   = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> ta) , session-counter : 1 ,
                            storage : REENCRYPT |-> keyIds(IL) , storage-status : (REENCRYPT |-> storageNormal) ,
@@ -41,13 +42,13 @@ omod SCENARIO-AUX is
                                    app-status : normal , api-call : noCall , api-return : noReturn ,
                                    current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
                                    trust-app-id : REENCRYPT ,
-                                   task : noTask , task-counter : 0 > .
+                                   task : noTask , task-counter : 0, state-changed : false > .
 
-  op shareKeys : List{ClientId} -> Configuration .
-  eq shareKeys(ID IL) = sharedKey(ID) shareKeys(IL) .
+  op shareKeys : List{SubId} -> Configuration .
+  eq shareKeys({ID} IL) = sharedKey(ID) shareKeys(IL) .
   eq shareKeys(nil) = none .
 
-  op sharedKey : ClientId -> Configuration .
+  op sharedKey : Oid -> Configuration .
   eq sharedKey(ID) = 
     < keyObj(ID) : PersistentObject | handle-set : none , object-type : TEE-TYPE-DATA , max-object-size : 0 Bits  , 
                                       file-id : fileName(ID) , trust-app-id : REENCRYPT ,
@@ -58,23 +59,20 @@ omod SCENARIO-AUX is
   --- op initTa : List{ClientId} -> Configuration .
   --- eq initTa(IL) = makeTa(1) makeTeeOs(IL) makeKey(IL) .
 
-  op initPub : Nat Nat Topic -> Configuration .
-  eq initPub(N, M, TOPIC)
-   = < pub(N) : Publisher | collected-data : nil, data-counter : 0, max-data : M, topic : TOPIC, sending : false > .
+  op initPub : Nat Nat Topic Oid -> Configuration .
+  eq initPub(N, M, TOPIC, BI)
+   = < pub(N) : Publisher | cur-data : 0, max-data : M, topic : TOPIC, sending : false, broker : BI > .
 
-  op initSub : Nat -> Configuration .
-  eq initSub(N)
-   = < sub(N) : Subscriber | recv-msg-queue : nil > .
+  op initSub : Nat Oid -> Configuration .
+  eq initSub(N, BI)
+   = < sub(N) : Subscriber | buffer : nil, broker : BI, receiving : false > .
 
 endom
 
 
 mod SCENARIO-TOPICS is
   pr TOPIC .
-------------------------------------------------------------
---- Topics
-------------------------------------------------------------
+  pr NAT .
 
-  op ElectricityConsumption : -> Topic [ctor] .
-  op BuildingTemperature : -> Topic [ctor] .
+  op topic : Nat -> Topic [ctor] .
 endm

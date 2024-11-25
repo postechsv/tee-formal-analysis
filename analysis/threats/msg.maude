@@ -1,77 +1,94 @@
 fmod ATTACK-TARGET is
-  pr TOPIC .
-  pr CLIENT-ID .
-
   sort AttackTarget .
-  op _::>_ : Topic ClientId -> AttackTarget [ctor] .
 endfm
 
 view AttackTarget from TRIV to ATTACK-TARGET is
   sort Elt to AttackTarget .
 endv
 
-fmod EXPLOIT is
-  pr MQTT-MSG .
-  pr CLIENT-ID .
-
-  sort Exploit .
-  op _::[___] : ClientId List{Data} ClientId Topic -> Exploit [ctor] .
+fmod LOG is
+  sort Log .
 endfm
 
-view Exploit from TRIV to EXPLOIT is
-  sort Elt to Exploit .
+view Log from TRIV to LOG is
+  sort Elt to Log .
 endv
 
 omod INTRUDER is
-  pr SET{Exploit} .
+  pr SET{Log} .
   pr SET{AttackTarget} .
 
-  class Intruder | attack-list : Set{AttackTarget},
-                   exploit-list : Set{Exploit} .
+  class Intruder | subs-list : Set{AttackTarget} .
+  
+  --- history : Set{Log} .
 endom
 
 omod MSG-THREAT is
-  pr MQTTZ-MSG .
   pr INTRUDER .
   pr MQTTZ-BROKER .
+  pr MQTTZ-MSG-AUX .
+  pr MQTTZ-RE-ENC-REQ .
+
+  vars INT BI PUB SUB : Oid .
+  var DATA : Data .
+  var N : Nat .
+  var SUBSC : Set{AttackTarget} .
+  var MQTTZ-ARGS : List{ReqArg} .
+  var TEE REE : Configuration .
+
 
   var TOPIC : Topic .
-  vars PUB SUB : ClientId .
-  var DATA : List{Data} .
-  vars BI INT : Oid .
-  var SUBS : List{ClientId} .
-  var PMSG : Configuration .
-  var ATKLIST : Set{AttackTarget} .
-  var MSG : MqttMsg .
-  var EXPL : Set{Exploit} .
+  var HISTORY : Set{Log} .
+  var MSG : Msg .
 
-  op learnBefore : ClientId Topic Set{AttackTarget} -> Bool .
-  eq learnBefore(SUB, TOPIC, (TOPIC ::> SUB, ATKLIST)) = true .
-  eq learnBefore(SUB, TOPIC, ATKLIST) = false [owise] . 
 
-  op exploitedBefore : ClientId ClientId Data Topic Set{Exploit} -> Bool .
-  eq exploitedBefore(PUB, SUB, DATA, TOPIC, (PUB ::[DATA SUB TOPIC], EXPL)) = true .
-  eq exploitedBefore(PUB, SUB, DATA, TOPIC, EXPL) = false [owise] . 
+  --- var SUBS : List{SubId} .
+  --- var PMSG : Configuration .
+  --- var MSG : MqttMsg .
+  --- var EXPL : Set{Exploit} .
+
+  op _::>_ : Oid Oid -> AttackTarget [ctor] .
+  op _@_ : Msg Oid -> Log [ctor] .
+
+  op exploitedBefore : Oid Oid Set{Log} -> Bool .
+  eq exploitedBefore(PUB, SUB, (msg mqttz[MQTTZ-ARGS] from PUB to BI @ SUB, HISTORY)) = true .
+  eq exploitedBefore(PUB, SUB, HISTORY) = false [owise] . 
+
+  op learnBefore : Oid Oid Set{AttackTarget} -> Bool .
+  eq learnBefore(PUB, SUB, (PUB ::> SUB, SUBSC)) = true .
+  eq learnBefore(PUB, SUB, SUBSC) = false [owise] .
 
   crl [learn-attack-targets] :
-    recvSubMqttMsg(SUB, TOPIC)
-    < INT : Intruder | attack-list : ATKLIST >
+    < BI : Broker | infra : {REE reqRA(reEncReq(DATA, PUB, SUB, MSG, N))} | {TEE} > 
+    < INT : Intruder | subs-list : SUBSC >
     => 
-    < INT : Intruder | attack-list : TOPIC ::> SUB , ATKLIST > 
-    recvSubMqttMsg(SUB, TOPIC)
-  if not learnBefore(SUB, TOPIC, ATKLIST) .
+    < BI : Broker | > < INT : Intruder | subs-list : PUB ::> SUB , SUBSC > 
+  if not learnBefore(PUB, SUB, SUBSC) .
 
-  crl [message-modification-threat] :
-    pubMqttMsg(msg DATA from PUB to TOPIC, PUB)
-    < INT : Intruder | exploit-list : EXPL, attack-list : (TOPIC ::> SUB , ATKLIST) >
+  --- crl [message-modification-threat] :
+  ---   (msg mqttz[MQTTZ-ARGS] from PUB to BI)
+  ---   < INT : Intruder | history : HISTORY , subs-list : (PUB ::> SUB , SUBSC) >
+  ---   => 
+  ---   < INT : Intruder | history : (msg mqttz[MQTTZ-ARGS] from PUB to BI) @ SUB, HISTORY > 
+  ---   (msg mqttz[MQTTZ-ARGS] from SUB to BI)
+  --- if not exploitedBefore(PUB, SUB, HISTORY) .
+
+  rl [message-modification-threat] :
+    (msg mqttz[MQTTZ-ARGS] from PUB to BI)
+    < INT : Intruder | subs-list : (PUB ::> SUB , SUBSC) >
     => 
-    < INT : Intruder | exploit-list : (PUB ::[DATA SUB TOPIC], EXPL) > 
-    pubMqttMsg(msg DATA from SUB to TOPIC, PUB)
-  if not exploitedBefore(PUB, SUB, DATA, TOPIC, EXPL) .
+    < INT : Intruder | > 
+    (msg mqttz[MQTTZ-ARGS] from SUB to BI) 
+    (msg mqttzReceived[] from BI to PUB) .
 
+  rl [message-modification-threat2] :
+    (msg mqttzReceived[] from BI to SUB)
+    < INT : Intruder | subs-list : (PUB ::> SUB , SUBSC) >
+    => 
+    < INT : Intruder | > .
 
   op int : -> Oid [ctor] .
   op initInt : -> Configuration .
-  eq initInt = < int : Intruder | attack-list : empty, exploit-list : empty > .
+  eq initInt = < int : Intruder | subs-list : empty > .
 
 endom

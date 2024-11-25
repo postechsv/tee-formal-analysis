@@ -3,22 +3,59 @@
 run() {
 
     case $1 in
-        table2) prog="normal" ;;
-        table3) prog="-patch" ;;
+        mc-exp1) prog="normal" ty="mc" ;;
+        mc-exp2) prog="-patch" ty="mc" ;;
+        ss-exp1) prog="normal" ty="ss1" ;;
+        ss-exp2) prog="normal" ty="ss2" ;;
         *) echo "error: wrong table"; exit 65 ;;
     esac
 
+    ltl=("p1a" "p1b" "p2a" "p2b" "p3a" "p3b" "p4" "p5" "p6")
+    # ssltl=("p1b" "p2b" "p3b" "p4" "p5" "p6")
+    ssltl=("$3")
     tht=("non" "oom" "msg")
+    red=("nored" "konly" "kcall" "all")
+    inv=("inv1" "inv2" "inv3" "inv4")
 
     cmds=()
 
-    for v in {1..6}
-    do
-        for t in "${tht[@]}"
+    if [ "$ty" == "mc" ]
+    then
+
+        for v in "${ltl[@]}"
         do
-            cmds+=("./run p$v $t $prog $1/maude-files $1/logs -silent")
+            for t in "${tht[@]}"
+            do
+                cmds+=("./run $v $t $prog "all" $1/maude-files $1/logs -silent noinv")
+            done
         done
-    done
+
+    else if [ "$ty" == "ss1" ]
+    then
+
+        for v in "${ssltl[@]}"
+        do
+            for t in "${tht[@]}"
+            do
+                for r in "${red[@]}"
+                do
+                    cmds+=("./run $v $t $prog $r $1/maude-files $1/logs -silent noinv")
+                done
+            done
+        done
+
+    else
+
+        for i in "${inv[@]}"
+        do
+            for r in "${red[@]}"
+            do
+                cmds+=("./run "no" "non" $prog $r $1/maude-files $1/logs -silent $i")
+            done
+        done
+    fi
+    fi
+
 
     case $2 in
         -non-parallel)  
@@ -31,5 +68,5 @@ run() {
 
 }
 
-# arg 1: table, 2: parallel
-run $1 $2
+# arg 1: table, 2: parallel, 3: test
+run $1 $2 $3

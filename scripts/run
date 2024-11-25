@@ -12,18 +12,30 @@ else
 fi
 
 run() {
-    case $6 in
+    case $7 in
         -silent) verbose=false ;;
         *)       verbose=true ;;
     esac
 
+    case $8 in
+        inv1) inv=true  ;;
+        inv2) inv=true  ;;
+        inv3) inv=true  ;;
+        inv4) inv=true  ;;
+        *)    inv=false ;;
+    esac
+
     case $1 in
-        p1) p="p1" ;;
-        p2) p="p2" ;;
-        p3) p="p3" ;;
-        p4) p="p4" ;;
-        p5) p="p5" ;;
-        p6) p="p6" ;;
+        p1a) p="p1a" ;;
+        p1b) p="p1b" ;;
+        p2a) p="p2a" ;;
+        p2b) p="p2b" ;;
+        p3a) p="p3a" ;;
+        p3b) p="p3b" ;;
+        p4)  p="p4" ;;
+        p5)  p="p5" ;;
+        p6)  p="p6" ;;
+        no)  p="no_prop" ;; # for invisible experiment
         *) echo "error: wrong property"; exit 65 ;;
     esac
 
@@ -39,18 +51,39 @@ run() {
         *) raProg="mqttzHost" taProg="mqttzTA" prn="" ;;
     esac
 
-    main=$(<"../analysis/cmd/main.maude")
-    analysis="mod ANALYSIS is pr ANALYSIS-CMD . $intRule endm"
-    cmd="set verbose on .\nred modelCheck(scenario($raProg, $taProg, $int),$p) ."
+    case $4 in
+        nored) red="" ;;
+        konly) red="pr IMP-INVISIBLE-REDUCTION ." ;;
+        kcall) red="pr IMP-INVISIBLE-REDUCTION . pr TEE-API-CALL-INVISIBLE-REDUCTION ." ;;
+        all)   red="pr IMP-INVISIBLE-REDUCTION . pr TEE-API-CALL-INVISIBLE-REDUCTION . pr INVISIBLE-REDUCTION ." ;;
+        *)     echo "error: wrong reduction $4"; exit 65 ;;
+    esac
 
-    name=`echo "$1"_"$2""$prn" | tr '-' '_'`
-
-    if [[ -n "$4" ]]
+    if [ "$inv" = true ]
     then
-        mf="$4"
+        main=$(<"../analysis/cmd/inv.maude")
+        analysis="mod ANALYSIS is pr ANALYSIS-CMD . $intRule $red endm"
+        cmd="set verbose on .\n"
+        for s in {1..4}
+        do
+            cmd=$cmd"\nsearch scenario-$8($raProg, $taProg, $int, $( expr 1 '*' "$s" )) =>* none ."
+        done
+    else
+        main=$(<"../analysis/cmd/main.maude")
+        analysis="mod ANALYSIS is pr ANALYSIS-CMD . $intRule $red endm"
+        cmd="set verbose on .\nred modelCheck(scenario($raProg, $taProg, $int),$p) ."
+    fi
+
+    name=`echo "$1"_"$2""$prn"_"$8" | tr '-' '_'`
+
+    if [[ -n "$5" ]]
+    then
+        mf="$5"
     else
         mf="./maude-files"
     fi
+
+    mf="$mf"/$4
 
     mkdir -p $mf
     (
@@ -62,16 +95,19 @@ run() {
         echo "write a maude file at" "$mf/$name".maude
     fi
 
-    if [[ -n "$5" ]]
+    if [[ -n "$6" ]]
     then
-        of="$5"
+        of="$6"
     else
         of="./logs"
     fi
 
+    of="$of"/$4
+
     mkdir -p $of
     (
-        $maude_bin < "$mf/$name.maude" >& "$of/$name".txt
+        echo -e "reduction method: $4" >& "$of/$name".txt
+        $maude_bin < "$mf/$name.maude" >> "$of/$name".txt 2>&1
     )
 
     if [ "$verbose" = true ]
@@ -80,5 +116,5 @@ run() {
     fi
 }
 
-# arg 1: LTL property, 2: threat, 3: TA prog, 4: maude file dir, 5: out file dir, 6: silent
-run $1 $2 $3 $4 $5 $6
+# arg 1: LTL property, 2: threat, 3: TA prog, 4: invisible, 5: maude file dir, 6: out file dir, 7: silent, 8: inv
+run $1 $2 $3 $4 $5 $6 $7 $8

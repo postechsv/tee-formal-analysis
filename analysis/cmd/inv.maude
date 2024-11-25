@@ -1,5 +1,5 @@
 load ../analysis/mqttz/main
-load ../analysis/scenario/base
+load ../analysis/scenario/inv
 load ../analysis/LTL/properties
 load ../analysis/threats/main
 --- load meta

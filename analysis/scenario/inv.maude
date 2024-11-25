@@ -1,0 +1,98 @@
+load aux
+
+mod BASE-SCENARIO is
+  pr SCENARIO-AUX .
+  pr SCENARIO-TOPICS .
+
+  vars RAPROG TAPROG : Program .
+  var THREAT : Configuration .
+  var CLIENTS : List{SubId} .
+  var SUBLIST : Map{Topic,List{SubId}} .
+  var N : Nat .
+  var BI : Oid .
+
+  --- op topic : Nat -> Topic [ctor] .
+
+  op initBroker : Program Program Oid List{SubId} Map{Topic,List{SubId}} -> Configuration .
+  eq initBroker(RAPROG, TAPROG, BI, CLIENTS, SUBLIST) = 
+      < BI : Broker | in-buffer : nil, out-buffer : nil, re-enc-queue : nil,
+                      subscriptions : SUBLIST ,
+                      infra : {initRa(RAPROG)} | {initTa(TAPROG) initTrustedOS(CLIENTS) shareKeys(CLIENTS)},
+                      is-running : false, wait-recv : false, counter : 0 > .
+
+--- pub1 send at most 2 message
+--- sub1 and sub2 subscribe to a topic
+
+  op scenario-inv1 : Program Program Configuration Nat -> Configuration .
+  eq scenario-inv1(RAPROG, TAPROG, THREAT, N) 
+   = initPub(1, N, topic(0), bk(1)) initSub(1, bk(1))
+     initBroker(RAPROG, TAPROG, bk(1), {pub(1)} {sub(1)}, scenario-1-sub-list) THREAT .
+  op scenario-1-sub-list : -> Map{Topic,List{SubId}} .
+  eq scenario-1-sub-list = (topic(0) |-> {sub(1)}) .
+
+--- pub1~2 send at most 2 message
+--- all subscribers subscribe to all topic
+
+  op scenario-inv2 : Program Program Configuration Nat -> Configuration .
+  eq scenario-inv2(RAPROG, TAPROG, THREAT, N) 
+   = initPub(1, N, topic(0), bk(1)) initSub(1, bk(1)) initSub(2, bk(1))
+     initBroker(RAPROG, TAPROG, bk(1), {pub(1)} {sub(1)} {sub(2)}, scenario-2-sub-list) THREAT .
+  op scenario-2-sub-list : -> Map{Topic,List{SubId}} .
+  eq scenario-2-sub-list = (topic(0) |-> {sub(1)} {sub(2)}) .
+
+--- pub1~3 send at most 2 message
+--- all subscribers subscribe to all topic
+
+  op scenario-inv3 : Program Program Configuration Nat -> Configuration .
+  eq scenario-inv3(RAPROG, TAPROG, THREAT, N) 
+   = initPub(1, N, topic(0), bk(1)) initSub(1, bk(1)) initSub(2, bk(1)) initSub(3, bk(1))
+     initBroker(RAPROG, TAPROG, bk(1), {pub(1)} {sub(1)} {sub(2)} {sub(3)}, scenario-3-sub-list) THREAT .
+  op scenario-3-sub-list : -> Map{Topic,List{SubId}} .
+  eq scenario-3-sub-list = (topic(0) |-> {sub(1)} {sub(2)} {sub(3)}) .
+
+--- pub1~3 send at most 2 message
+--- all subscribers subscribe to all topic
+
+  op scenario-inv4 : Program Program Configuration Nat -> Configuration .
+  eq scenario-inv4(RAPROG, TAPROG, THREAT, N) 
+   = initPub(1, N, topic(0), bk(1)) initSub(1, bk(1)) initSub(2, bk(1)) initSub(3, bk(1)) initSub(4, bk(1))
+     initBroker(RAPROG, TAPROG, bk(1), {pub(1)} {sub(1)} {sub(2)} {sub(3)} {sub(4)}, scenario-4-sub-list) THREAT .
+  op scenario-4-sub-list : -> Map{Topic,List{SubId}} .
+  eq scenario-4-sub-list = (topic(0) |-> {sub(1)} {sub(2)} {sub(3)} {sub(4)}) .
+endm
+
+
+--- Backup file for ss-exp2-old
+
+--- --- pub1 send at most 2 message
+--- --- sub1 and sub2 subscribe to a topic
+
+---   op scenario-inv1 : Program Program Configuration Nat -> Configuration .
+---   eq scenario-inv1(RAPROG, TAPROG, THREAT, N) 
+---    = initPub(1, N, topic(0)) initSub(1)
+---      initBroker(RAPROG, TAPROG, pub(1) sub(1), scenario-1-sub-list) THREAT .
+---   op scenario-1-sub-list : -> Map{Topic,List{ClientId}} .
+---   eq scenario-1-sub-list = (topic(0) |-> sub(1)) .
+
+--- --- pub1~2 send at most 2 message
+--- --- all subscribers subscribe to all topic
+
+---   op scenario-inv2 : Program Program Configuration Nat -> Configuration .
+---   eq scenario-inv2(RAPROG, TAPROG, THREAT, N) 
+---    = initPub(1, N, topic(0)) initSub(1) 
+---      initPub(2, N, topic(0)) initSub(2)
+---      initBroker(RAPROG, TAPROG, pub(1) pub(2) sub(1) sub(2), scenario-2-sub-list) THREAT .
+---   op scenario-2-sub-list : -> Map{Topic,List{ClientId}} .
+---   eq scenario-2-sub-list = (topic(0) |-> sub(1) sub(2)) .
+
+--- --- pub1~3 send at most 2 message
+--- --- all subscribers subscribe to all topic
+
+---   op scenario-inv3 : Program Program Configuration Nat -> Configuration .
+---   eq scenario-inv3(RAPROG, TAPROG, THREAT, N) 
+---    = initPub(1, N, topic(0)) initSub(1) 
+---      initPub(2, N, topic(0)) initSub(2)
+---      initPub(3, N, topic(0)) initSub(3)
+---      initBroker(RAPROG, TAPROG, pub(1) pub(2) pub(3) sub(1) sub(2) sub(3), scenario-3-sub-list) THREAT .
+---   op scenario-3-sub-list : -> Map{Topic,List{ClientId}} .
+---   eq scenario-3-sub-list = (topic(0) |-> sub(1) sub(2) sub(3)) .

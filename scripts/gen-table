@@ -34,7 +34,10 @@ def read_from_csv(file_name: str) -> List[List[str]]:
     with open(file_name, newline='') as csvfile:
         reader = csv.reader(csvfile, delimiter=',')
         for row in reader:
-            csv_data.append(row)
+            r = list()
+            r.append(row[0])
+            r.extend(row[2:])
+            csv_data.append(r)
 
     return csv_data[1:]
 

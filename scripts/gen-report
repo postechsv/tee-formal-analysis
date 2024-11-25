@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
 import argparse
 import csv
+from functools import reduce
 import os
 import re
 from typing import List
 
+red_sort  = {"nored" : 1, "konly" : 2, "kcall" : 3, "all" : 4}
 type_sort = {"NON" : 1, "MSG" : 2, "OOM" : 3}
 
+# gnu data gen
+props = ["p1b", "p2b", "p3b", "p4", "p5", "p6"]
+types = ["NON", "MSG", "OOM"]
+redux = ["nored", "konly", "kcall", "all"]
+index = ["prop", "redux", "type", "result", "state", "time"]
+
 def write_csv(data: List[List[str]], file_name):
-    header = ["Prop.", "Type", "Safe?", "# State", "Time"]
+    header = ["Prop.", "Red", "Type", "Safe?", "# State", "Time"]
 
     rows = list()
     rows.append(header)
@@ -21,16 +29,71 @@ def write_csv(data: List[List[str]], file_name):
 def find_state(input_string: str):
     result = re.search(r'ModelCheckerSymbol:\sExamined\s[0-9]*\ssystem\sstates', input_string)
     if result:
-        s = result.group().split("Examined")[1].split("system")[0]
-        return str(round(int(s)/1000, 1))
-    return None
+        return result.group().split("Examined")[1].split("system")[0]
+        # s = result.group().split("Examined")[1].split("system")[0]
+        # return str(round(int(s)/1000, 1))
+    return "-"
 
 def find_time(input_string: str):
     result = re.search(r'rewrites:\s[0-9]*\sin\s[0-9]*ms\scpu\s\([0-9]*ms\sreal\)\s\([0-9]*\srewrites/second\)', input_string)
     if result:
         t = result.group().split("in")[1].split("ms")[0]
-        return str(round(int(t)/1000, 1))
-    return None
+        return str(int(t)/1000.0)
+    return "-"
+
+def find_red(input_string: str):
+    result = re.search(r'reduction\smethod:\s[a-zA-Z]*', input_string)
+    if result:
+        return result.group().split(" ")[2]
+    return "-"
+
+def filter(data: List[List[str]], *keywords):
+    found = list()
+    for d_r in data:
+        if reduce(lambda acc, cur: acc and cur in d_r, keywords, True):
+            found.append(d_r)
+    return found
+
+def gen_gnu_data(data: List[List[str]], target):
+    p_rows = list()
+    for p in props:
+        ty_rows = list()
+        for ty in types:
+            row = list()
+            for r in redux:
+                res = filter(data, p, ty, r)
+                
+                # not found
+                if len(res) < 1:
+                    info = [p, r, ty, "-", "-", "-"]
+                else:
+                    assert len(res) == 1
+
+                    # list  [prop, redux, type, result, state, time]
+                    # e.g., ['p1', 'nored', 'NON', 'TRUE', ' 827094 ', '157.6']                    
+                    info = res[0]
+
+                row.append((r, info[index.index(target)]))
+
+            ty_rows.append((ty, row))
+        p_rows.append((p, ty_rows))
+    
+    return p_rows
+
+def write_gnu_data(file_name, data: List[List[List[str]]]):
+    header = "\t".join(redux)
+
+    f = open(file_name, "w")
+    f.write("# {}\n".format(header))
+
+    for p, p_r in data:
+        for ty, r in p_r:
+            assert len(r) == 4
+
+            d = "\t".join(map(lambda x: x[1], r))
+            f.write("{}-{}\t{}\n".format(p.upper(), ty, d))
+
+        f.write("\n")
 
 def find_result(input_string: str):
     # result Bool: true
@@ -54,6 +117,7 @@ def read_log(log_name):
     r = find_state(s)
     t = find_time(s)
     mc_r = find_result(s)
+    red = find_red(s)
 
     # print("  # state", r, t, mc_r)
 
@@ -61,14 +125,15 @@ def read_log(log_name):
     file_name = os.path.basename(log_name)
     f_n, _ = file_name.split(".")
 
-    prop, ty = f_n.replace("_patch", "").split("_")
+    prop, ty, _ = f_n.replace("_patch", "").split("_")
 
-    return [prop, ty.upper(), mc_r, r, t]
+    return [prop, red, ty.upper(), mc_r, r, t]
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("dir", nargs="?", metavar="D", type=str, help="table directory")
+    parser.add_argument("-gen-data", dest="gen_data", action="store_true", default=False)
     args = parser.parse_args()
 
     try:
@@ -91,13 +156,23 @@ if __name__ == "__main__":
                 log_file = "{}/{}".format(root, file)
                 log_data.append(read_log(log_file))
 
-        log_data = sorted(log_data, key=lambda x: (x[0], type_sort[x[1]]))
+        log_data = sorted(log_data, key=lambda x: (x[0], red_sort[x[1]], type_sort[x[2]]))
 
         log_file_name = args.dir.replace("/", "").replace(".", "").replace("..", "")
         csv_file_name = "{}-report.csv".format(log_file_name)
 
         write_csv(log_data, csv_file_name)
         print("write \'{}\' using the log files in \'{}\'".format(csv_file_name, args.dir))
+
+        if args.gen_data:
+            gnu_name = "{}-gnu".format(log_file_name)
+            gnu_s, gnu_t = "{}-state.dat".format(gnu_name), "{}-time.dat".format(gnu_name)
+
+            write_gnu_data(gnu_s, gen_gnu_data(log_data, "state"))
+            print("write \'{}\' using the log file \'{}\'".format(gnu_s, csv_file_name))
+
+            write_gnu_data(gnu_t, gen_gnu_data(log_data, "time"))
+            print("write \'{}\' using the log file \'{}\'".format(gnu_s, csv_file_name))
 
         # log_data.clear()
 

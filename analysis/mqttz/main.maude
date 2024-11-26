@@ -1,4 +1,4 @@
-load ../../formal-model/src/main
+load ../../spec/src/main
 load consts
 load client
 load broker

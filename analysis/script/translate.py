@@ -74,13 +74,15 @@ class Translator:
             ' 1' : ' # 1',
 
             # TEE constant translate
+            'TEE_TIMEOUT_INFINITE' : '# TEE-TIMEOUT-INFINITE',
+
             'TEE_STORAGE_PRIVATE' : '# TEE-STORAGE-PRIVATE',
 
             'TEE_HANDLE_NULL' : '# TEE-HANDLE-NULL',
 
-            # 'TEE_DATA_FLAG_ACCESS_READ'         : '# TEE-DATA-FLAG-ACCESS-READ',
+            'TEE_DATA_FLAG_ACCESS_READ'         : '# TEE-DATA-FLAG-ACCESS-READ',
             # 'TEE_DATA_FLAG_SHARE_READ'          : '# TEE-DATA-FLAG-SHARE-READ',
-            # 'TEE_DATA_FLAG_ACCESS_WRITE'        : '# TEE-DATA-FLAG-ACCESS-WRITE',
+            'TEE_DATA_FLAG_ACCESS_WRITE'        : '# TEE-DATA-FLAG-ACCESS-WRITE',
             # 'TEE_DATA_FLAG_ACCESS_WRITE_META'   : '# TEE-DATA-FLAG-ACCESS-WRITE-META',
             # 'TEE_DATA_FLAG_OVERWRITE'           : '# TEE-DATA-FLAG-SHARE-WRITE',
             'TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ'
@@ -90,6 +92,7 @@ class Translator:
 
 
             'TEE_TYPE_AES'                      : '# TEE-TYPE-AES',
+            'TEE_TYPE_HMAC_SHA256'              : '# TEE-TYPE-SHA256',
 
             'TEE_ObjectInfo'    : 'TeeObjectInfo',
             'aes_cipher'        : 'AesCipher',
@@ -97,9 +100,11 @@ class Translator:
             'TEE_ATTR_SECRET_VALUE' : '# TEE-ATTR-SECRET-VALUE',
 
             'TEE_ALG_AES_CBC_NOPAD' : '# TEE-ALG-AES-CBC-NOPAD',
+            'TEE_ALG_HMAC_SHA256'   : '# TEE-ALG-HMAC-SHA256',
 
             'TEE_MODE_ENCRYPT' : '# TEE-MODE-ENCRYPT',
             'TEE_MODE_DECRYPT' : '# TEE-MODE-DECRYPT',
+            'TEE_MODE_MAC'     : '# TEE-MODE-MAC',
 
             'TEE_ERROR_BAD_PARAMETER'   : '# TEE-ERROR-BAD-PARAMETER',
             'TEE_ERROR_GENERIC'         : '# TEE-ERROR-GENERIC',
@@ -107,6 +112,8 @@ class Translator:
             'TEE_ERROR_SHORT_BUFFER'    : '# TEE-ERROR-SHORT-BUFFER',
             'TEE_ERROR_BAD_STATE'       : '# TEE-ERROR-BAD-STATE',
             'TEE_ERROR_NOT_SUPPORTED'   : '# TEE-ERROR-NOT-SUPPORTED',
+            'TEE_ERROR_ITEM_NOT_FOUND'  : '# TEE-ERROR-ITEM-NOT-FOUND',
+            'TEE_ERROR_CORRUPT_OBJECT'  : '# TEE-ERROR-CORRUPT-OBJECT',
 
             'TEE_SUCCESS' : '# TEE-SUCCESS',
 
@@ -131,14 +138,35 @@ class Translator:
             'TEE_FreeOperation'                     : 'FreeOperation',
             'TEE_ResetOperation'                    : 'ResetOperation',
             'TEE_SetOperationKey'                   : 'SetOperationKey',
+
             'TEE_CipherInit'                        : 'CipherInit',
             'TEE_CipherUpdate'                      : 'CipherUpdate',
 
-            # Custom constants translate
+            'TEE_MACInit'                           : 'MACInit',
+            'TEE_MACComputeFinal'                   : 'MACComputeFinal',
+
+            'TEE_GenerateRandom'                    : 'GenerateRandom',
+
+            'TEE_OpenTASession'                     : 'OpenTASession',
+
+            # Custom constants translate (mqttz)
             'TA_AES_KEY_SIZE'                       : '# TA-AES-KEY-SIZE',
             'TA_AES_MODE_ENCODE'                    : '# TA-AES-MODE-ENCODE',
             'TA_AES_MODE_DECODE'                    : '# TA-AES-MODE-DECODE',
-            'TA_REENCRYPT'                          : '# TA-REENCRYPT'
+            'TA_REENCRYPT'                          : '# TA-REENCRYPT',
+
+            # Custom constants translate (kmgk)
+            'HMAC_SHA256_KEY_SIZE_BYTE'             : '# HMAC-SHA256-KEY-SIZE-BYTE',
+            'HMAC_SHA256_KEY_SIZE_BIT'              : '# HMAC-SHA256-KEY-SIZE-BIT',
+            'TA_KEYMASTER_UUID'                     : '# TA-KEYMASTER-UUID',
+            'KM_GET_AUTHTOKEN_KEY'                  : '# KM-GET-AUTHTOKEN-KEY',
+            'HW_AUTH_TOKEN_VERSION'                 : '# HW-AUTH-TOKEN-VERSION',
+            'ERROR_NONE'                            : '# ERROR-NONE',
+            'ERROR_INVALID'                         : '# ERROR-INVALID',
+            'TEE_TRUE'                              : '# TEE-TRUE',
+            'TEE_FALSE'                             : '# TEE-FALSE',
+            'GK_ENROLL'                             : '# GK-ENROLL',
+            'GK_VERIFY'                             : '# GK-VERIFY'
         }
 
     def no_need_to_translate(self, line):

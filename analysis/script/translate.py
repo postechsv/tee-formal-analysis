@@ -1,3 +1,5 @@
+import argparse
+
 class AnnotationInfo:
     def __init__(self, del_assign, ignore_args, more_out_args, more_in_args):
         self.del_assign = del_assign
@@ -237,7 +239,7 @@ class Translator:
             for var_type in self.var_types: line = line.replace(var_type, 'var')
         return line
 
-    def translate(self, source_path='./preprocessed-ta.c', target_path='./imp.maude'):
+    def translate(self, source_path, target_path, custom_main):
         source_program = open(source_path)
         target_program = open(target_path, 'w')
 
@@ -250,7 +252,7 @@ class Translator:
             if ignore_flag: continue 
 
             if '//@create_custom_main' in line:
-                custom_main_file = open('./custom_main.txt')
+                custom_main_file = open(custom_main)
                 for line in custom_main_file.readlines(): target_program.write(line)
                 break
             if '//@add_line' in line: line = self.write_constants['tab'] + self.write_constants['tab'] + line.split(' | ')[1]
@@ -262,6 +264,13 @@ class Translator:
                 target_program.write(self.write_constants['tab'] + self.write_constants['tab'] + self.translate_to_imp(line))
 
 if __name__ == '__main__':
-    translator = Translator()
-    translator.translate()
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('--source', default='./mqttz/preprocessed-ta.c')
+    parser.add_argument('--target', default='./mqttz/imp.maude')
+    parser.add_argument('-custom-main', default='./mqttz/custom_main.txt')
 
+    args = parser.parse_args()
+
+    translator = Translator()
+    translator.translate(args.source, args.target, args.custom_main)

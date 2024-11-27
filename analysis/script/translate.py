@@ -39,21 +39,29 @@ class Translator:
         ]
 
         self.var_types = [
+            'uint8_t',
             'uint32_t',             # C native
+            'uint64_t',
             'size_t',
             'void',
             'char',
             'int',
+            'bool',
 
             'TEE_OperationHandle',  # TEE types
             'TEE_ObjectHandle',
             'TEE_Result',
-            'TEE_Attribute'
+            'TEE_Attribute',
+
+            # custom types (kmgk)
+            'secure_id_t',
+            'salt_t'
         ]
 
         self.struct_types = [       # TODO: accumulate struct types as translating
             'TEE_ObjectInfo',       # currently manually added
-            'aes_cipher'
+            'aes_cipher',
+            'password_handle_t'
         ]
 
         self.translate_mapping = {
@@ -96,6 +104,7 @@ class Translator:
 
             'TEE_ObjectInfo'    : 'TeeObjectInfo',
             'aes_cipher'        : 'AesCipher',
+            'password_handle_t' : 'PasswordHandleT',
 
             'TEE_ATTR_SECRET_VALUE' : '# TEE-ATTR-SECRET-VALUE',
 
@@ -236,6 +245,7 @@ class Translator:
         if '{' in line: # start of struct 
             for struct_type in self.struct_types: line = line.replace(struct_type + ' ', '')
             line = line.replace('typedef ', '')
+            line = line.replace('__packed ', '')
         elif '}' in line: line = line # end of struct
         else: # var declar
             for var_type in self.var_types: line = line.replace(var_type, 'var')

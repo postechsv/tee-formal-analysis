@@ -116,34 +116,36 @@ static TEE_Result TA_GetMasterKey(TEE_ObjectHandle masterKey)
 	TEE_ObjectHandle	secretObj = TEE_HANDLE_NULL;
 	uint32_t		readSize = 0;
 
-	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, secret_ID,
-		sizeof(secret_ID), TEE_DATA_FLAG_ACCESS_READ, &secretObj);
+	//@func_annote |res(out) | secretObj(out)|, sizeof(secret_ID)(ignore)|
+	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, secret_ID, sizeof(secret_ID), TEE_DATA_FLAG_ACCESS_READ, &secretObj);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to open secret, error=%X", res);
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
-	res = TEE_ReadObjectData(secretObj, secretData, sizeof(secretData),
-			&readSize);
-	if (res != TEE_SUCCESS || sizeof(secretData) != readSize) {
+	//@func_annote |# dataSize(1)(in)|res(out)| secretData(out)|secretData, sizeof(secretData), &readSize(ignore)|
+	res = TEE_ReadObjectData(secretObj, secretData, sizeof(secretData), &readSize);
+	// if (res != TEE_SUCCESS || sizeof(secretData) != readSize) {
+	if (res != TEE_SUCCESS) {
 		EMSG("Failed to read secret data, bytes = %u", readSize);
-		goto close_obj;
+		goto close_obj; //@no_semi_colon
 	}
 
-	TEE_InitRefAttribute(&attrs[0], TEE_ATTR_SECRET_VALUE, secretData,
-			sizeof(secretData));
+	//@func_annote |attrs(out)|&attrs[0], (ignore)|, sizeof(secretData)(ignore)|
+	TEE_InitRefAttribute(&attrs[0], TEE_ATTR_SECRET_VALUE, secretData, sizeof(secretData));
 
-	res = TEE_PopulateTransientObject(masterKey, attrs,
-			sizeof(attrs)/sizeof(attrs[0]));
+	//@func_annote |res(out)|, sizeof(attrs)/sizeof(attrs[0])(ignore)|
+	res = TEE_PopulateTransientObject(masterKey, attrs, sizeof(attrs)/sizeof(attrs[0]));
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to set master key attributes");
-		goto close_obj;
+		goto close_obj; //@no_semi_colon
 	}
 
 close_obj:
+	//@func_annote |secretObj(out)|
 	TEE_CloseObject(secretObj);
 exit:
-	return res;
+	return res; //@no_semi_colon
 }
 
 static TEE_Result TA_ComputeSignature(uint8_t *signature, size_t signature_length,

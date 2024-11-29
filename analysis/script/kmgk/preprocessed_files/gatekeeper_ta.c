@@ -37,47 +37,51 @@ typedef struct __packed {
 
 	bool hardware_backed; //@no_semi_colon
 } password_handle_t;
+//@endprocess_struct
 
+//@process_func
 TEE_Result TA_CreateEntryPoint(void)
 {
 	TEE_Result		res = TEE_SUCCESS;
 	TEE_ObjectHandle	secretObj = TEE_HANDLE_NULL;
 
 	DMSG("Checking master key secret");
-	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, secret_ID,
-		sizeof(secret_ID), TEE_DATA_FLAG_ACCESS_READ, &secretObj);
+	//@func_annote |res(out) | secretObj(out)|, sizeof(secret_ID)(ignore)|
+	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, secret_ID, sizeof(secret_ID), TEE_DATA_FLAG_ACCESS_READ, &secretObj);
 	if (res == TEE_ERROR_ITEM_NOT_FOUND) {
 		uint8_t secretData[HMAC_SHA256_KEY_SIZE_BYTE];
 		DMSG("Create master key secret");
 
+		//@func_annote |secretData(out)|secretData, sizeof(secretData)(ignore)|
 		TEE_GenerateRandom(secretData, sizeof(secretData));
-		res = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, secret_ID,
-				sizeof(secret_ID), TEE_DATA_FLAG_ACCESS_WRITE,
-				TEE_HANDLE_NULL, NULL, 0, &secretObj);
+		//@func_annote | # noData, # dataSize(0), secretObj(in)|res(out) | secretObj(out)|, sizeof(secret_ID)(ignore)| NULL, 0, &secretObj(ignore)|
+		res = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, secret_ID, sizeof(secret_ID), TEE_DATA_FLAG_ACCESS_WRITE, TEE_HANDLE_NULL, NULL, 0, &secretObj);
 		if (res != TEE_SUCCESS) {
 			EMSG("Failed to create secret");
 		} else {
-			res = TEE_WriteObjectData(secretObj, (void *)secretData,
-					sizeof(secretData));
+			//@func_annote |res(out) |, sizeof(secretData)(ignore)|
+			res = TEE_WriteObjectData(secretObj, (void *)secretData, sizeof(secretData));
 			if (res != TEE_SUCCESS) {
 				EMSG("Failed to write secret data");
 			}
-			TEE_CloseObject(secretObj);
+			TEE_CloseObject(secretObj); //@no_semi_colon
 		}
 	} else if (res == TEE_SUCCESS) {
 		DMSG("Secret is already created");
-		TEE_CloseObject(secretObj);
+		//@func_annote |secretObj(out)|
+		TEE_CloseObject(secretObj); //@no_semi_colon
 	} else {
 		EMSG("Failed to open secret, error=%X", res);
 	}
 
-	return res;
+	return res; //@no_semi_colon
 }
 
 void TA_DestroyEntryPoint(void)
 {
 }
 
+//@ignore
 TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types,
 		TEE_Param  params[TEE_NUM_PARAMS], void **sess_ctx)
 {
@@ -102,6 +106,7 @@ void TA_CloseSessionEntryPoint(void *sess_ctx)
 	/* Unused parameters */
 	(void)&sess_ctx;
 }
+//@endignore
 
 static TEE_Result TA_GetMasterKey(TEE_ObjectHandle masterKey)
 {

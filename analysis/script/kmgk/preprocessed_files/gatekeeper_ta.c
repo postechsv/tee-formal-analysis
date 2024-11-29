@@ -77,6 +77,7 @@ TEE_Result TA_CreateEntryPoint(void)
 	return res; //@no_semi_colon
 }
 
+//@func_start
 void TA_DestroyEntryPoint(void)
 {
 }
@@ -108,6 +109,7 @@ void TA_CloseSessionEntryPoint(void *sess_ctx)
 }
 //@endignore
 
+//@func_start
 static TEE_Result TA_GetMasterKey(TEE_ObjectHandle masterKey)
 {
 	TEE_Result		res;
@@ -148,8 +150,10 @@ exit:
 	return res; //@no_semi_colon
 }
 
-static TEE_Result TA_ComputeSignature(uint8_t *signature, size_t signature_length,
-		TEE_ObjectHandle key, const uint8_t *message, size_t length)
+//@func_start
+// Preprocess: removed signature_length and length
+static TEE_Result TA_ComputeSignature(uint8_t *signature, TEE_ObjectHandle key, const uint8_t *message)
+// static TEE_Result TA_ComputeSignature(uint8_t *signature, size_t signature_length, TEE_ObjectHandle key, const uint8_t *message, size_t length)
 {
 	uint32_t buf_length = HMAC_SHA256_KEY_SIZE_BYTE;
 	uint8_t buf[buf_length];
@@ -157,71 +161,86 @@ static TEE_Result TA_ComputeSignature(uint8_t *signature, size_t signature_lengt
 	TEE_Result res;
 	uint32_t to_write;
 
-	res = TEE_AllocateOperation(&op, TEE_ALG_HMAC_SHA256, TEE_MODE_MAC,
-			HMAC_SHA256_KEY_SIZE_BIT);
+	//@func_annote |res(out)| op(out)|&op, (ignore)|
+	res = TEE_AllocateOperation(&op, TEE_ALG_HMAC_SHA256, TEE_MODE_MAC, HMAC_SHA256_KEY_SIZE_BIT);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to allocate HMAC operation");
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
+	//@func_annote |res(out)|
 	res = TEE_SetOperationKey(op, key);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to set secret key");
-		goto free_op;
+		goto free_op; //@no_semi_colon
 	}
 
+	//@func_annote |, # noData(in)|  (out)|, NULL, 0(ignore)|
 	TEE_MACInit(op, NULL, 0);
 
+	//@func_annote |buf(out)|, length, buf, &buf_length(ignore)|
 	TEE_MACComputeFinal(op, (void *)message, length, buf, &buf_length);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to compute HMAC");
-		goto free_op;
+		goto free_op; //@no_semi_colon
 	}
 
+	//@ignore
 	to_write = buf_length;
 	if (buf_length > signature_length)
 		to_write = signature_length;
+	//@endignore
 
+	//@ignore
 	memset(signature, 0, signature_length);
 	memcpy(signature, buf, to_write);
+	//@endignore
+	//@add_line | signature := buf ;
 
 free_op:
+	//@func_annote | op(out)|
 	TEE_FreeOperation(op);
 exit:
-	return res;
+	return res; //@no_semi_colon
 }
 
-static TEE_Result TA_ComputePasswordSignature(
-		uint8_t *signature, size_t signature_length,
-		TEE_ObjectHandle key,
-		const uint8_t *password, size_t password_length, salt_t salt)
+//@func_start
+// Preprocess: removed signature_length and password_length
+static TEE_Result TA_ComputePasswordSignature(uint8_t *signature, TEE_ObjectHandle key, const uint8_t *password, salt_t salt)
+// static TEE_Result TA_ComputePasswordSignature(uint8_t *signature, size_t signature_length, TEE_ObjectHandle key, const uint8_t *password, size_t password_length, salt_t salt)
 {
 	uint8_t salted_password[password_length + sizeof(salt)];
+	// Preprocess: ad-hoc salting
+	//@ignore
 	memcpy(salted_password, &salt, sizeof(salt));
 	memcpy(salted_password + sizeof(salt), password, password_length);
-	return TA_ComputeSignature(signature, signature_length, key,
-			salted_password, sizeof(salted_password));
+	//@endignore
+	//@add_line | salted_password = salt + password ;
+	//@func_annote |, sizeof(salted_password)(ignore)|
+	return TA_ComputeSignature(signature, signature_length, key, salted_password, sizeof(salted_password));
 }
 
-static TEE_Result TA_CreatePasswordHandle(password_handle_t *password_handle,
-		salt_t salt, secure_id_t user_id, uint64_t flags,
-		uint64_t handle_version, const uint8_t *password,
-		uint32_t password_length)
+//@func_start
+// Preprocess: removed password_length
+static TEE_Result TA_CreatePasswordHandle(password_handle_t *password_handle, salt_t salt, secure_id_t user_id, uint64_t flags, uint64_t handle_version, const uint8_t *password)
+// static TEE_Result TA_CreatePasswordHandle(password_handle_t *password_handle, salt_t salt, secure_id_t user_id, uint64_t flags, uint64_t handle_version, const uint8_t *password, uint32_t password_length)
 {
 	password_handle_t pw_handle;
+	//@ignore
 	const uint32_t metadata_length = sizeof(pw_handle.user_id) +
 		sizeof(pw_handle.flags) +
 		sizeof(pw_handle.version);
+	//@endignore
 	uint8_t to_sign[password_length + metadata_length];
 
 	TEE_ObjectHandle masterKey = TEE_HANDLE_NULL;
 	TEE_Result res;
 
-	res = TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256,
-			HMAC_SHA256_KEY_SIZE_BIT, &masterKey);
+	//@func_annote |res(out)| masterKey(out)|, &masterKey(ignore)|
+	res = TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256, HMAC_SHA256_KEY_SIZE_BIT, &masterKey);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to allocate password key");
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
 	pw_handle.version = handle_version;
@@ -230,29 +249,36 @@ static TEE_Result TA_CreatePasswordHandle(password_handle_t *password_handle,
 	pw_handle.flags = flags;
 	pw_handle.hardware_backed = true;
 
+	// Preprocess: ad-hoc
+	//@ignore
 	memcpy(to_sign, &pw_handle, metadata_length);
 	memcpy(to_sign + metadata_length, password, password_length);
+	//@endignore
+	//@add_line | to_sign = pw_handle + password ;
 
 	res = TA_GetMasterKey(masterKey);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to get master key");
-		goto free_key;
+		goto free_key; //@no_semi_colon
 	}
 
-	res = TA_ComputePasswordSignature(pw_handle.signature,
-			sizeof(pw_handle.signature), masterKey,
-			to_sign, sizeof(to_sign), salt);
+	//@func_annote |, sizeof(pw_handle.signature)(ignore)|, sizeof(to_sign)(ignore)|
+	res = TA_ComputePasswordSignature(pw_handle.signature, sizeof(pw_handle.signature), masterKey, to_sign, sizeof(to_sign), salt);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to compute password signature");
-		goto free_key;
+		goto free_key; //@no_semi_colon
 	}
 
+	//@ignore
 	memcpy(password_handle, &pw_handle, sizeof(pw_handle));
+	//@endignore
+	//@add_line | password_handle = pw_handle
 
 free_key:
+	//@func_annote |masterKey(out)|
 	TEE_FreeTransientObject(masterKey);
 exit:
-	return res;
+	return res; //@no_semi_colon
 }
 
 static TEE_Result TA_GetAuthTokenKey(TEE_ObjectHandle key)
@@ -371,36 +397,43 @@ exit:
 	memcpy(auth_token, &token, sizeof(token));
 }
 
-static TEE_Result TA_DoVerify(const password_handle_t *expected_handle,
-		const uint8_t *password, uint32_t password_length)
+//@func_start
+// Preprocess: removed password_length
+static TEE_Result TA_DoVerify(const password_handle_t *expected_handle, const uint8_t *password)
+// static TEE_Result TA_DoVerify(const password_handle_t *expected_handle, const uint8_t *password, uint32_t password_length)
 {
 	TEE_Result res;
 	password_handle_t password_handle;
 
+	//@ignore
 	if (!password_length) {
 		res = TEE_FALSE;
 		goto exit;
 	}
+	//@endignore
 
-	res = TA_CreatePasswordHandle(&password_handle, expected_handle->salt,
-			expected_handle->user_id, expected_handle->flags,
-			expected_handle->version, password, password_length);
+	//@func_annote |, password_length(ignore)|
+	res = TA_CreatePasswordHandle(&password_handle, expected_handle->salt, expected_handle->user_id, expected_handle->flags, expected_handle->version, password, password_length);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to create password handle");
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
-	if (memcmp(password_handle.signature, expected_handle->signature,
-			sizeof(expected_handle->signature)) == 0) {
+	
+	//@add_line | if (password_handle.signature == expected_handle->signature) {
+	//@ignore
+	if (memcmp(password_handle.signature, expected_handle->signature, sizeof(expected_handle->signature)) == 0) {
+	//@endignore
 		res = TEE_TRUE;
 	} else {
 		res = TEE_FALSE;
 	}
 
 exit:
-	return res;
+	return res; //@no_semi_colon
 }
 
+//@func_start
 static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 {
 	TEE_Result res = TEE_SUCCESS;
@@ -419,6 +452,7 @@ static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 	 * | current_password_handle        | #current_password_handle_length |
 	 * +--------------------------------+---------------------------------+
 	 */
+	//@ignore
 	uint32_t uid;
 	uint32_t desired_password_length;
 	const uint8_t *desired_password;
@@ -429,6 +463,7 @@ static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 
 	const uint8_t *request = (const uint8_t *)params[0].memref.buffer;
 	const uint8_t *i_req = request;
+	//@endignore
 
 	/*
 	 * Enroll response layout
@@ -447,23 +482,28 @@ static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 	uint32_t timeout = 0;
 	password_handle_t password_handle;
 
+	//@ignore
 	uint8_t *response = params[1].memref.buffer;
 	uint8_t *i_resp = response;
 
 	const uint32_t max_response_size = sizeof(uint32_t) +
 		sizeof(uint32_t) +
 		sizeof(password_handle_t);
+	//@endignore
 
 	secure_id_t user_id = 0;
 	uint64_t flags = 0;
 	salt_t salt;
 
+	//@ignore
 	deserialize_int(&i_req, &uid);
 	deserialize_blob(&i_req, &desired_password, &desired_password_length);
 	deserialize_blob(&i_req, &current_password, &current_password_length);
 	deserialize_blob(&i_req, &current_password_handle,
 			&current_password_handle_length);
+	//@endignore
 
+	//@ignore
 	// Check request buffer size
 	if (get_size(request, i_req) > params[0].memref.size) {
 		EMSG("Wrong request buffer size");
@@ -485,27 +525,32 @@ static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 		res = TEE_ERROR_BAD_PARAMETERS;
 		goto exit;
 	}
+	//@endignore
 
-	if (!current_password_handle_length) {
+	//Preprocess: remove length check
+	//@add_line | if ( false) {
+	// if (!current_password_handle_length) {
 		// Password handle does not match what is stored, generate new
 		// secure user_id
-		TEE_GenerateRandom(&user_id, sizeof(user_id));
+		//@func_annote |user_id(out)|&user_id, sizeof(user_id)(ignore)|
+		TEE_GenerateRandom(&user_id, sizeof(user_id)); //@no_semi_colon
 	} else {
 		uint64_t timestamp;
 		bool throttle;
 
-		password_handle_t *pw_handle =
-			(password_handle_t *)current_password_handle;
+		password_handle_t *pw_handle = (password_handle_t *)current_password_handle;
 		if (pw_handle->version > HANDLE_VERSION) {
-			EMSG("Wrong handle version %u, required version is %u",
-					pw_handle->version, HANDLE_VERSION);
+			EMSG("Wrong handle version %u, required version is %u", pw_handle->version, HANDLE_VERSION);
 			error = ERROR_INVALID;
-			goto serialize_response;
+			goto serialize_response; //@no_semi_colon
 		}
 
 		user_id = pw_handle->user_id;
+		//@ignore
 		timestamp = GetTimestamp();
+		//@endignore
 
+		//@ignore
 		throttle = (pw_handle->version >= HANDLE_VERSION_THROTTLE);
 		if (throttle) {
 			failure_record_t record;
@@ -519,57 +564,97 @@ static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 
 			IncrementFailureRecord(&record, timestamp);
 		}
+		//@endignore
 
-		res = TA_DoVerify(pw_handle, current_password,
-				current_password_length);
-		switch (res) {
-		case TEE_TRUE:
-			break;
-		case TEE_FALSE:
-			if (throttle && timeout > 0) {
-				error = ERROR_RETRY;
+		res = TA_DoVerify(pw_handle, current_password, current_password_length);
+		// Preprocess: change to equivalent if-else statements
+		// switch (res) {
+		// case TEE_TRUE:
+		// 	break;
+		// case TEE_FALSE:
+		// 	if (throttle && timeout > 0) {
+		// 		error = ERROR_RETRY;
+		// 	} else {
+		// 		error = ERROR_INVALID;
+		// 	}
+		// 	goto serialize_response;
+		// default:
+		// 	EMSG("Failed to verify password handle");
+		// 	goto exit;
+		// }
+		if (res == TEE_TRUE) {
+			;
+		} else {
+			if (res == TEE_FALSE) {
+				//@ignore
+				if (throttle && timeout > 0) {
+					error = ERROR_RETRY;
+				} else {
+					error = ERROR_INVALID;
+				}
+				//@endignore
+				//@add_line | 			error = ERROR_INVALID;
+				goto serialize_response; //@no_semi_colon
 			} else {
-				error = ERROR_INVALID;
+				EMSG("Failed to verify password handle");
+				goto exit; //@no_semi_colon
 			}
-			goto serialize_response;
-		default:
-			EMSG("Failed to verify password handle");
-			goto exit;
 		}
 	}
 
+	//@ignore
 	ClearFailureRecord(user_id);
+	//@endignore
 
+	//@func_annote |salt(out)|&salt, sizeof(salt)(ignore)|
 	TEE_GenerateRandom(&salt, sizeof(salt));
-	res = TA_CreatePasswordHandle(&password_handle, salt, user_id, flags,
-			HANDLE_VERSION, desired_password,
-			desired_password_length);
+	//@func_annote |, desired_password_length(ignore)|
+	res = TA_CreatePasswordHandle(&password_handle, salt, user_id, flags, HANDLE_VERSION, desired_password, desired_password_length);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to create password handle");
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
 serialize_response:
+	//@ignore
 	serialize_int(&i_resp, error);
-	switch (error) {
-	case ERROR_INVALID:
-	case ERROR_UNKNOWN:
-		break;
-	case ERROR_RETRY:
-		serialize_int(&i_resp, timeout);
-		break;
-	case ERROR_NONE:
-		serialize_blob(&i_resp, (const uint8_t *)&password_handle,
-				sizeof(password_handle));
-		break;
-	default:
-		EMSG("Unknown error message!");
-		res = TEE_ERROR_GENERIC;
+	//@endignore
+	// Preprocess: change to equivalent if-else statements (rm ERROR_RETRY for now)
+	// switch (error) {
+	// case ERROR_INVALID:
+	// case ERROR_UNKNOWN:
+	// 	break;
+	// case ERROR_RETRY:
+	// 	serialize_int(&i_resp, timeout);
+	// 	break;
+	// case ERROR_NONE:
+	// 	serialize_blob(&i_resp, (const uint8_t *)&password_handle,
+	// 			sizeof(password_handle));
+	// 	break;
+	// default:
+	// 	EMSG("Unknown error message!");
+	// 	res = TEE_ERROR_GENERIC;
+	// }
+	if (error == ERROR_INVALID || error == ERROR_UNKNOWN) {
+		;
+	} else {
+		if (error == ERROR_NONE) {
+			//@add_line | 		skip
+			//@ignore
+			serialize_blob(&i_resp, (const uint8_t *)&password_handle, sizeof(password_handle));
+			//@endignore
+		} else {
+			EMSG("Unknown error message!");
+			res = TEE_ERROR_GENERIC;
+		}
 	}
+
+	//@ignore
 	params[1].memref.size = get_size(response, i_resp);
+	//@endignore
 exit:
 	DMSG("Enroll returns 0x%08X, error = %d", res, error);
-	return res;
+	return res; //@no_semi_colon
 }
 
 static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])

@@ -1,5 +1,6 @@
 import argparse
 from enum import Enum
+from functools import reduce
 
 class TranslationStatus(Enum):
     NOT_TRANSLATING = -1
@@ -257,8 +258,8 @@ class Translator:
     def special_process_struct(self, line):
         if '{' in line: # start of struct 
             for struct_type in self.struct_types: line = line.replace(struct_type + ' ', '')
-            line = line.replace('typedef ', '')
-            line = line.replace('__packed ', '')
+            replacements = {'typedef ' : '', '__packed ' : ''}
+            line = reduce(lambda temp, repl: temp.replace(*repl), replacements.items(), line)
         elif '}' in line: line = line # end of struct
         else: # var declar
             for var_type in self.var_types: line = line.replace(var_type, 'var')
@@ -267,8 +268,8 @@ class Translator:
     def special_process_func_start(self, line):
         if 'static' in line: # start of func
             for var_type in self.var_types: line = line.replace(var_type + ' ', '')
-            line = line.replace('static ', '')
-            line = line.replace('(', ' (')
+            replacements = {'const ' : '', 'static ' : '', '(' : ' ('}
+            line = reduce(lambda temp, repl: temp.replace(*repl), replacements.items(), line)
             self.translation_status = TranslationStatus.TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION
         return line
 

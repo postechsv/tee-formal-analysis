@@ -169,6 +169,7 @@ err:
     return res; //@no_semi_colon
 }
 
+//@func_start
 static TEE_Result set_aes_key(void *session, char *key)
 {
     aes_cipher *sess;
@@ -209,6 +210,7 @@ static TEE_Result set_aes_key(void *session, char *key)
     return res; //@no_semi_colon
 }
 
+//@func_start
 static TEE_Result set_aes_iv(void *session, char *iv)
 {
     aes_cipher *sess;
@@ -225,6 +227,7 @@ static TEE_Result set_aes_iv(void *session, char *iv)
  * This method reads an object from Secure Storage but is always invoked
  * from within a TA. Hence why we don't check the parameter types.
  */
+ //@func_start
 static TEE_Result read_raw_object(char *cli_id, char *data)
 {
 	TEE_ObjectHandle object;
@@ -273,6 +276,7 @@ exit:
 	return res; //@no_semi_colon
 }
 
+//@func_start
 static TEE_Result cipher_buffer(void *sess, char *enc_data, char *dec_data)
 {
     printf("MQTTZ: Starting AES Cipher!\n");
@@ -293,6 +297,7 @@ static TEE_Result cipher_buffer(void *sess, char *enc_data, char *dec_data)
     return res; //@no_semi_colon
 }
 
+//@func_start
 static int save_key(char *cli_id, char *cli_key)
 {
     uint32_t obj_data_flag;
@@ -319,6 +324,7 @@ static int save_key(char *cli_id, char *cli_key)
     return 0; //@no_semi_colon
 }
 
+//@func_start
 // Preprocess: delete key_mode arguement
 static int get_key(char *cli_id, char *cli_key)
 {
@@ -405,6 +411,7 @@ static int fill_ss(int table_size)
 }
 //@endignore
 
+//@func_start
 static TEE_Result payload_reencryption(void *session, uint32_t param_types, TEE_Param params[4])
 {
     TEE_Result res;
@@ -430,6 +437,7 @@ static TEE_Result payload_reencryption(void *session, uint32_t param_types, TEE_
     TEE_GetSystemTime(&t1);
     //@endignore
     char *ori_cli_key;
+    //@func_annote(assign)
     ori_cli_key = (char *) TEE_Malloc(sizeof *ori_cli_key * (TA_AES_KEY_SIZE + 1), 0);
     printf("MQTTZ: Allocated Origin Cli Key\n");
     // if (get_key((char *) params[0].memref.buffer, ori_cli_key, params[3].value.a) != 0)
@@ -484,6 +492,7 @@ static TEE_Result payload_reencryption(void *session, uint32_t param_types, TEE_
     //@ignore
     size_t dec_data_size = TA_MQTTZ_MAX_MSG_SZ;
     //@endignore
+    //@func_annote(assign)
     dec_data = (char *) TEE_Malloc(sizeof *dec_data * dec_data_size, 0);
     //@ignore
     if (!dec_data)

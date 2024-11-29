@@ -1,4 +1,13 @@
 import argparse
+from enum import Enum
+
+class TranslationStatus(Enum):
+    NOT_TRANSLATING = -1
+    TRANSLATING = 0
+    TRANSLATING_STRUCT = 1
+    TRANSLATING_FUNC_START = 2
+    TRANSLATING_FUNC_BODY_WITH_ANNOTATION = 3
+    TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION = 4
 
 class AnnotationInfo:
     def __init__(self, del_assign, ignore_args, more_out_args, more_in_args):
@@ -68,10 +77,10 @@ class Translator:
             #TODO: need to update
             'payload_reencryption (*session, param_types, TEE_Param params[4])'
             : 'payload_reencryption (*session, ori_cli_id, ori_cli_iv, ori_cli_data, dest_cli_id, dest_cli_data)',
-            '(var *) TEE_Malloc(sizeof *dest_cli_iv * (TA_AES_IV_SIZE + 1), 0);' : '# dummyIv;',
-            '(var *) TEE_Malloc(sizeof *ori_cli_key * (TA_AES_KEY_SIZE + 1), 0);' : '# randomAttrVal;',
-            '(var *) TEE_Malloc(sizeof *dest_cli_key * (TA_AES_KEY_SIZE + 1), 0);' : '# randomAttrVal;',
-            '(var * ori_cli_iv) TEE_Malloc(sizeof *dec_data * dec_data_size, 0 ori_cli_iv);' : '# noData;',
+            '(char *) TEE_Malloc(sizeof *dest_cli_iv * (TA_AES_IV_SIZE + 1), 0);' : '# dummyIv;',
+            '(char *) TEE_Malloc(sizeof *ori_cli_key * (TA_AES_KEY_SIZE + 1), 0);' : '# randomAttrVal;',
+            '(char *) TEE_Malloc(sizeof *dest_cli_key * (TA_AES_KEY_SIZE + 1), 0);' : '# randomAttrVal;',
+            '(char *) TEE_Malloc(sizeof *dec_data * dec_data_size, 0);' : '# noData;',
 
             # C syntax to IMP syntax
             '->' : ' . ', 
@@ -88,9 +97,9 @@ class Translator:
 
             'TEE_HANDLE_NULL' : '# TEE-HANDLE-NULL',
 
-            'TEE_DATA_FLAG_ACCESS_READ'         : '# TEE-DATA-FLAG-ACCESS-READ',
+            'TEE_DATA_FLAG_ACCESS_READ,'         : '# TEE-DATA-FLAG-ACCESS-READ,',
             # 'TEE_DATA_FLAG_SHARE_READ'          : '# TEE-DATA-FLAG-SHARE-READ',
-            'TEE_DATA_FLAG_ACCESS_WRITE'        : '# TEE-DATA-FLAG-ACCESS-WRITE',
+            'TEE_DATA_FLAG_ACCESS_WRITE,'        : '# TEE-DATA-FLAG-ACCESS-WRITE,',
             # 'TEE_DATA_FLAG_ACCESS_WRITE_META'   : '# TEE-DATA-FLAG-ACCESS-WRITE-META',
             # 'TEE_DATA_FLAG_OVERWRITE'           : '# TEE-DATA-FLAG-SHARE-WRITE',
             'TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ'
@@ -178,6 +187,10 @@ class Translator:
             'GK_VERIFY'                             : '# GK-VERIFY'
         }
 
+        self.prev_translation_status = None
+        self.translation_status = None
+        self.current_annotation_info = None
+
     def no_need_to_translate(self, line):
         tokens = line.split()
         if len(tokens) == 0: return False # an empty line
@@ -207,7 +220,7 @@ class Translator:
         line = self.replace_with_imp_names(line)
         return self.add_semi_colon(line)
 
-    def process_preprocess_line(self, line, ignore_flag, struct_flag, func_flag):
+    def process_preprocess_line(self, line):
         def is_preprocess_line(line): return ('//@' in line)
 
         def start_ignore(line): return ('//@ignore' in line)    
@@ -217,29 +230,29 @@ class Translator:
         def end_process_struct(line): return ('//@endprocess_struct' in line)
 
         def start_process_func(line): return ('//@process_func' in line)
+        def func_start(line): return '//@func_start' in line
 
-        if not is_preprocess_line(line): pass # normal C line
+        if not is_preprocess_line(line): return False # normal C line
         else: # is preprocess line
-            if start_ignore(line): ignore_flag = True
-            elif end_ignore(line): ignore_flag = False
-            elif start_process_struct(line): struct_flag = True
-            elif end_process_struct(line): struct_flag = False
-            elif start_process_func(line): func_flag = True
+            if start_ignore(line): 
+                self.prev_translation_status = self.translation_status
+                self.translation_status = TranslationStatus.NOT_TRANSLATING
+            elif end_ignore(line): self.translation_status = self.prev_translation_status
+            elif start_process_struct(line): self.translation_status = TranslationStatus.TRANSLATING_STRUCT
+            elif end_process_struct(line): self.translation_status = TranslationStatus.TRANSLATING
+            elif start_process_func(line) or func_start(line): self.translation_status = TranslationStatus.TRANSLATING_FUNC_START
             else: pass
-        return [ignore_flag, struct_flag, func_flag]
+            return True
 
-    def process_func_annotation_line(self, line, annotation_info):
-        def is_func_annotation(line): return ('//@func_annote' in line)
-
-        if not is_func_annotation(line): return [False, annotation_info]
-        else:
-            ignore_args, more_out_args, more_in_args = [], [], []
-            tokens = line.split('|')
-            for token in tokens:
-                if '(out)' in token: more_out_args.append(token.replace('(out)', ''))
-                if '(in)' in token: more_in_args.append(token.replace('(in)', ''))
-                if '(ignore)' in token: ignore_args.append(token.replace('(ignore)', ''))
-            return [True, AnnotationInfo(not ('(assign)' in line), ignore_args, more_out_args, more_in_args)]
+    def process_func_annotation_line(self, line):
+        ignore_args, more_out_args, more_in_args = [], [], []
+        tokens = line.split('|')
+        for token in tokens:
+            if '(out)' in token: more_out_args.append(token.replace('(out)', ''))
+            if '(in)' in token: more_in_args.append(token.replace('(in)', ''))
+            if '(ignore)' in token: ignore_args.append(token.replace('(ignore)', ''))
+        self.current_annotation_info = AnnotationInfo(not ('(assign)' in line), ignore_args, more_out_args, more_in_args)
+        self.translation_status = TranslationStatus.TRANSLATING_FUNC_BODY_WITH_ANNOTATION
 
     def special_process_struct(self, line):
         if '{' in line: # start of struct 
@@ -251,55 +264,66 @@ class Translator:
             for var_type in self.var_types: line = line.replace(var_type, 'var')
         return line
 
-    def special_process_func(self, line, annotation_info=None):
+    def special_process_func_start(self, line):
         if 'static' in line: # start of func
             for var_type in self.var_types: line = line.replace(var_type + ' ', '')
             line = line.replace('static ', '')
             line = line.replace('(', ' (')
-        elif ':' in line: line = self.write_constants['tab'] + line.replace(':', ' :') # code label (case not considered yet)
+            self.translation_status = TranslationStatus.TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION
+        return line
+
+    def special_process_func_body(self, line):
+        if ':' in line: line = self.write_constants['tab'] + line.replace(':', ' :') # code label (case not considered yet)
         elif 'if' in line: line = line.replace('!', '! ') # if statement
         elif '}\n' in line: line = line.replace('}', '} ;')
         else: # middle of func
-            if annotation_info is not None:
-                if ' = ' in line and annotation_info.del_assign:
+            if self.translation_status == TranslationStatus.TRANSLATING_FUNC_BODY_WITH_ANNOTATION:
+                if ' = ' in line and self.current_annotation_info.del_assign:
                     tokens = line.split()
                     line = line.replace(tokens[0] + ' ' + tokens[1] + ' ', '')
-                for ignore_arg in annotation_info.ignore_args: line = line.replace(ignore_arg, '')
-                for more_in_arg in annotation_info.more_in_args: line = line.replace(')', more_in_arg + ')')
-                for (o_idx, more_out_arg) in enumerate(annotation_info.more_out_args):
+                for ignore_arg in self.current_annotation_info.ignore_args: line = line.replace(ignore_arg, '')
+                for more_in_arg in self.current_annotation_info.more_in_args: line = line.replace(')', more_in_arg + ')')
+                for (o_idx, more_out_arg) in enumerate(self.current_annotation_info.more_out_args):
                     if o_idx == 0: line = line.replace(');', ' ; ' + more_out_arg + ');')
                     else: line = line.replace(');', ',' + more_out_arg + ');')
-                annotation_info.del_assign = False
-
-            for type_conversion in self.need_to_strip_type_conversions: line = line.replace(type_conversion, ' ')
-            for struct_type in self.struct_types:
-                if struct_type in line: line = line.replace(struct_type, 'struct ' + self.translate_mapping[struct_type])
-            for var_type in self.var_types: line = line.replace(var_type, 'var')
+                self.translation_status = TranslationStatus.TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION
+                self.current_annotation_info = None
+            else: # self.translation_status == TranslationStatus.TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION
+                for type_conversion in self.need_to_strip_type_conversions: line = line.replace(type_conversion, ' ')
+                for struct_type in self.struct_types:
+                    if struct_type in line: line = line.replace(struct_type, 'struct ' + self.translate_mapping[struct_type])
+                for var_type in self.var_types: line = line.replace(var_type, 'var')
+                if 'var' in line and '[' in line and ']' in line: line = line[:line.find('[')] + line[line.find(']') + 1:]
         return line
 
     def translate(self, source_path, target_path, custom_main):
         source_program = open(source_path)
         target_program = open(target_path, 'w')
 
-        ignore_flag, struct_flag, func_flag = False, False, False
-        annotation_encounted, annotation_info = False, None
         for line in source_program.readlines():
-            # process user added preprocess comment
-            [ignore_flag, struct_flag, func_flag] = self.process_preprocess_line(line, ignore_flag, struct_flag, func_flag)
-            [annotation_encounted, annotation_info] = self.process_func_annotation_line(line, annotation_info)
-            if ignore_flag: continue 
-
+            if '//@add_line' in line: line = self.write_constants['tab'] + self.write_constants['tab'] + line.split(' | ')[1]
             if '//@create_custom_main' in line:
                 custom_main_file = open(custom_main)
                 for line in custom_main_file.readlines(): target_program.write(line)
                 break
-            if '//@add_line' in line: line = self.write_constants['tab'] + self.write_constants['tab'] + line.split(' | ')[1]
 
+            # process user added preprocess comment
+            self.process_preprocess_line(line)
+
+            if self.translation_status == TranslationStatus.NOT_TRANSLATING: continue
+            elif self.translation_status == TranslationStatus.TRANSLATING_STRUCT:
+                line = self.special_process_struct(line)
+            elif self.translation_status == TranslationStatus.TRANSLATING_FUNC_START:
+                line = self.special_process_func_start(line)    
+            elif self.translation_status == TranslationStatus.TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION or \
+                self.translation_status == TranslationStatus.TRANSLATING_FUNC_BODY_WITH_ANNOTATION:
+                if '//@func_annote' in line: self.process_func_annotation_line(line)
+                else: 
+                    if self.no_need_to_translate(line): continue
+                    line = self.special_process_func_body(line)
+            
             if self.no_need_to_translate(line): continue
-            else: 
-                if struct_flag: line = self.special_process_struct(line)
-                if func_flag: line = self.special_process_func(line, annotation_info)
-                target_program.write(self.write_constants['tab'] + self.write_constants['tab'] + self.translate_to_imp(line))
+            target_program.write(self.write_constants['tab'] + self.write_constants['tab'] + self.translate_to_imp(line))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

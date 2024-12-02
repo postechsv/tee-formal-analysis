@@ -37,6 +37,16 @@ typedef struct __packed {
 
 	bool hardware_backed; //@no_semi_colon
 } password_handle_t;
+
+typedef struct __packed {
+	uint8_t version;
+	uint64_t challenge;
+	uint64_t user_id;
+	uint64_t authenticator_id;
+	uint32_t authenticator_type;
+	uint64_t timestamp;
+	uint8_t hmac[32];
+} hw_auth_token_t;
 //@endprocess_struct
 
 //@process_func

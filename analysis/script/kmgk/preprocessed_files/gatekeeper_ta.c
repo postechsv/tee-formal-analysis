@@ -23,7 +23,11 @@
 #include "gatekeeper_ipc.h"
 #include "failure_record.h"
 
+// Preprocess: secret_ID just one for now
+//@ignore
 static uint8_t	secret_ID[] = {0xB1, 0x6B, 0x00, 0xB5};
+//@endignore
+//@add_line | secret_ID = 177
 
 //@process_struct
 // Manually copied from gatekeeper/ta/ta_gatekeeper.h
@@ -909,6 +913,7 @@ exit:
 	return res; //@no_semi_colon
 }
 
+//@ignore
 TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx, uint32_t cmd_id,
 			uint32_t param_types, TEE_Param params[TEE_NUM_PARAMS])
 {
@@ -934,3 +939,6 @@ TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx, uint32_t cmd_id,
 
 	return TEE_ERROR_BAD_PARAMETERS;
 }
+//@endignore
+
+//@create_custom_main

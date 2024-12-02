@@ -281,6 +281,7 @@ exit:
 	return res; //@no_semi_colon
 }
 
+//@func_start
 static TEE_Result TA_GetAuthTokenKey(TEE_ObjectHandle key)
 {
 	TEE_Result		res;
@@ -297,104 +298,122 @@ static TEE_Result TA_GetAuthTokenKey(TEE_ObjectHandle key)
 
 	DMSG("Connect to keymaster");
 
+	//@ignore
 	paramTypes = TEE_PARAM_TYPES(TEE_PARAM_TYPE_NONE,
 				     TEE_PARAM_TYPE_NONE,
 				     TEE_PARAM_TYPE_NONE,
 				     TEE_PARAM_TYPE_NONE);
 	memset(params, 0, sizeof(params));
+	//@endignore
 
-	res = TEE_OpenTASession(&uuid, TEE_TIMEOUT_INFINITE, paramTypes, params, &sess,
-			&returnOrigin);
+	//@func_annote |, paramTypes(ignore)|
+	res = TEE_OpenTASession(&uuid, TEE_TIMEOUT_INFINITE, paramTypes, params, &sess, &returnOrigin);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to connect to keymaster");
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
+	//@endignore
 
+	//@ignore
 	paramTypes = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
 				     TEE_PARAM_TYPE_MEMREF_OUTPUT,
 				     TEE_PARAM_TYPE_NONE,
 				     TEE_PARAM_TYPE_NONE);
 	memset(&params, 0, sizeof(params));
+	//@endignore
 
+	//@ignore
 	params[0].memref.buffer = dummy;
 	params[0].memref.size = sizeof(dummy);
 
 	params[1].memref.buffer = authTokenKeyData;
 	params[1].memref.size = sizeof(authTokenKeyData);
+	//@endignore
 
-	res = TEE_InvokeTACommand(sess, TEE_TIMEOUT_INFINITE, KM_GET_AUTHTOKEN_KEY,
-			paramTypes, params, &returnOrigin);
+	//@func_annote |, TEE_TIMEOUT_INFINITE(ignore)|, paramTypes(ignore)|
+	res = TEE_InvokeTACommand(sess, TEE_TIMEOUT_INFINITE, KM_GET_AUTHTOKEN_KEY, paramTypes, params, &returnOrigin);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed in keymaster");
-		goto close_sess;
+		goto close_sess; //@no_semi_colon
 	}
 
+	//@ignore
 	if (params[1].memref.size != sizeof(authTokenKeyData)) {
 		EMSG("Wrong auth_token key size");
 		res = TEE_ERROR_CORRUPT_OBJECT;
 		goto close_sess;
 	}
+	//@endignore
 
-	TEE_InitRefAttribute(&attrs[0], TEE_ATTR_SECRET_VALUE, authTokenKeyData,
-			sizeof(authTokenKeyData));
-	res = TEE_PopulateTransientObject(key, attrs,
-			sizeof(attrs)/sizeof(attrs[0]));
+	//@func_annote |attrs(out)|&attrs[0], (ignore)|, sizeof(authTokenKeyData)(ignore)|
+	TEE_InitRefAttribute(&attrs[0], TEE_ATTR_SECRET_VALUE, authTokenKeyData, sizeof(authTokenKeyData));
+	//@func_annote |res(out)|, sizeof(attrs)/sizeof(attrs[0])(ignore)|
+	res = TEE_PopulateTransientObject(key, attrs, sizeof(attrs)/sizeof(attrs[0]));
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to set auth_token key attributes");
-		goto close_sess;
+		goto close_sess; //@no_semi_colon
 	}
 
 close_sess:
+	//@ignore
 	TEE_CloseTASession(sess);
+	//@endignore
 exit:
-	return res;
+	return res; //@no_semi_colon
 }
 
-static void TA_MintAuthToken(hw_auth_token_t *auth_token, int64_t timestamp,
-		secure_id_t user_id, secure_id_t authenticator_id,
-		uint64_t challenge) {
+//@func_start
+static void TA_MintAuthToken(hw_auth_token_t *auth_token, int64_t timestamp, secure_id_t user_id, secure_id_t authenticator_id, uint64_t challenge) {
 	TEE_Result		res;
 
 	hw_auth_token_t		token;
 	TEE_ObjectHandle	authTokenKey = TEE_HANDLE_NULL;
 
 	const uint8_t		*toSign = (const uint8_t *)&token;
+	//@ignore
 	const uint32_t		toSignLen = sizeof(token) - sizeof(token.hmac);
+	//@endignore
 
 	token.version = HW_AUTH_TOKEN_VERSION;
 	token.challenge = challenge;
 	token.user_id = user_id;
 	token.authenticator_id = authenticator_id;
-	token.authenticator_type = TEE_U32_TO_BIG_ENDIAN(
-			(uint32_t)HW_AUTH_PASSWORD);
+	token.authenticator_type = TEE_U32_TO_BIG_ENDIAN((uint32_t)HW_AUTH_PASSWORD);
 	token.timestamp =  TEE_U64_TO_BIG_ENDIAN(timestamp);
+	//@ignore
 	memset(token.hmac, 0, sizeof(token.hmac));
+	//@endignore
+	//@add_line | token.hac := # noData
 
-	res = TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256,
-			HMAC_SHA256_KEY_SIZE_BIT, &authTokenKey);
+	//@func_annote |res(out)| authTokenKey(out)|, &authTokenKey(ignore)|
+	res = TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256, HMAC_SHA256_KEY_SIZE_BIT, &authTokenKey);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to allocate auth_token key");
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
 	res = TA_GetAuthTokenKey(authTokenKey);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to get auth_token key from keymaster");
-		goto free_key;
+		goto free_key; //@no_semi_colon
 	}
 
-	res = TA_ComputeSignature(token.hmac, sizeof(token.hmac), authTokenKey,
-			toSign, toSignLen);
+	//@func_annote |, sizeof(token.hamc)(ignore)|, toSignLen(ignore)|
+	res = TA_ComputeSignature(token.hmac, sizeof(token.hmac), authTokenKey, toSign, toSignLen);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to compute auth_token signature");
 		memset(token.hmac, 0, sizeof(token.hmac));
-		goto free_key;
+		goto free_key; //@no_semi_colon
 	}
 
 free_key:
+	//@func_annote |authTokenKey(out)|
 	TEE_FreeTransientObject(authTokenKey);
 exit:
+	//@ignore
 	memcpy(auth_token, &token, sizeof(token));
+	//@endignore
+	//@add_line | auth_token := token ;
 }
 
 //@func_start
@@ -657,6 +676,7 @@ exit:
 	return res; //@no_semi_colon
 }
 
+//@func_start
 static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 {
 	TEE_Result res = TEE_SUCCESS;
@@ -674,6 +694,7 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 	 * | provided_password               | #provided_password_length        |
 	 * +---------------------------------+----------------------------------+
 	 */
+	//@ignore
 	uint32_t uid;
 	uint64_t challenge;
 	uint32_t enrolled_password_handle_length;
@@ -683,6 +704,7 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 
 	const uint8_t *request = (const uint8_t *)params[0].memref.buffer;
 	const uint8_t *i_req = request;
+	//@endignore
 
 	/*
 	 * Verify response layout
@@ -703,28 +725,37 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 	hw_auth_token_t auth_token;
 	bool request_reenroll = false;
 
+	//@ignore
 	uint8_t *response = params[1].memref.buffer;
 	uint8_t *i_resp = response;
+	//@endignore
 
+	//@ignore
 	const uint32_t max_response_size = sizeof(uint32_t) +
 		sizeof(uint32_t) +
 		sizeof(password_handle_t) +
 		sizeof(uint32_t);
+	//@endignore
 
 	password_handle_t *password_handle;
 	secure_id_t user_id;
 	secure_id_t authenticator_id = 0;
 
+	//@ignore
 	uint64_t timestamp = GetTimestamp();
+	//@endignore
 	bool throttle;
 
+	//@ignore
 	deserialize_int(&i_req, &uid);
 	deserialize_int64(&i_req, &challenge);
 	deserialize_blob(&i_req, &enrolled_password_handle,
 			&enrolled_password_handle_length);
 	deserialize_blob(&i_req, &provided_password,
 			&provided_password_length);
+	//@endignore
 
+	//@ignore
 	// Check request buffer size
 	if (get_size(request, i_req) > params[0].memref.size) {
 		EMSG("Wrong request buffer size");
@@ -746,18 +777,19 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 		res = TEE_ERROR_BAD_PARAMETERS;
 		goto exit;
 	}
+	//@endignore
 
 	password_handle = (password_handle_t *)enrolled_password_handle;
 
 	if (password_handle->version > HANDLE_VERSION) {
-		EMSG("Wrong handle version %u, required version is %u",
-				password_handle->version, HANDLE_VERSION);
+		EMSG("Wrong handle version %u, required version is %u", password_handle->version, HANDLE_VERSION);
 		error = ERROR_INVALID;
-		goto serialize_response;
+		goto serialize_response; //@no_semi_colon
 	}
 
 	user_id = password_handle->user_id;
 
+	//@ignore
 	throttle = (password_handle->version >= HANDLE_VERSION_THROTTLE);
 	if (throttle) {
 		failure_record_t record;
@@ -772,50 +804,99 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 	} else {
 		request_reenroll = true;
 	}
+	//@endignore
 
-	res = TA_DoVerify(password_handle, provided_password,
-			provided_password_length);
-	switch (res) {
-	case TEE_TRUE:
-		TA_MintAuthToken(&auth_token, timestamp, user_id,
-				authenticator_id, challenge);
+	res = TA_DoVerify(password_handle, provided_password, provided_password_length);
+	// Preprocess: change to equivalent if-else statements
+	// switch (res) {
+	// case TEE_TRUE:
+	// 	TA_MintAuthToken(&auth_token, timestamp, user_id,
+	// 			authenticator_id, challenge);
+	// 	if (throttle) {
+	// 		ClearFailureRecord(user_id);
+	// 	}
+	// 	goto serialize_response;
+	// case TEE_FALSE:
+	// 	if (throttle && timeout > 0) {
+	// 		error = ERROR_RETRY;
+	// 	} else {
+	// 		error = ERROR_INVALID;
+	// 	}
+	// 	goto serialize_response;
+	// default:
+	// 	EMSG("Failed to verify password handle");
+	// 	goto exit;
+	// }
+	if (res == TEE_TRUE) {
+		TA_MintAuthToken(&auth_token, timestamp, user_id, authenticator_id, challenge);
+		//@ignore
 		if (throttle) {
 			ClearFailureRecord(user_id);
 		}
+		//@endignore
 		goto serialize_response;
-	case TEE_FALSE:
-		if (throttle && timeout > 0) {
-			error = ERROR_RETRY;
+	} else {
+		if (res == TEE_FALSE) {
+			// Preprocess: remove throttle for now
+			// if (throttle && timeout > 0) {
+			if (timeout > 0) {
+				error = ERROR_RETRY;
+			} else {
+				error = ERROR_INVALID;
+			}
+			goto serialize_response;
 		} else {
-			error = ERROR_INVALID;
+			EMSG("Failed to verify password handle");
+			goto exit; //@no_semi_colon
 		}
-		goto serialize_response;
-	default:
-		EMSG("Failed to verify password handle");
-		goto exit;
 	}
 
 serialize_response:
+	//@ignore
 	serialize_int(&i_resp, error);
-	switch (error) {
-	case ERROR_INVALID:
-	case ERROR_UNKNOWN:
-		break;
-	case ERROR_RETRY:
-		serialize_int(&i_resp, timeout);
-		break;
-	case ERROR_NONE:
-		serialize_blob(&i_resp, (uint8_t *)&auth_token, sizeof(auth_token));
-		serialize_int(&i_resp, (uint32_t) request_reenroll);
-		break;
-	default:
-		EMSG("Unknown error message!");
-		res = TEE_ERROR_GENERIC;
+	//@endignore
+	// Preprocess: change to equivalent if-else statements
+	// switch (error) {
+	// case ERROR_INVALID:
+	// case ERROR_UNKNOWN:
+	// 	break;
+	// case ERROR_RETRY:
+	// 	serialize_int(&i_resp, timeout);
+	// 	break;
+	// case ERROR_NONE:
+	// 	serialize_blob(&i_resp, (uint8_t *)&auth_token, sizeof(auth_token));
+	// 	serialize_int(&i_resp, (uint32_t) request_reenroll);
+	// 	break;
+	// default:
+	// 	EMSG("Unknown error message!");
+	// 	res = TEE_ERROR_GENERIC;
+	// }
+	if (error == ERROR_INVALID || error == ERROR_UNKNOWN) {
+		;
+	} else {
+		if (error == ERROR_RETRY) {
+			//@ignore
+			serialize_int(&i_resp, timeout);
+			//@endignore
+		} else {
+			if (error == ERROR_NONE) {
+				//@ignore
+				serialize_blob(&i_resp, (uint8_t *)&auth_token, sizeof(auth_token));
+				serialize_int(&i_resp, (uint32_t) request_reenroll);
+				//@endignore
+			} else { 
+				EMSG("Unknown error message!");
+				res = TEE_ERROR_GENERIC; //@no_semi_colon
+			}
+		}
 	}
+
+	//@ignore
 	params[1].memref.size = get_size(response, i_resp);
+	//@endignore
 exit:
 	DMSG("Verify returns 0x%08X, error = %d", res, error);
-	return res;
+	return res; //@no_semi_colon
 }
 
 TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx, uint32_t cmd_id,

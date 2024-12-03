@@ -1,0 +1,64 @@
+load ../../spec/src/main
+load consts
+
+mod KMGK is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr GATEKEEPER-CONSTANTS .
+  pr IMP-SEMANTICS .
+endm
+
+omod SCENARIO-AUX is
+  pr KMGK .
+  pr ID-GEN .
+  pr RICH-APP .
+  pr TRUST-APP .
+
+  var P : Program .
+
+------------------------------------------------------------
+--- Initialization Functions
+------------------------------------------------------------
+
+  op osId : -> Oid .
+  op initTrustedOS : -> Configuration .
+  eq initTrustedOS 
+  = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> ta) , session-counter : 1 ,
+                           storage : empty , storage-status : empty ,
+                           service-request-ta : noAppId , service-request-ta-inst : noInstId ,
+                           service-in : nil , service-out : nil ,
+                           temporary-objects : empty > .
+
+  op initRa : Program -> Configuration .
+  eq initRa(P) = < ra : RichApp | proc : none , prog : P , running : false , 
+                                  invoke-req-queue : nil , invoke-ret-queue : nil > .
+
+  op initTa : Program -> Configuration .
+  eq initTa(P) = < ta : TrustApp | proc : none , prog : P , running : false ,
+                                   app-status : normal , api-call : noCall , api-return : noReturn ,
+                                   current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
+                                   trust-app-id : GATEKEEPER ,
+                                   task : noTask , task-counter : 0 > .
+
+
+endom
+
+mod BASE-SCENARIO is
+  pr DEVICE .
+  pr SCENARIO-AUX .
+
+  vars RAPROG TAPROG : Program .
+
+  op initDevice : Program Program -> Configuration .
+  eq initDevice(RAPROG, TAPROG) = 
+  < device : Device | execution-envs : {initRa(RAPROG)} | 
+                                       {initTa(TAPROG) initTrustedOS} > 
+  .
+
+  op scenario : Program Program -> Configuration .
+  eq scenario(RAPROG, TAPROG) 
+   = initDevice(RAPROG, TAPROG) .
+
+endm
+
+--- red 1 .

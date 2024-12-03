@@ -25,7 +25,8 @@ endom
 
 omod MSG-THREAT is
   pr INTRUDER .
-  pr MQTTZ-BROKER .
+  pr BROKER .
+  pr PUBLISHER .
   pr MQTTZ-MSG-AUX .
   pr MQTTZ-RE-ENC-REQ .
 
@@ -35,7 +36,7 @@ omod MSG-THREAT is
   var SUBSC : Set{AttackTarget} .
   var MQTTZ-ARGS : List{ReqArg} .
   var TEE REE : Configuration .
-
+  var OUT-BUFFER : List{MqttzMsg} .
 
   var TOPIC : Topic .
   var HISTORY : Set{Log} .
@@ -74,18 +75,17 @@ omod MSG-THREAT is
   --- if not exploitedBefore(PUB, SUB, HISTORY) .
 
   rl [message-modification-threat] :
-    (msg mqttz[MQTTZ-ARGS] from PUB to BI)
+    < PUB : Publisher | out-buffer : [msg mqttz[MQTTZ-ARGS] from PUB to BI] OUT-BUFFER >
     < INT : Intruder | subs-list : (PUB ::> SUB , SUBSC) >
     => 
     < INT : Intruder | > 
-    (msg mqttz[MQTTZ-ARGS] from SUB to BI) 
-    (msg mqttzReceived[] from BI to PUB) .
+    < PUB : Publisher | out-buffer : [msg mqttz[MQTTZ-ARGS] from SUB to BI] OUT-BUFFER > .
 
-  rl [message-modification-threat2] :
-    (msg mqttzReceived[] from BI to SUB)
-    < INT : Intruder | subs-list : (PUB ::> SUB , SUBSC) >
-    => 
-    < INT : Intruder | > .
+  --- rl [message-modification-threat2] :
+  ---   (msg mqttzReceived[] from BI to SUB)
+  ---   < INT : Intruder | subs-list : (PUB ::> SUB , SUBSC) >
+  ---   => 
+  ---   < INT : Intruder | > .
 
   op int : -> Oid [ctor] .
   op initInt : -> Configuration .

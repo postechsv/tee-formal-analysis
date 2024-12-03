@@ -1,7 +1,7 @@
 load ../analysis/mqttz/main
 load ../analysis/scenario/base
-load ../analysis/LTL/properties
 load ../analysis/threats/main
+load ../analysis/LTL/properties
 --- load meta
 
 mod ANALYSIS-CMD is

@@ -32,6 +32,7 @@ class Translator:
             'printf',               # ignore printf & sprintf statement
             'snprintf',
             'EMSG',
+            'DMSG',
 
             # ignore TEE API func. not supported
             'TEE_Free(',            # so to not confuse with TEE_FreeTransient
@@ -45,7 +46,9 @@ class Translator:
         ]
 
         self.need_to_strip_type_conversions = [ # type conversion currently not supported
-            ' (aes_cipher *)'
+            ' (aes_cipher *)',
+            ' (void *)',
+            ' (password_handle_t *)',
         ]
 
         self.var_types = [
@@ -65,7 +68,8 @@ class Translator:
 
             # custom types (kmgk)
             'secure_id_t',
-            'salt_t'
+            'salt_t',
+            'password_handle_t'
         ]
 
         self.struct_types = [       # TODO: accumulate struct types as translating
@@ -82,6 +86,10 @@ class Translator:
             '(char *) TEE_Malloc(sizeof *ori_cli_key * (TA_AES_KEY_SIZE + 1), 0);' : '# randomAttrVal;',
             '(char *) TEE_Malloc(sizeof *dest_cli_key * (TA_AES_KEY_SIZE + 1), 0);' : '# randomAttrVal;',
             '(char *) TEE_Malloc(sizeof *dec_data * dec_data_size, 0);' : '# noData;',
+            'TA_Enroll (TEE_Param params[TEE_NUM_PARAMS])'
+            : 'TA_Enroll (uid, desired_password, current_password, current_password_handle, error, password_handle)',
+            'TA_Verify (TEE_Param params[TEE_NUM_PARAMS])'
+            : 'TA_Verify (uid, challenge, enrolled_password_handle, provided_password, error, response_auth_token)',
 
             # C syntax to IMP syntax
             '->' : ' . ', 
@@ -90,6 +98,8 @@ class Translator:
             
             ' 0' : ' # 0',
             ' 1' : ' # 1',
+            ' true'  : ' # true',
+            ' false' : '# false',
 
             # TEE constant translate
             'TEE_TIMEOUT_INFINITE' : '# TEE-TIMEOUT-INFINITE',
@@ -182,10 +192,14 @@ class Translator:
             'HW_AUTH_TOKEN_VERSION'                 : '# HW-AUTH-TOKEN-VERSION',
             'ERROR_NONE'                            : '# ERROR-NONE',
             'ERROR_INVALID'                         : '# ERROR-INVALID',
+            'ERROR_UNKNOWN'                         : '# ERROR-UNKNOWN',
+            'ERROR_RETRY'                           : '# ERROR-RETRY',
+            'HANDLE_VERSION'                        : '# HANDLE-VERSION',
             'TEE_TRUE'                              : '# TEE-TRUE',
             'TEE_FALSE'                             : '# TEE-FALSE',
             'GK_ENROLL'                             : '# GK-ENROLL',
-            'GK_VERIFY'                             : '# GK-VERIFY'
+            'GK_VERIFY'                             : '# GK-VERIFY',
+            'KM_GET_AUTHTOKEN_KEY'                  : '# KM-GET-AUTHTOKEN-KEY'
         }
 
         self.prev_translation_status = None
@@ -271,6 +285,10 @@ class Translator:
             replacements = {'const ' : '', 'static ' : '', '(' : ' ('}
             line = reduce(lambda temp, repl: temp.replace(*repl), replacements.items(), line)
             self.translation_status = TranslationStatus.TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION
+        elif 'TA_CreateEntryPoint' in line or 'TA_DestroyEntryPoint' in line:
+            tokens = line.split()
+            line = tokens[1].replace('(void)', '') + ' ()'
+            self.translation_status = TranslationStatus.TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION
         return line
 
     def special_process_func_body(self, line):
@@ -287,13 +305,16 @@ class Translator:
                 for (o_idx, more_out_arg) in enumerate(self.current_annotation_info.more_out_args):
                     if o_idx == 0: line = line.replace(');', ' ; ' + more_out_arg + ');')
                     else: line = line.replace(');', ',' + more_out_arg + ');')
+                for type_conversion in self.need_to_strip_type_conversions: line = line.replace(type_conversion, ' ')
                 self.translation_status = TranslationStatus.TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION
                 self.current_annotation_info = None
             else: # self.translation_status == TranslationStatus.TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION
+                if line.strip() == ';': return line.replace(';', 'skip') # do nothing line
                 for type_conversion in self.need_to_strip_type_conversions: line = line.replace(type_conversion, ' ')
                 for struct_type in self.struct_types:
                     if struct_type in line: line = line.replace(struct_type, 'struct ' + self.translate_mapping[struct_type])
                 for var_type in self.var_types: line = line.replace(var_type, 'var')
+                if 'var' in line and 'const' in line: line = line.replace('const ', '')
                 if 'var' in line and '[' in line and ']' in line: line = line[:line.find('[')] + line[line.find(']') + 1:]
         return line
 

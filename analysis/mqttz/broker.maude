@@ -1,40 +1,6 @@
-fmod RE-ENC-REQ is
-  sort ReEncReq .
-endfm
-
-view ReEncReq from TRIV to RE-ENC-REQ is
-  sort Elt to ReEncReq .
-endv
-
-omod MQTTZ-RE-ENC-REQ is
-  pr DATA .
-  pr NAT .
-  pr CONFIGURATION .
-  pr RE-ENC-REQ .
-
-  op reEncReq : Data Oid Oid Msg Nat -> ReEncReq [ctor] .
-  
-  msg reqRA : ReEncReq -> Msg .
-  msg retRA : ReEncReq -> Msg .
-
-  msg ignoreRA : ReEncReq -> Msg .
-endom
-
-omod MQTTZ-BROKER is
-  pr LIST{ReEncReq} .
-  pr MAP{Topic,List{SubId}} .
-  --- * (op undefined to unknown) .
-  pr LIST{MqttzMsg} .
-  pr EXECUTION-ENV .
-
-  class Broker | infra : Env, in-buffer : List{MqttzMsg}, out-buffer : List{MqttzMsg},
-                 re-enc-queue : List{ReEncReq}, subscriptions : Map{Topic,List{SubId}},
-                 is-running : Bool, wait-recv : Bool, counter : Nat .
-
-endom
-
 omod MQTTZ-BROKER-BEHAVIOR is
-  pr MQTTZ-BROKER .
+  pr BROKER .
+  pr SUBSCRIBER .
   pr ENCRYPTION .
   pr MQTTZ-CRYPTO-KEY-VALUE .
   pr MQTTZ-MSG-AUX .
@@ -91,46 +57,14 @@ omod MQTTZ-BROKER-BEHAVIOR is
     < BI : Broker | out-buffer : OUT-BUFFER [OUT-MSG], infra : {REE} | {TEE}, is-running : false >
   if MSG-INDEX := getMsgIndex(MSG) /\ OUT-MSG := mkMqttzMsg(DATA, PUB, MSG-INDEX, BI, SUB) .
 
-  rl [broker-try-send-message]:
-    < BI : Broker | out-buffer : [MSG] OUT-BUFFER, wait-recv : false >
+  crl [broker-send-message]:
+    < BI : Broker | out-buffer : [MSG] OUT-BUFFER, is-running : false > < SUB : Subscriber | in-buffer : IN-BUFFER >
     => 
-    < BI : Broker | out-buffer : OUT-BUFFER, wait-recv : true > MSG .
-
-  rl [broker-send-message-success]:
-    < BI : Broker | wait-recv : true > (msg mqttzReceived[] from SUB to BI)
-    => 
-    < BI : Broker | wait-recv : false > (msg mqttzRecvConfirmed[] from BI to SUB) .
-
-  --- rl [send-sub-msg] :
-  ---   < BI : MqttzBroker | ra-ret-queue : {MSG, MSG', SUB} REQ, wait-receiving : false >
-  ---   => 
-  ---   < BI : MqttzBroker | ra-ret-queue : {MSG, MSG', SUB} REQ, wait-receiving : true, send-msg : false > 
-  ---   subMqttMsg(MSG', SUB)
-  --- .
-
-  --- rl [send-sub-msg-done] :
-  ---   recvSubMqttMsg(SUB, TOPIC)
-  ---   < BI : MqttzBroker | ra-ret-queue : {MSG, MSG', SUB} REQ, wait-receiving : true >
-  ---   => 
-  ---   < BI : MqttzBroker | ra-ret-queue : REQ, wait-receiving : false, send-msg : false > 
-  --- .
+    < BI : Broker | out-buffer : OUT-BUFFER > < SUB : Subscriber | in-buffer : IN-BUFFER [MSG] >
+  if SUB == getReceiver(MSG) .
 
 endom
 
 omod MQTTZ-BROKER-BEHAVIOR-INVISIBLE is
   pr MQTTZ-BROKER-BEHAVIOR .
-
-  var BI : Oid .
-  --- vars PUB SUB : ClientId .
-  --- vars MSG MSG' : MqttMsg .
-  --- var MSGS : List{MqttMsg} .
-  --- var REQ : List{RaRequest} .
-
-  --- eq
-  ---   < BI : MqttzBroker | ra-ret-queue : {MSG, MSG', SUB} REQ, wait-receiving : false >
-  ---   =
-  ---   < BI : MqttzBroker | ra-ret-queue : {MSG, MSG', SUB} REQ, wait-receiving : true > 
-  ---   subMqttMsg(MSG, SUB)
-  --- .
-
 endom

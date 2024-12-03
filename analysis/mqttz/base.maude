@@ -1,0 +1,235 @@
+mod MQTTZ-CRYPTO-KEY-VALUE is
+  pr NAT .
+  pr CONFIGURATION .
+  pr TEE-ATTRIBUTE .
+
+  op keyAttrValue : Oid -> AttrContent [ctor] .
+endm
+
+------------------------------------------------------------
+--- MQT-TZ Subscription
+------------------------------------------------------------
+
+fmod SUBSCRIPTION is
+  sort SubId .
+endfm
+
+view SubId from TRIV to SUBSCRIPTION is
+  sort Elt to SubId .
+endv
+
+mod CLIENT-SUBSCRIPTION is
+  pr SUBSCRIPTION .
+  pr CONFIGURATION .
+  op {_} : Oid -> SubId [ctor] .
+endm
+
+------------------------------------------------------------
+--- MQT-TZ Topic
+------------------------------------------------------------
+
+fmod TOPIC is
+  sort Topic .
+endfm
+
+view Topic from TRIV to TOPIC is
+  sort Elt to Topic .
+endv
+
+------------------------------------------------------------
+--- MQT-TZ Message
+------------------------------------------------------------
+
+fmod MSG-REQ is 
+  sorts Req ReqId ReqArg .
+endfm
+
+view ReqArg from TRIV to MSG-REQ is
+  sort Elt to ReqArg .
+endv
+
+fmod INFRA-MSG-REQ is
+  pr MSG-REQ .
+  pr LIST{ReqArg} .
+
+  --- var REQ : ReqId .
+
+  op _[_] : ReqId List{ReqArg} -> Req [ctor] .        
+  op _[]  : ReqId -> Req [ctor] .
+
+  --- eq REQ[] = REQ[nil] .
+endfm
+
+omod INFRA-MSG is
+  pr INFRA-MSG-REQ .
+  msg msg_from_to_ : Req Oid Oid -> Msg .
+endom
+
+fmod MQTTZ-MSG is
+  sorts MqttzMsg .
+endfm
+
+view MqttzMsg from TRIV to MQTTZ-MSG is
+  sort Elt to MqttzMsg .
+endv
+
+omod MQTTZ-MSG-BASE is 
+  pr INFRA-MSG .
+  pr MQTTZ-MSG .
+  pr DATA .
+  pr TOPIC .
+
+  op [_] : Msg -> MqttzMsg [ctor] .
+
+--- Msg
+  op mqttz : -> ReqId [ctor] .
+  op mqttzReceived : -> ReqId [ctor] .
+  op mqttzRecvConfirmed : -> ReqId [ctor] .
+
+--- Msg Args
+  op reqArg : Data -> ReqArg [ctor] .
+  op reqArg : Topic -> ReqArg [ctor] .
+  op reqArg : Oid -> ReqArg [ctor] .
+  op reqArg : Nat -> ReqArg [ctor] .
+endom
+
+omod MQTTZ-MSG-AUX is 
+  pr MQTTZ-MSG-BASE .
+
+  var N : Nat .
+  var DATA : Data .
+  var TOPIC : Topic .
+  vars PUB SENDER RECEIVER : Oid .
+  var MQTTZ-ARGS : List{ReqArg} .
+
+  op getTopic : Msg -> Topic .
+  eq getTopic(msg mqttz[reqArg(DATA) reqArg(TOPIC) reqArg(N)] from SENDER to RECEIVER) = TOPIC .
+
+  op getData : Msg -> Data .
+  eq getData(msg mqttz[reqArg(DATA) reqArg(TOPIC) reqArg(N)] from SENDER to RECEIVER) = DATA .
+
+  op getSender : Msg -> Oid .
+  eq getSender(msg mqttz[MQTTZ-ARGS] from SENDER to RECEIVER) = SENDER .  
+
+  op getReceiver : Msg -> Oid .
+  eq getReceiver(msg mqttz[MQTTZ-ARGS] from SENDER to RECEIVER) = RECEIVER . 
+
+  op getPublisher : Msg -> Oid .
+  eq getPublisher(msg mqttz[reqArg(DATA) reqArg(PUB) reqArg(N)] from SENDER to RECEIVER) = PUB . 
+
+  op getMsgIndex : Msg -> Nat .
+  eq getMsgIndex(msg mqttz[MQTTZ-ARGS reqArg(N)] from SENDER to RECEIVER) = N .
+endom
+
+------------------------------------------------------------
+--- Re-encryption Request
+------------------------------------------------------------
+
+fmod RE-ENC-REQ is
+  sort ReEncReq .
+endfm
+
+view ReEncReq from TRIV to RE-ENC-REQ is
+  sort Elt to ReEncReq .
+endv
+
+omod MQTTZ-RE-ENC-REQ is
+  pr DATA .
+  pr NAT .
+  pr CONFIGURATION .
+  pr RE-ENC-REQ .
+
+  op reEncReq : Data Oid Oid Msg Nat -> ReEncReq [ctor] .
+  
+  msg reqRA : ReEncReq -> Msg .
+  msg retRA : ReEncReq -> Msg .
+
+  msg ignoreRA : ReEncReq -> Msg .
+endom
+
+------------------------------------------------------------
+--- MQT-TZ Auxiliary Constants
+------------------------------------------------------------
+
+mod MQTTZ-CONSTANTS is
+  pr NAT .
+  pr APP-ID .
+  pr DATA .
+  pr TA-INSTANCE-ID .
+  pr CONFIGURATION .
+
+  op bk : Nat -> Oid [ctor] .
+  ops pub sub : Nat -> Oid [ctor] .
+  op ra : -> Oid [ctor] .
+  op ta : -> TaInstId [ctor] .
+  op data : Nat -> Data [ctor] .
+
+  op REENCRYPT : -> AppId [ctor] .
+endm
+
+------------------------------------------------------------
+--- MQT-TZ Program Variables
+------------------------------------------------------------
+
+mod MQTTZ-PROGRAM-DECL is 
+  pr IMP-PROGRAM .
+
+  op cmd : -> Var [ctor] .
+
+  op algo : -> Var [ctor] .
+  op mode : -> Var [ctor] .
+  op keySize : -> Var [ctor] .
+  op opHandle : -> Var [ctor] .
+  op keyHandle : -> Var [ctor] .
+  op AesCipher : -> Var [ctor] .
+
+  op allocResources : -> FuncId [ctor] .
+  op session : -> Var [ctor] .
+  op sess : -> Var [ctor] .
+  op attr : -> Var [ctor] .
+  op res : -> Var [ctor] .
+
+  op setAesKey : -> FuncId [ctor] .
+  op key : -> Var [ctor] .
+
+  op setAesIv : -> FuncId [ctor] .
+  op iv : -> Var [ctor] .
+
+  op readRawObject : -> FuncId [ctor] .
+  op cliId : -> Var [ctor] .
+  op data : -> Var [ctor] .
+  op object : -> Var [ctor] .
+  op objectInfo : -> Var [ctor] .
+
+  op cipherBuffer : -> FuncId [ctor] .
+  op encData : -> Var [ctor] .
+  op decData : -> Var [ctor] .
+
+  op saveKey : -> FuncId [ctor] .
+  op cliKey : -> Var [ctor] .
+  op objDataFlag : -> Var [ctor] .
+
+  op getKey : -> FuncId [ctor] .
+  op payloadReencryption : -> FuncId [ctor] .
+  op oriCliKey : -> Var [ctor] .
+  op oriCliId : -> Var [ctor] .
+  op oriCliIv : -> Var [ctor] .
+  op oriCliData : -> Var [ctor] .
+  op destCliId : -> Var [ctor] .
+  op destCliData : -> Var [ctor] .
+
+  op destCliKey : -> Var [ctor] .
+
+  op destCliIv : -> Var [ctor] .
+  op command : -> Var [ctor] .
+  op sessAlgo : -> Var [ctor] .
+  op sessMode : -> Var [ctor] .
+  op sessKeySize : -> Var [ctor] .
+  op sessOpHandle : -> Var [ctor] .
+  op sessKeyHandle : -> Var [ctor] .
+
+  op sessionContext : -> Var [ctor] .
+  op ret : -> Var [ctor] .
+
+  op main : -> FuncId [ctor] .
+endm

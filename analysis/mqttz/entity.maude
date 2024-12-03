@@ -1,0 +1,42 @@
+omod ENTITY is
+  pr LIST{MqttzMsg} .
+
+  class Entity | in-buffer : List{MqttzMsg}, out-buffer : List{MqttzMsg} .
+endom
+
+omod CLIENT is
+  pr ENTITY .
+
+  class Client | broker : Oid .
+
+  subclass Client < Entity .
+endom
+
+omod SUBSCRIBER is 
+  pr CLIENT .
+
+  class Subscriber .
+  subclass Subscriber < Client .
+endom
+
+omod PUBLISHER is 
+  pr NAT .
+  pr TOPIC .
+  pr CLIENT .
+
+  class Publisher | cur-data : Nat, max-data : Nat, topic : Topic .
+  subclass Publisher < Client .
+endom
+
+omod BROKER is
+  pr ENTITY .
+  pr LIST{ReEncReq} .
+  pr MAP{Topic,List{SubId}} .
+  pr EXECUTION-ENV .
+
+  class Broker | infra : Env, re-enc-queue : List{ReEncReq}, 
+                 subscriptions : Map{Topic,List{SubId}},
+                 is-running : Bool, counter : Nat .
+
+  subclass Broker < Entity .
+endom

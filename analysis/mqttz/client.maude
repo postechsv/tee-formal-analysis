@@ -1,64 +1,14 @@
-omod CLIENT is
-  class Client | broker : Oid .
-endom
-
-omod SUBSCRIBER is 
-  pr CLIENT .
-  pr LIST{MqttzMsg} .
-
-  class Subscriber | buffer : List{MqttzMsg}, receiving : Bool .
-
-  subclass Subscriber < Client .
-endom
-
 omod SUBSCRIBER-BEHAVIOR is 
   pr SUBSCRIBER .
-  pr CLIENT .
-  pr MQTTZ-MSG-BASE .
-
-  vars BI SUB : Oid .
-  var BUFFER : List{MqttzMsg} .
-  var MQTTZ-ARGS : List{ReqArg} .
-
-  --- rl [recv-msg] :
-  ---   subMqttMsg(MSG, SUB)
-  ---   < SUB : Subscriber | recv-msg-queue : MSGS >
-  ---   => 
-  ---   < SUB : Subscriber | recv-msg-queue : MSGS MSG >
-  ---   recvSubMqttMsg(SUB, getTopic(MSG)) 
-  --- .
-
-  rl [sub-try-recv-message]:
-    < SUB : Subscriber | buffer : BUFFER, receiving : false > (msg mqttz[MQTTZ-ARGS] from BI to SUB)
-    => 
-    < SUB : Subscriber | buffer : BUFFER [msg mqttz[MQTTZ-ARGS] from BI to SUB], receiving : true >
-    (msg mqttzReceived[] from SUB to BI) .
-
-  rl [sub-recv-message-success]:
-    < SUB : Subscriber | receiving : true > (msg mqttzRecvConfirmed[] from BI to SUB)
-    => 
-    < SUB : Subscriber | receiving : false > .
-
 endom
 
 omod SUBSCRIBER-BEHAVIOR-INVISIBLE is 
   pr SUBSCRIBER-BEHAVIOR .
 endom
 
-omod PUBLISHER is 
-  pr NAT .
-  pr TOPIC .
-  pr CLIENT .
-
-  class Publisher | cur-data : Nat, max-data : Nat, 
-                    topic : Topic, sending : Bool .
-
-  subclass Publisher < Client .
-endom
-
 omod PUBLISHER-BEHAVIOR is
-  pr CLIENT . 
   pr PUBLISHER .
+  pr BROKER .
   pr MQTTZ-MSG-BASE .
   pr MQTTZ-CONSTANTS .
   pr ALGORITHM-IDENTIFIER .
@@ -72,42 +22,32 @@ omod PUBLISHER-BEHAVIOR is
   vars DATA RAND-DATA : Data .
   var BI PUB : Oid .
   var DATALIST : List{Data} .
+  vars IN-BUFFER OUT-BUFFER : List{MqttzMsg} .
+  var MSG : Msg .
 
 --- MQTTZ only use one algorithm.
 
-  op mkRandomEncryptedData : Oid Nat -> Data .
-  eq mkRandomEncryptedData(PUB, N) = encrypted(data(N), TEE-ALG-AES-CBC-NOPAD, 
-                                               key(teeAttribute(TEE-ATTR-SECRET-VALUE , keyAttrValue(PUB)))) .
+  op mkRandomEncData : Oid Nat -> Data .
+  eq mkRandomEncData(PUB, N) = encrypted(data(N), TEE-ALG-AES-CBC-NOPAD, 
+                                         key(teeAttribute(TEE-ATTR-SECRET-VALUE , keyAttrValue(PUB)))) .
 
-  crl [collect-data] :
-    < PUB : Publisher | cur-data : N, max-data : M, sending : false, topic : TOPIC, broker : BI >
-    =>
-    < PUB : Publisher | cur-data : N + 1, sending : true >
-    (msg mqttz[reqArg(RAND-DATA) reqArg(TOPIC) reqArg(N + 1)] from PUB to BI)
-  if N < M /\ RAND-DATA := mkRandomEncryptedData(PUB, N + 1) .
+  op mkPubMsg : Data Topic Nat Oid Oid -> Msg .
+  eq mkPubMsg(RAND-DATA, TOPIC, N, PUB, BI)
+   = (msg mqttz[reqArg(RAND-DATA) reqArg(TOPIC) reqArg(N)] from PUB to BI) .
 
-  rl [pub-send-message-success]:
-    < PUB : Publisher | sending : true > (msg mqttzReceived[] from BI to PUB)
-    => 
-    < PUB : Publisher | sending : false > .
+  crl [pub-make-message]:
+      < PUB : Publisher | cur-data : N, max-data : M, out-buffer : OUT-BUFFER, topic : TOPIC, broker : BI >
+      => 
+      < PUB : Publisher | cur-data : N + 1, out-buffer : OUT-BUFFER [MSG] >
+  if N < M /\ RAND-DATA := mkRandomEncData(PUB, N + 1) 
+  /\ MSG := mkPubMsg(RAND-DATA, TOPIC, N + 1, PUB, BI) .
 
+  rl [pub-send-message]:
+     < PUB : Publisher | out-buffer : [MSG] OUT-BUFFER, broker : BI > < BI : Broker | in-buffer : IN-BUFFER >
+     => 
+     < PUB : Publisher | out-buffer : OUT-BUFFER > < BI : Broker | in-buffer : IN-BUFFER [MSG] > .
 endom
 
 omod PUBLISHER-BEHAVIOR-INVISIBLE is
   pr PUBLISHER-BEHAVIOR .
-
-  var N M : Nat .
-  var TOPIC : Topic .
-  var CLIENT : Oid .
-  var DATA : Data .
-  var PUB : Oid .
-  var DATALIST : List{Data} .
-
-  --- ceq
-  ---   < PUB : Publisher | collected-data : DATALIST, data-counter : N, max-data : M >
-  ---   =
-  ---   < PUB : Publisher | collected-data : (DATALIST data(N, PUB)), 
-  ---                       data-counter : N + 1 >
-  --- if N < M .
-
 endom

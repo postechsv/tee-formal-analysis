@@ -1,5 +1,6 @@
 load ../../spec/src/main
-load consts
+load base
+load entity
 load client
 load broker
 load broker-ta

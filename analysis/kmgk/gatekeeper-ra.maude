@@ -1,0 +1,54 @@
+mod GATEKEEPER-RA-PROGRAM is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr GATEKEEPER-PROGRAM-DECL .
+  pr GATEKEEPER-DATA .
+
+  op gatekeeperRA : -> Program [ctor] .
+  eq gatekeeperRA =
+    struct {
+    	var version ;
+    	var userId ;
+    	var flags ;
+    	var salt ;
+    	var signature ;
+    	var hardwareBacked
+    } PasswordHandleT ;
+
+    main(uid, desiredPassword, currentPassword, cphVersion, cphUserId, cphFlags, cphSalt, cphSignature, cphHardwareBacked,
+		                  challenge, ephVersion, ephUserId, ephFlags, ephSalt, ephSignature, ephHardwareBacked, providedPassword) {
+      var ret ; var sess ;
+      --- TeecOpenSession(# taInst(1) ; 'ret , 'sess) ;
+      sess := # sessionId(0) ;
+
+      --- for enrollment
+      struct PasswordHandleT cph ; --- current password handle
+      cph . version := cphVersion ;
+      cph . userId := cphUserId ;
+      cph . flags := cphFlags ;
+      cph . salt := cphSalt ;
+      cph . signature := cphSignature ;
+      cph . hardwareBacked := cphHardwareBacked ;
+
+      --- for verification
+      struct PasswordHandleT eph ; --- enrolled password handle
+      eph . version := ephVersion ;
+      eph . userId := ephUserId ;
+      eph . flags := ephFlags ;
+      eph . salt := ephSalt ;
+      eph . signature := ephSignature ;
+      eph . hardwareBacked := ephHardwareBacked ;
+      var cmdId ; cmdId := # GK-VERIFY ;
+
+      var responseHandle ; var responseAuthToken ;
+      responseHandle := # 404 ; responseAuthToken := # 405 ;
+      TeecInvokeCommand(sess, # main, (cmdId, uid, desiredPassword, currentPassword, 
+                                       cph . version, cph . userId, cph . flags, cph . salt, cph . signature, cph . hardwareBacked, 
+                                       responseHandle,
+                                       challenge, eph . version, eph . userId, eph . flags, eph . salt, eph . signature, eph . hardwareBacked, 
+                                       providedPassword, responseAuthToken) ; ret) ;
+
+      return ret
+    }
+  .
+endm

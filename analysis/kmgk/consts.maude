@@ -10,3 +10,48 @@ mod GATEKEEPER-CONSTANTS is
 
   op GATEKEEPER : -> AppId [ctor] .
 endm
+
+mod GATEKEEPER-PROGRAM-DECL is
+  pr IMP-PROGRAM .
+
+  op cmdId : -> Var [ctor] .
+
+  op uid : -> Var [ctor] .
+  op desiredPassword : -> Var [ctor] .
+  op currentPassword : -> Var [ctor] .
+  op cphVersion : -> Var [ctor] .
+  op cphUserId : -> Var [ctor] .
+  op cphFlags : -> Var [ctor] .
+  op cphSalt : -> Var [ctor] .
+  op cphSignature : -> Var [ctor] .
+  op cphHardwareBacked : -> Var [ctor] .
+  op challenge : -> Var [ctor] .
+  op ephVersion : -> Var [ctor] .
+  op ephUserId : -> Var [ctor] .
+  op ephFlags : -> Var [ctor] .
+  op ephSalt : -> Var [ctor] .
+  op ephSignature : -> Var [ctor] .
+  op ephHardwareBacked : -> Var [ctor] .
+  op providedPassword : -> Var [ctor] .
+
+  op responseHandle : -> Var [ctor] .
+  op responseAuthToken : -> Var [ctor] .
+
+  op version : -> Var [ctor] .
+  op userId : -> Var [ctor] .
+  op flags : -> Var [ctor] .
+  op salt : -> Var [ctor] .
+  op signature : -> Var [ctor] .
+  op hardwareBacked : -> Var [ctor] .
+  op PasswordHandleT : -> Var [ctor] .
+
+  op currentPasswordHandle : -> Var [ctor] .
+  op cph : -> Var [ctor] .
+  op enrolledPasswordHandle : -> Var [ctor] .
+  op eph : -> Var [ctor] .
+
+  op sess : -> Var [ctor] .
+  op ret : -> Var [ctor] .
+
+  op main : -> FuncId [ctor] .
+endm

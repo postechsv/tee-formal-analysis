@@ -1,10 +1,14 @@
 load ../../spec/src/main
 load consts
+load gatekeeper-ta
+load gatekeeper-ra
 
 mod KMGK is
   pr TEE-BEHAVIOR .
   pr TEE-IMP-BEHAVIOR .
   pr GATEKEEPER-CONSTANTS .
+  pr GATEKEEPER-RA-PROGRAM .
+  pr GATEKEEPER-TA-PROGRAM .
   pr IMP-SEMANTICS .
 endm
 
@@ -61,4 +65,4 @@ mod BASE-SCENARIO is
 
 endm
 
---- red 1 .
+red scenario(gatekeeperRA, gatekeeperTA) .

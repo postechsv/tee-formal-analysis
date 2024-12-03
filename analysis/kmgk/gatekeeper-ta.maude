@@ -1,0 +1,69 @@
+fmod GATEKEEPER-DATA is
+  pr NAT .
+
+  op GK-ENROLL : -> Nat [ctor] .
+  eq GK-ENROLL = 0 .
+
+  op GK-VERIFY : -> Nat [ctor] .
+  eq GK-VERIFY = 1 .
+endfm
+
+mod GATEKEEPER-TA-PROGRAM-DECL is
+  pr TEE-IMP-STRUCT-DECL .
+  pr GATEKEEPER-DATA .
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr GATEKEEPER-PROGRAM-DECL .
+endm
+
+mod GATEKEEPER-TA-PROGRAM is
+  pr GATEKEEPER-TA-PROGRAM-DECL .
+
+  op gatekeeperTA : -> Program [ctor] .
+
+  eq gatekeeperTA = 
+    struct {
+    	var version ;
+    	var userId ;
+    	var flags ;
+    
+    	var salt ;
+    	var signature ;
+    
+    	var hardwareBacked
+    } PasswordHandleT ;
+    
+    main (cmdId, uid, desiredPassword, currentPassword, cphVersion, cphUserId, cphFlags, cphSalt, cphSignature, cphHardwareBacked, responseHandle, challenge, ephVersion, ephUserId, ephFlags, ephSalt, ephSignature, ephHardwareBacked, providedPassword, responseAuthToken) {
+      var ret ;
+      if (cmdId === # GK-ENROLL) {
+        struct PasswordHandleT currentPasswordHandle ;
+        currentPasswordHandle . version := cphVersion ;
+        currentPasswordHandle . userId := cphUserId ;
+        currentPasswordHandle . flags := cphFlags ;
+        currentPasswordHandle . salt := cphSalt ;
+        currentPasswordHandle . signature := cphSignature ;
+        currentPasswordHandle . hardwareBacked := cphHardwareBacked ;
+
+        ret := # 405
+        --- ret := TAEnroll(uid, desiredPassword, currentPassword, currentPasswordHandle, responseHandle)
+      } else {
+        if (cmdId === # GK-VERIFY) {
+          struct PasswordHandleT enrolledPasswordHandle ;
+          enrolledPasswordHandle . version := ephVersion ;
+          enrolledPasswordHandle . userId := ephUserId ;
+          enrolledPasswordHandle . flags := ephFlags ;
+          enrolledPasswordHandle . salt := ephSalt ;
+          enrolledPasswordHandle . signature := ephSignature ;
+          enrolledPasswordHandle . hardwareBacked := ephHardwareBacked ;
+
+          ret := # 406
+          --- ret := # TAVerify(uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
+        } else {
+          ret := # 404
+        }
+      } ;
+
+      return ret
+    }
+  .
+endm

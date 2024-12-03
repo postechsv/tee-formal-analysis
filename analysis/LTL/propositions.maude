@@ -13,6 +13,7 @@ omod PROPOSITION is
   pr CLIENT .
   pr MQTTZ-CONSTANTS .
   pr MQTTZ-MSG-AUX .
+  pr INTRUDER .
 
   --- vars N M : Nat .
   --- var BI KI : Oid .
@@ -41,28 +42,14 @@ omod PROPOSITION is
 
   vars N M I J K : Nat .
   vars PREV-MSG-INDEX CUR-MSG-INDEX : Nat .
-  vars PUB SUB TI BI : Oid .
+  vars PUB SUB TI BI AI : Oid .
   vars TEE REE CF : Configuration .
   var MSG : Msg .
   var TOPIC : Topic .
   var SUBSC : Map{Topic,List{SubId}} .
-  var BUFFER : List{MqttzMsg} .
+  var BUFFER BUFFER-HEAD BUFFER-TAIL : List{MqttzMsg} .
   var PUB-I-MSGS : List{MqttzMsg} .
   var DATA : Data .
-
-------------------------------------------------------------
---- Auxilary Functions
-------------------------------------------------------------
-
-  --- op getData : List{MqttMsg} ClientId -> List{Data} .
-  --- eq getData((msg encrypted(data(N, PUB), ALGO, KEYS) from TOPIC to SUB) MQ, PUB) = data(N, PUB) getData(MQ, PUB) .
-  --- eq getData(MSG MQ, PUB) = getData(MQ, PUB) [owise] .
-  --- eq getData(nil, PUB) = nil .
-
-  --- op checkData : List{Data} List{Data} -> Bool .
-  --- eq checkData(D DATA1, D DATA2) = checkData(DATA1, DATA2) .
-  --- eq checkData(D1 DATA1, D2 DATA2) = false [owise] .
-  --- eq checkData(nil, DATA) = true .
 
 ------------------------------------------------------------
 --- Propositions
@@ -82,34 +69,13 @@ omod PROPOSITION is
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | running : true > TEE} > CF |= running.TA = true .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= running.TA = false [owise] .
 
-  op send.B : -> Prop .
-  eq < BI : Broker | wait-recv : true > CF |= send.B = true .
-  eq < BI : Broker | > CF |= send.B = false [owise] .
-
-  --- op pubSentMsg : -> Prop .
-  --- eq pubMqttMsg(MSG, PUB) REST |= pubSentMsg = true .
-
-  --- op pubSentMsg : ClientId -> Prop .
-  --- eq pubMqttMsg(MSG, PUB) REST |= pubSentMsg(PUB) = true .
-
-  --- op pubSentMsg : ClientId Nat -> Prop .
-  --- eq pubMqttMsg(msg encrypted(data(N, PUB), ALGO, KEYS) from PUB to TOPIC , PUB) REST |= pubSentMsg(PUB, N) = true .
-
-  --- op send.P : Nat -> Prop .
-  --- eq < pub(I) : Publisher | sending : true > CF |= send.P(I) = true .
-  --- eq < pub(I) : Publisher | > CF |= send.P(I) = false [owise] .
-
-  --- op recv.S : Nat -> Prop .
-  --- eq < sub(J) : Subscriber | receiving : true > CF |= recv.S(J) = true .
-  --- eq < sub(J) : Subscriber | > CF |= recv.S(J) = false [owise] .
-
   op send.P : Nat Nat -> Prop .
-  ceq < pub(I) : Publisher | sending : true > MSG CF |= send.P(I,K) = true
+  ceq < pub(I) : Publisher | out-buffer : BUFFER-HEAD [MSG] BUFFER-TAIL > CF |= send.P(I,K) = true
    if pub(I) == getSender(MSG) /\ K == getMsgIndex(MSG) .
   eq < pub(I) : Publisher | > CF |= send.P(I,K) = false [owise] .
 
   op recv.S : Nat Nat Oid -> Prop .
-  ceq < sub(J) : Subscriber | receiving : true, buffer : BUFFER [MSG] > CF |= recv.S(J,K,pub(I)) = true
+  ceq < sub(J) : Subscriber | in-buffer : BUFFER-HEAD [MSG] BUFFER-TAIL > CF |= recv.S(J,K,pub(I)) = true
    if sub(J) == getReceiver(MSG) /\ K == getMsgIndex(MSG) /\ pub(I) == getPublisher(MSG) .
   eq < sub(J) : Subscriber | > CF |= recv.S(J,K,pub(I)) = false [owise] .
 
@@ -138,7 +104,7 @@ omod PROPOSITION is
   eq < BI : Broker | > CF |= reEncSucc(N) = false [owise] .
 
   op inOrderQueue.S : Nat Oid -> Prop .
-  ceq < sub(J) : Subscriber | buffer : BUFFER > CF |= inOrderQueue.S(J,pub(I)) = true
+  ceq < sub(J) : Subscriber | in-buffer : BUFFER > CF |= inOrderQueue.S(J,pub(I)) = true
    if PUB-I-MSGS := filter(BUFFER, pub(I)) /\ isOrdered(PUB-I-MSGS, 0) == true .
   eq < sub(J) : Subscriber | > CF |= inOrderQueue.S(J,pub(I)) = false [owise] .
 
@@ -146,8 +112,9 @@ omod PROPOSITION is
   ceq < BI : Broker | counter : N > CF |= numTaskExceed.TA(M) = true if N > M .
    eq < BI : Broker | > CF |= numTaskExceed.TA(M) = false [owise] .
 
-
---- Aux
+------------------------------------------------------------
+--- Auxilary Functions
+------------------------------------------------------------
 
   op filter : List{MqttzMsg} Oid -> List{MqttzMsg} .
   ceq filter([MSG] BUFFER, PUB) = [MSG] filter(BUFFER, PUB) if PUB == getPublisher(MSG)  .
@@ -160,53 +127,14 @@ omod PROPOSITION is
    else isOrdered(BUFFER, CUR-MSG-INDEX) fi if CUR-MSG-INDEX := getMsgIndex(MSG) .
   eq isOrdered(nil, N) = true .
 
+  --- Patch
 
-  --- op brokerReceiveMsg : ClientId -> Prop .
-  --- eq recvPubMqttMsg(PUB, TOPIC) REST |= brokerReceiveMsg(PUB) = true .
+  op noMsgAttack : -> Prop .
+  eq < AI : Intruder | subs-list : empty > CF |= noMsgAttack = true .
+  eq < AI : Intruder | > CF |= noMsgAttack = false [owise] .
 
-  --- op brokerSendMsg : -> Prop .
-  --- eq < BI : MqttzBroker | send-msg : true > CF |= brokerSendMsg = true .
+  op msgAttackExist : -> Prop .
+  eq < AI : Intruder | > CF |= msgAttackExist = true .
+  eq CF |= msgAttackExist = false [owise] .
 
-  --- op subReceiveMsg : -> Prop .
-  --- eq recvSubMqttMsg(SUB, TOPIC) REST |= subReceiveMsg = true .
-
-  --- op subReceiveMsg : ClientId -> Prop .
-  --- eq recvSubMqttMsg(SUB, TOPIC) REST |= subReceiveMsg(SUB) = true .
-
-  --- op subReceiveMsg : ClientId Topic -> Prop .
-  --- eq recvSubMqttMsg(SUB, TOPIC) REST |= subReceiveMsg(SUB, TOPIC) = true .
-
-  --- op subReceiveMsg : ClientId ClientId Nat -> Prop .
-  --- eq < BI : MqttzBroker | ra-ret-queue : {msg encrypted(data(N, PUB), ALGO, KEYS) from CLI to TOPIC, msg DATA from TOPIC to SUB, SUB} REQ >
-  ---    < SUB : Subscriber | recv-msg-queue : (LQ (msg DATA from TOPIC to SUB) RQ) > 
-  ---    recvSubMqttMsg(SUB, TOPIC) 
-  ---    REST |= subReceiveMsg(SUB, PUB, N) = true .
-
-  --- op inQueue : ClientId List{Data} -> Prop .
-  --- eq < PUB : Publisher | collected-data : DATA > REST |= inQueue(PUB, DATA) = true .
-
-  --- op inQueue : ClientId ClientId List{Data} -> Prop .
-  --- ceq < SUB : Subscriber | recv-msg-queue : MQ > REST |= inQueue(SUB, PUB, DATA) = true if checkData(getData(MQ, PUB), DATA) .
-
-  --- op taStart : -> Prop .
-  --- eq < BI : MqttzBroker | execution-envs : {REE} | {< TK : TaKernel | running : true, state-changed : true > TEE} > REST |= taStart = true .
-
-  --- op taRunning : -> Prop .
-  --- eq < BI : MqttzBroker | execution-envs : {REE} | {< TK : TaKernel | running : true > TEE} > REST |= taRunning = true .
-
-  --- op taProgNotRun : -> Prop .
-  --- eq < BI : MqttzBroker | execution-envs : {REE} | {< TK : TaKernel | proc : none > TEE} > REST |= taProgNotRun = true .
-  --- eq < BI : MqttzBroker | execution-envs : {REE} | {< TK : TaKernel | proc : (k(.K) PROC) > TEE} > REST |= taProgNotRun = true .
-
-  --- op taTerminate : -> Prop .
-  --- eq < BI : MqttzBroker | execution-envs : {REE} | {< TK : TaKernel | running : false, state-changed : true > TEE} > REST |= taTerminate = true .
-
-  --- eq < BI : MqttzBroker | execution-envs : {REE} | {< TK : TaKernel | state-changed : true, app-status : outOfMemory > TEE} > 
-  ---    REST |= taTerminate = true .
-
-  --- op numOfTaskExceed : Nat -> Prop .
-  --- ceq < BI : MqttzBroker | execution-envs : {REE} | {< TK : TaKernel | task-counter : N > TEE} > 
-  ---     REST |= numOfTaskExceed(M) = true if N > M .
-
-  --- eq REST |= P:Prop = false [owise] .
 endom

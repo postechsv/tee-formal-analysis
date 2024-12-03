@@ -6,16 +6,17 @@ mod LTL-PROPERTIES is
   pr SCENARIO-TOPICS .
 
 
-  ops p1a p1b p2a p2b p3a p3b p4 p5 p6 : -> Formula .
-  op testF : -> Formula .
+  ops p1 p2 p3 p4 p5 p6 : -> Formula .
+  ops p1-no-msg p4-no-msg : -> Formula .
+  ops p1-unused p2-unused p3-unused : -> Formula .
 
 --- P1: If no memory error occurs in brokers, subscribers should receive them in the near future.
 
-  eq p1a =
+  eq p1 =
     ([] ~ memErr.TA) -> 
     ([] (send.P(1,1) -> <> recv.S(2,1,pub(1)))) .
 
-  eq p1b =
+  eq p1-unused =
     ([] ~ memErr.TA) -> 
     ([] (
          ((send.P(1,1) /\ topic.P(1,sub(1))) -> <> recv.S(1,1,pub(1)))
@@ -24,14 +25,16 @@ mod LTL-PROPERTIES is
       /\ ((send.P(2,2) /\ topic.P(2,sub(2))) -> <> recv.S(2,2,pub(2))))  
     ) .
 
---- CE: <> (panic and <> receive)
+  eq p1-no-msg = 
+    ([] (~ memErr.TA /\ ~ panic.TA)) -> 
+    ([] (send.P(1,1) -> <> recv.S(2,1,pub(1)))) .
 
 --- P2: If TAs panicked, subscribers should not receive any messages.
 
-  eq p2a =
-    [] (panic.TA -> [] ~ (recv.S(1,1,pub(1)) /\ recv.S(1,2,pub(1)))) .
+  eq p2 =
+    [] ((panic.TA /\ ~ recv.S(2,1,pub(1))) -> [] (~ recv.S(2,1,pub(1)))) .
 
-  eq p2b =
+  eq p2-unused =
     [] (panic.TA -> 
       [] (
          (reEncReq(1) -> [] ~ reEncSucc(1))
@@ -41,36 +44,28 @@ mod LTL-PROPERTIES is
 
 --- P3: If any resource error occurs in brokers, subscribers should not receive any messages.
 
-  eq p3a =
-    [] ((memErr.TA /\ running.TA) -> [] ~ (recv.S(1,1,pub(1)) /\ recv.S(1,2,pub(1)))) .
+  eq p3 =
+    [] ((memErr.TA /\ ~ recv.S(2,1,pub(1))) -> [] (~ recv.S(2,1,pub(1)))) .
 
-  eq p3b =
-    --- [] ((memErr.TA /\ running.TA) -> [] ~ send.B) .
+  eq p3-unused =
     [] ((memErr.TA /\ running.TA) -> 
       [] ((reEncReq(1) -> [] ~ reEncSucc(1))
        /\ (reEncReq(2) -> [] ~ reEncSucc(2))
        /\ (reEncReq(3) -> [] ~ reEncSucc(3))
        /\ (reEncReq(4) -> [] ~ reEncSucc(4)))) .
-
-  eq testF =
-    --- [] ((memErr.TA /\ running.TA) -> [] ~ send.B) .
-    [] ((memErr.TA /\ running.TA) -> 
-        [] (reEncReq(1) -> [] ~ reEncSucc(1))) .
     
-
 --- P4: When the broker TA starts running, it should eventually terminate.
 
   eq p4 =
     [] (start.TA -> <> term.TA) .
 
+  eq p4-no-msg =
+    ([] ~ panic.TA) -> p4 .
+
 --- P5: If subscribers receive messages from publishers, messages sent from each publisher are in order.
 
   eq p5 =
-    [] (
-       (topic.P(1,sub(1)) -> [] (inOrderQueue.S(1,pub(1))))
-    /\ (topic.P(1,sub(2)) -> [] (inOrderQueue.S(2,pub(1))))
-    /\ (topic.P(2,sub(1)) -> [] (inOrderQueue.S(1,pub(2))))
-    /\ (topic.P(2,sub(2)) -> [] (inOrderQueue.S(2,pub(2))))) .
+    [] (topic.P(1,sub(2)) -> [] (inOrderQueue.S(2,pub(1)))) .
 
 --- P6: The number of tasks handled by each TA cannot exceed five.
 

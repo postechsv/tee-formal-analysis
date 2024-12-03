@@ -16,7 +16,7 @@ mod BASE-SCENARIO is
   < BI : Broker | in-buffer : nil, out-buffer : nil, re-enc-queue : nil,
                   subscriptions : (topic(1) |-> {sub(1)} {sub(2)}, topic(2) |-> {sub(2)}) ,
                   infra : {initRa(RAPROG)} | {initTa(TAPROG) initTrustedOS(clients) shareKeys(clients)},
-                  is-running : false, wait-recv : false, counter : 0 > .
+                  is-running : false, counter : 0 > .
 
   op scenario : Program Program Configuration -> Configuration .
   eq scenario(RAPROG, TAPROG, THREAT) 

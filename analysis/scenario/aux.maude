@@ -61,11 +61,11 @@ omod SCENARIO-AUX is
 
   op initPub : Nat Nat Topic Oid -> Configuration .
   eq initPub(N, M, TOPIC, BI)
-   = < pub(N) : Publisher | cur-data : 0, max-data : M, topic : TOPIC, sending : false, broker : BI > .
+   = < pub(N) : Publisher | out-buffer : nil, in-buffer : nil, cur-data : 0, max-data : M, topic : TOPIC, broker : BI > .
 
   op initSub : Nat Oid -> Configuration .
   eq initSub(N, BI)
-   = < sub(N) : Subscriber | buffer : nil, broker : BI, receiving : false > .
+   = < sub(N) : Subscriber | in-buffer : nil, out-buffer : nil, broker : BI > .
 
 endom
 

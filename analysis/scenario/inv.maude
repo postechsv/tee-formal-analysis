@@ -18,7 +18,7 @@ mod BASE-SCENARIO is
       < BI : Broker | in-buffer : nil, out-buffer : nil, re-enc-queue : nil,
                       subscriptions : SUBLIST ,
                       infra : {initRa(RAPROG)} | {initTa(TAPROG) initTrustedOS(CLIENTS) shareKeys(CLIENTS)},
-                      is-running : false, wait-recv : false, counter : 0 > .
+                      is-running : false, counter : 0 > .
 
 --- pub1 send at most 2 message
 --- sub1 and sub2 subscribe to a topic

@@ -10,7 +10,7 @@ red_sort  = {"nored" : 1, "konly" : 2, "kcall" : 3, "all" : 4}
 type_sort = {"NON" : 1, "MSG" : 2, "OOM" : 3}
 
 # gnu data gen
-props = ["p1b", "p2b", "p3b", "p4", "p5", "p6"]
+props = ["p1", "p2", "p3", "p4", "p5", "p6"]
 types = ["NON", "MSG", "OOM"]
 redux = ["nored", "konly", "kcall", "all"]
 index = ["prop", "redux", "type", "result", "state", "time"]

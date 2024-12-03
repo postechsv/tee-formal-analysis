@@ -3,15 +3,17 @@
 run() {
 
     case $1 in
-        mc-exp1) prog="normal" ty="mc" ;;
-        mc-exp2) prog="-patch" ty="mc" ;;
-        ss-exp1) prog="normal" ty="ss1" ;;
+        mc-exp1) prog="normal" ty="mc1" ;;
+        mc-exp2) prog="-patch" ty="mc2" ;;
+        mc-exp3) prog="-patch" ty="mc3" ;;
+        ss-exp1) prog="-patch" ty="ss1" ;;
         ss-exp2) prog="normal" ty="ss2" ;;
         *) echo "error: wrong table"; exit 65 ;;
     esac
 
-    ltl=("p1a" "p1b" "p2a" "p2b" "p3a" "p3b" "p4" "p5" "p6")
-    # ssltl=("p1b" "p2b" "p3b" "p4" "p5" "p6")
+    ltl=("p1" "p2" "p3" "p4" "p5" "p6")
+    ltl2=("p1p" "p2" "p3" "p4p" "p5" "p6")
+    # ssltl=("p1" "p2" "p3" "p4" "p5" "p6")
     ssltl=("$3")
     tht=("non" "oom" "msg")
     red=("nored" "konly" "kcall" "all")
@@ -19,10 +21,32 @@ run() {
 
     cmds=()
 
-    if [ "$ty" == "mc" ]
+    if [ "$ty" == "mc1" ]
     then
 
         for v in "${ltl[@]}"
+        do
+            for t in "${tht[@]}"
+            do
+                cmds+=("./run $v $t $prog "all" $1/maude-files $1/logs -silent noinv")
+            done
+        done
+
+    else if [ "$ty" == "mc2" ]
+    then
+        
+        for v in "${ltl[@]}"
+        do
+            for t in "${tht[@]}"
+            do
+                cmds+=("./run $v $t $prog "all" $1/maude-files $1/logs -silent noinv")
+            done
+        done
+
+    else if [ "$ty" == "mc3" ]
+    then
+        
+        for v in "${ltl2[@]}"
         do
             for t in "${tht[@]}"
             do
@@ -55,6 +79,8 @@ run() {
         done
     fi
     fi
+    fi
+    fi
 
 
     case $2 in
@@ -68,5 +94,5 @@ run() {
 
 }
 
-# arg 1: table, 2: parallel, 3: test
+# arg 1: table, 2: parallel, 3: ss formula
 run $1 $2 $3

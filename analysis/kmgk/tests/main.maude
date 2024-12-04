@@ -1,10 +1,12 @@
 load ../main
 load test-transient
 load test-persistent
+load test-data-stream
 
 mod TEST-CASES is
   pr TEST-TRANSIENT .
   pr TEST-PERSISTENT .
+  pr TEST-DATA-STREAM .
 endm
 
 mod TEST-SCENARIO is
@@ -27,4 +29,5 @@ mod TEST-SCENARIO is
 endm
 
 --- rew scenario(testTransientTA) .
-rew scenario(testPersistentTA) .
+--- rew scenario(testPersistentTA) .
+rew scenario(testDataStreamTA) .

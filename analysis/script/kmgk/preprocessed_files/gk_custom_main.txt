@@ -1,5 +1,5 @@
-    main (cmdId, uid, desiredPassword, currentPassword, cphVersion, cphUserId, cphFlags, cphHandleSalt, cphSignature, cphHardwareBacked, responseHandle
-		  challenge, ephVersion, ephUserId, ephFlags, ephHandleSalt, ephSignature, ephHardwareBacked, providedPassword, responseAuthToken) {
+    main (cmdId, uid, desiredPassword, currentPassword, cphVersion, cphUserId, cphFlags, cphSalt, cphSignature, cphHardwareBacked, responseHandle
+		  challenge, ephVersion, ephUserId, ephFlags, ephSalt, ephSignature, ephHardwareBacked, providedPassword, responseAuthToken) {
       
       var ret ;
       if (cmdId === # GK-ENROLL) {
@@ -7,7 +7,7 @@
 		currentPasswordHandle . version := cphVersion ;
 		currentPasswordHandle . userId := cphUserId ;
 		currentPasswordHandle . flags := cphFlags ;
-		currentPasswordHandle . salt := cphHandleSalt ;
+		currentPasswordHandle . salt := cphSalt ;
 		currentPasswordHandle . signature := cphSignature ;
 		currentPasswordHandle . hardwareBacked := cphHardwareBacked ;
 
@@ -18,11 +18,11 @@
 			enrolledPasswordHandle . version := ephVersion ;
 			enrolledPasswordHandle . userId := ephUserId ;
 			enrolledPasswordHandle . flags := ephFlags ;
-			enrolledPasswordHandle . salt := ephHandleSalt ;
+			enrolledPasswordHandle . salt := ephSalt ;
 			enrolledPasswordHandle . signature := ephSignature ;
 			enrolledPasswordHandle . hardwareBacked := ephHardwareBacked ;
 
-	  		ret := # TAVerify(uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
+	  		ret := TAVerify(uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
 		} else {
 			ret := # 404
 		}

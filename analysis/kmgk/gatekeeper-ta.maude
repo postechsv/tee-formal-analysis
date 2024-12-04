@@ -57,7 +57,7 @@ mod GATEKEEPER-TA-PROGRAM is
           enrolledPasswordHandle . hardwareBacked := ephHardwareBacked ;
 
           ret := # 406
-          --- ret := # TAVerify(uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
+          --- ret := TAVerify(uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
         } else {
           ret := # 404
         }

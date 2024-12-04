@@ -7,7 +7,7 @@ mod LTL-PROPERTIES is
 
 
   ops p1 p2 p3 p4 p5 p6 : -> Formula .
-  ops p1-no-msg p4-no-msg : -> Formula .
+  ops p1n p2n p3n p4n : -> Formula .
   ops p1-unused p2-unused p3-unused : -> Formula .
 
 --- P1: If no memory error occurs in brokers, subscribers should receive them in the near future.
@@ -25,13 +25,16 @@ mod LTL-PROPERTIES is
       /\ ((send.P(2,2) /\ topic.P(2,sub(2))) -> <> recv.S(2,2,pub(2))))  
     ) .
 
-  eq p1-no-msg = 
+  eq p1n = 
     ([] (~ memErr.TA /\ ~ panic.TA)) -> 
     ([] (send.P(1,1) -> <> recv.S(2,1,pub(1)))) .
 
 --- P2: If TAs panicked, subscribers should not receive any messages.
 
   eq p2 =
+    [] (panic.TA -> [] (~ recv.S(2,1,pub(1)))) .
+
+  eq p2n =
     [] ((panic.TA /\ ~ recv.S(2,1,pub(1))) -> [] (~ recv.S(2,1,pub(1)))) .
 
   eq p2-unused =
@@ -45,7 +48,10 @@ mod LTL-PROPERTIES is
 --- P3: If any resource error occurs in brokers, subscribers should not receive any messages.
 
   eq p3 =
-    [] ((memErr.TA /\ ~ recv.S(2,1,pub(1))) -> [] (~ recv.S(2,1,pub(1)))) .
+    [] (memErr.TA -> [] (~ recv.S(2,1,pub(1)))) .
+
+  eq p3n =
+    [] ((memErr.TA /\ send.P(1,1)) -> [] (~ recv.S(2,1,pub(1)))) .
 
   eq p3-unused =
     [] ((memErr.TA /\ running.TA) -> 
@@ -59,7 +65,7 @@ mod LTL-PROPERTIES is
   eq p4 =
     [] (start.TA -> <> term.TA) .
 
-  eq p4-no-msg =
+  eq p4n =
     ([] ~ panic.TA) -> p4 .
 
 --- P5: If subscribers receive messages from publishers, messages sent from each publisher are in order.

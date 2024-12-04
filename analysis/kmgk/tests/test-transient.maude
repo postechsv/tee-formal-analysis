@@ -6,11 +6,42 @@ mod TEST-TRANSIENT is
 
   op testTransientTA : -> Program [ctor] .
 
+  op varDecls : -> Stmt [ctor] .
+  eq varDecls = 
+    var res ; var masterKey ;                     --- AllocateTransientObject
+    var secretData ; secretData := # randomData ; --- InitRefAttribute
+    var attrs
+  .
+
+  op allocateTransientObject : -> Stmt [ctor] .
+  eq allocateTransientObject = AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, masterKey) .
+
+  op initRefAttribute : -> Stmt [ctor] .
+  eq initRefAttribute = InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attrs) .
+
+  op populateTransientObject : -> Stmt [ctor] .
+  eq populateTransientObject = PopulateTransientObject(masterKey, attrs  ; res) .
+
+  --- Location: TA_CreatePasswordHandle
+  op testCase1 : -> Stmt [ctor] .
+  eq testCase1 = varDecls ; allocateTransientObject .
+
+  --- Location: TA_GetMasterKey
+  op testCase2 : -> Stmt [ctor] .
+  eq testCase2 = testCase1 ; initRefAttribute .
+
+  op testCase3 : -> Stmt [ctor] .
+  eq testCase3 = testCase2 ; populateTransientObject .
+
   eq testTransientTA = 
     main () {
-      --- Location: TA_CreatePasswordHandle
-      var res ; var masterKey ;
-      AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, masterKey) ;
+      --- testCase1 ;
+      --- return res
+
+      --- testCase2 ;
+      --- return attrs
+
+      testCase3 ;
       return res
     }
   .

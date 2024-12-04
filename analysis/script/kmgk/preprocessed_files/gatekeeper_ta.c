@@ -49,7 +49,7 @@ typedef struct __packed {
 	uint64_t authenticator_id;
 	uint32_t authenticator_type;
 	uint64_t timestamp;
-	uint8_t hmac[32];
+	uint8_t hmac[32]; //@no_semi_colon
 } hw_auth_token_t;
 //@endprocess_struct
 
@@ -377,7 +377,9 @@ exit:
 }
 
 //@func_start
-static void TA_MintAuthToken(hw_auth_token_t *auth_token, int64_t timestamp, secure_id_t user_id, secure_id_t authenticator_id, uint64_t challenge) {
+// Preprocess: currently unable to handle void (no output), return dummy bool value for now
+static bool TA_MintAuthToken(hw_auth_token_t *auth_token, int64_t timestamp, secure_id_t user_id, secure_id_t authenticator_id, uint64_t challenge) {
+// static void TA_MintAuthToken(hw_auth_token_t *auth_token, int64_t timestamp, secure_id_t user_id, secure_id_t authenticator_id, uint64_t challenge) {
 	TEE_Result		res;
 
 	hw_auth_token_t		token;
@@ -428,6 +430,8 @@ exit:
 	memcpy(auth_token, &token, sizeof(token));
 	//@endignore
 	//@add_line | auth_token := token ;
+	// Preprocess: currently unable to handle void (no output), return dummy bool value for now
+	return true;
 }
 
 //@func_start
@@ -693,7 +697,10 @@ exit:
 //@func_start
 static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 {
-	TEE_Result res = TEE_SUCCESS;
+	// Preprocess: separate variable delcarion & value assigment
+	// TEE_Result res = TEE_SUCCESS;
+	TEE_Result res;
+	res = TEE_SUCCESS;
 
 	/*
 	 * Verify request layout
@@ -734,10 +741,17 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 	 * | response_request_reenroll      | 4                               |
 	 * +--------------------------------+---------------------------------+
 	 */
-	uint32_t error = ERROR_NONE;
-	uint32_t timeout = 0;
+	// Preprocess: separate variable delcarion & value assigment
+	// uint32_t error = ERROR_NONE;
+	// uint32_t timeout = 0;
+	uint32_t error;
+	error = ERROR_NONE;
+	uint32_t timeout;
+	timeout = 0;
 	hw_auth_token_t auth_token;
-	bool request_reenroll = false;
+	// bool request_reenroll = false;
+	bool request_reenroll;
+	request_reenroll = false;
 
 	//@ignore
 	uint8_t *response = params[1].memref.buffer;
@@ -753,7 +767,10 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 
 	password_handle_t *password_handle;
 	secure_id_t user_id;
-	secure_id_t authenticator_id = 0;
+	// Preprocess: separate variable delcarion & value assigment
+	// secure_id_t authenticator_id = 0;
+	secure_id_t authenticator_id;
+	authenticator_id = 0;
 
 	//@ignore
 	uint64_t timestamp = GetTimestamp();
@@ -795,7 +812,9 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 
 	password_handle = (password_handle_t *)enrolled_password_handle;
 
-	if (password_handle->version > HANDLE_VERSION) {
+	// Preprocess: change to equivalent leq condition
+	if (! (password_handle->version <= HANDLE_VERSION)) {
+	// if (password_handle->version > HANDLE_VERSION) {
 		EMSG("Wrong handle version %u, required version is %u", password_handle->version, HANDLE_VERSION);
 		error = ERROR_INVALID;
 		goto serialize_response; //@no_semi_colon
@@ -820,6 +839,7 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 	}
 	//@endignore
 
+	//@func_annote(assign) |, provided_password_length(ignore)|
 	res = TA_DoVerify(password_handle, provided_password, provided_password_length);
 	// Preprocess: change to equivalent if-else statements
 	// switch (res) {
@@ -842,27 +862,29 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 	// 	goto exit;
 	// }
 	if (res == TEE_TRUE) {
-		TA_MintAuthToken(&auth_token, timestamp, user_id, authenticator_id, challenge);
+		// Preprocess: currently unable to handle void (no output), return dummy bool value for now
+		bool dummy;
+		dummy = TA_MintAuthToken(&auth_token, timestamp, user_id, authenticator_id, challenge);
 		//@ignore
 		if (throttle) {
 			ClearFailureRecord(user_id);
 		}
 		//@endignore
-		goto serialize_response;
+		goto serialize_response; //@no_semi_colon
 	} else {
 		if (res == TEE_FALSE) {
-			// Preprocess: remove throttle for now
+			// Preprocess: remove throttle for now & change to equivalent leq condition
 			// if (throttle && timeout > 0) {
-			if (timeout > 0) {
-				error = ERROR_RETRY;
+			if (! (timeout <= 0)) {
+				error = ERROR_RETRY; //@no_semi_colon
 			} else {
-				error = ERROR_INVALID;
+				error = ERROR_INVALID; //@no_semi_colon
 			}
-			goto serialize_response;
+			goto serialize_response; //@no_semi_colon
 		} else {
 			EMSG("Failed to verify password handle");
 			goto exit; //@no_semi_colon
-		}
+		} //@no_semi_colon
 	}
 
 serialize_response:
@@ -892,17 +914,19 @@ serialize_response:
 			//@ignore
 			serialize_int(&i_resp, timeout);
 			//@endignore
+			//@add_line | ;
 		} else {
 			if (error == ERROR_NONE) {
 				//@ignore
 				serialize_blob(&i_resp, (uint8_t *)&auth_token, sizeof(auth_token));
 				serialize_int(&i_resp, (uint32_t) request_reenroll);
 				//@endignore
+				//@add_line | ;
 			} else { 
 				EMSG("Unknown error message!");
 				res = TEE_ERROR_GENERIC; //@no_semi_colon
-			}
-		}
+			} //@no_semi_colon
+		} //@no_semi_colon
 	}
 
 	//@ignore

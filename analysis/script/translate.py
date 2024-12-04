@@ -58,7 +58,7 @@ class Translator:
             'size_t',
             'void',
             'char',
-            'int',
+            'int ',
             'bool',
 
             'TEE_OperationHandle',  # TEE types
@@ -90,7 +90,7 @@ class Translator:
             'TA_Enroll (TEE_Param params[TEE_NUM_PARAMS])'
             : 'TA_Enroll (uid, desired_password, current_password, current_password_handle, error, password_handle)',
             'TA_Verify (TEE_Param params[TEE_NUM_PARAMS])'
-            : 'TA_Verify (uid, challenge, enrolled_password_handle, provided_password, error, response_auth_token)',
+            : 'TA_Verify (uid, challenge, enrolled_password_handle, provided_password, response_auth_token)',
 
             # C syntax to IMP syntax
             '->' : ' . ', 
@@ -100,7 +100,7 @@ class Translator:
             ' 0' : ' # 0',
             ' 1' : ' # 1',
             ' true'  : ' # true',
-            ' false' : '# false',
+            ' false' : ' # false',
 
             # TEE constant translate
             'TEE_TIMEOUT_INFINITE' : '# TEE-TIMEOUT-INFINITE',
@@ -296,7 +296,7 @@ class Translator:
 
     def special_process_func_body(self, line):
         if ':' in line: line = self.write_constants['tab'] + line.replace(':', ' :') # code label (case not considered yet)
-        elif 'if' in line: line = line.replace('!', '! ') # if statement
+        elif 'if (' in line: line = line.replace('!', '! ') # if statement
         elif '}\n' in line: line = line.replace('}', '} ;')
         else: # middle of func
             if self.translation_status == TranslationStatus.TRANSLATING_FUNC_BODY_WITH_ANNOTATION:

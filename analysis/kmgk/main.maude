@@ -4,10 +4,9 @@ load gatekeeper-ta
 load gatekeeper-ra
 
 mod KMGK is
-  pr TEE-BEHAVIOR .
-  pr TEE-IMP-BEHAVIOR .
   pr GATEKEEPER-CONSTANTS .
   pr GATEKEEPER-RA-PROGRAM .
+  pr GATEKEEPER-RA-BEHAVIOR .
   pr GATEKEEPER-TA-PROGRAM .
   pr IMP-SEMANTICS .
 endm
@@ -42,7 +41,7 @@ omod SCENARIO-AUX is
                                    app-status : normal , api-call : noCall , api-return : noReturn ,
                                    current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
                                    trust-app-id : GATEKEEPER ,
-                                   task : noTask , task-counter : 0 > .
+                                   task : noTask , task-counter : 0 , state-changed : false > .
 
 
 endom
@@ -65,4 +64,5 @@ mod BASE-SCENARIO is
 
 endm
 
-red scenario(gatekeeperRA, gatekeeperTA) .
+--- red scenario(gatekeeperRA, gatekeeperTA) .
+rew scenario(gatekeeperRA, gatekeeperTA) .

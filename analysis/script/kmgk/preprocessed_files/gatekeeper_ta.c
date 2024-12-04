@@ -449,21 +449,23 @@ static TEE_Result TA_DoVerify(const password_handle_t *expected_handle, const ui
 	}
 	//@endignore
 
-	//@func_annote |, password_length(ignore)|
+	//@func_annote(assign) |, password_length(ignore)|
 	res = TA_CreatePasswordHandle(&password_handle, expected_handle->salt, expected_handle->user_id, expected_handle->flags, expected_handle->version, password, password_length);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to create password handle");
 		goto exit; //@no_semi_colon
 	}
 
 	
-	//@add_line | if (password_handle.signature == expected_handle->signature) {
+	//@add_line | if (password_handle . signature == expected_handle->signature) {
 	//@ignore
 	if (memcmp(password_handle.signature, expected_handle->signature, sizeof(expected_handle->signature)) == 0) {
 	//@endignore
-		res = TEE_TRUE;
+		res = TEE_TRUE; //@no_semi_colon
 	} else {
-		res = TEE_FALSE;
+		res = TEE_FALSE; //@no_semi_colon
 	}
 
 exit:
@@ -772,9 +774,10 @@ static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
 	secure_id_t authenticator_id;
 	authenticator_id = 0;
 
-	//@ignore
-	uint64_t timestamp = GetTimestamp();
-	//@endignore
+	// Preprocess: separate variable delcarion & value assigment & dummy timestamp for now
+	// uint64_t timestamp = GetTimestamp();
+	uint64_t timestamp;
+	timestamp = 0;
 	bool throttle;
 
 	//@ignore

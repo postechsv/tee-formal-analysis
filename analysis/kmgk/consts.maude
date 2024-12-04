@@ -50,8 +50,30 @@ mod GATEKEEPER-PROGRAM-DECL is
   op enrolledPasswordHandle : -> Var [ctor] .
   op eph : -> Var [ctor] .
 
+  op authenticatorId : -> Var [ctor] .
+  op authenticatorType : -> Var [ctor] .
+  op timestamp : -> Var [ctor] .
+  op hmac : -> Var [ctor] .
+  op HwAuthTokenT : -> Var [ctor] .
+
   op sess : -> Var [ctor] .
   op ret : -> Var [ctor] .
 
+  op error : -> Var [ctor] .
+  op timeout : -> Var [ctor] .
+  op authToken : -> Var [ctor] .
+  op requestReenroll : -> Var [ctor] .
+  op passwordHandle : -> Var [ctor] .
+  op throttle : -> Var [ctor] .
+  op res : -> Var [ctor] .
+  op expectedHandle : -> Var [ctor] .
+  op password : -> Var [ctor] .
+
+  op dummy : -> Var [ctor] .
+
   op main : -> FuncId [ctor] .
+  op TAVerify : -> FuncId [ctor] .
+  op TADoVerify : -> FuncId [ctor] .
+  op TACreatePasswordHandle : -> FuncId [ctor] .
+  op TAMintAuthToken : -> FuncId [ctor] .
 endm

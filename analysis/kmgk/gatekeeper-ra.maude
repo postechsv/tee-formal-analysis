@@ -62,6 +62,6 @@ omod GATEKEEPER-RA-BEHAVIOR is
   rl [execute-ra]:
     < RI : RichApp | proc : none, prog : P >
     => 
-    < RI : RichApp | proc : execute(P, main, (# 1 , # 2 , # 3 , # 4 , # 5 , # 6 , # 7 , # 8 , # 9 , # 10 , # 11 , # 12 , # 13 , # 14 , # 15 , # 16 , # 17)) >
+    < RI : RichApp | proc : execute(P, main, (# 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1)) >
   .
 endom

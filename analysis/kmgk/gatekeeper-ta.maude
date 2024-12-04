@@ -1,11 +1,27 @@
 fmod GATEKEEPER-DATA is
   pr NAT .
+  pr RETURN-CODE .
 
   op GK-ENROLL : -> Nat [ctor] .
   eq GK-ENROLL = 0 .
 
   op GK-VERIFY : -> Nat [ctor] .
   eq GK-VERIFY = 1 .
+
+  ops ERROR-NONE ERROR-INVALID ERROR-RETRY ERROR-UNKNOWN : -> Nat [ctor] .
+  eq ERROR-NONE = 0 .
+  eq ERROR-INVALID = 1 .
+  eq ERROR-RETRY = 2 .
+  eq ERROR-RETRY = 3 .
+
+  op HANDLE-VERSION : -> Nat [ctor] .
+  eq HANDLE-VERSION = 2 .
+
+  op TEE-TRUE : -> ReturnCode [ctor] .
+  eq TEE-TRUE = TEE-SUCCESS .
+
+  op TEE-FALSE : -> Nat [ctor] .
+  eq TEE-FALSE = 1 .
 endfm
 
 mod GATEKEEPER-TA-PROGRAM-DECL is
@@ -14,6 +30,8 @@ mod GATEKEEPER-TA-PROGRAM-DECL is
   pr TEE-BEHAVIOR .
   pr TEE-IMP-BEHAVIOR .
   pr GATEKEEPER-PROGRAM-DECL .
+
+  ops serializeResponse exit : -> Label [ctor] .
 endm
 
 mod GATEKEEPER-TA-PROGRAM is
@@ -33,6 +51,122 @@ mod GATEKEEPER-TA-PROGRAM is
     	var hardwareBacked
     } PasswordHandleT ;
     
+    struct {
+    	var version ;
+    	var challenge ;
+    	var userId ;
+    	var authenticatorId ;
+    	var authenticatorType ;
+    	var timestamp ;
+    	var hmac
+    } HwAuthTokenT ;
+
+    TACreatePasswordHandle(passwordHandle, salt, userId, flags, version, password)
+    {
+      return # TEE-SUCCESS
+    } ;
+
+    TADoVerify (expectedHandle, password)
+    {
+    	var res ;
+    	struct PasswordHandleT passwordHandle ;
+    
+    
+    	res := TACreatePasswordHandle(passwordHandle, expectedHandle . salt, expectedHandle . userId, expectedHandle . flags, expectedHandle . version, password) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	
+        if (passwordHandle . signature === expectedHandle . signature) {
+    		res := # TEE-TRUE
+    	} else {
+    		res := # TEE-FALSE
+    	}  ;
+    
+      exit :
+    	return res
+    }  ;
+
+    TAMintAuthToken (authToken, timestamp, userId, authenticatorId, challenge)
+    {
+      return # true
+    } ;
+
+    TAVerify (uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
+    {
+    	var res ;
+    	res := # TEE-SUCCESS ;
+    
+    
+    	var error ;
+    	error := # ERROR-NONE ;
+    	var timeout ;
+    	timeout := # 0 ;
+    	struct HwAuthTokenT authToken ;
+    	var requestReenroll ;
+    	requestReenroll := # false ;
+    
+    
+    
+    	struct PasswordHandleT passwordHandle ;
+    	var userId ;
+    	var authenticatorId ;
+    	authenticatorId := # 0 ;
+    
+    	var timestamp ;
+    	timestamp := # 0 ;
+    	var throttle ;
+    
+    
+    
+    	passwordHandle := enrolledPasswordHandle ;
+    
+    	if (!  (passwordHandle . version <= # HANDLE-VERSION)) {
+    		error := # ERROR-INVALID ;
+    		goto serializeResponse
+    	}  ;
+    
+    	userId := passwordHandle . userId ;
+    
+    
+    	res := TADoVerify(passwordHandle, providedPassword) ;
+    	if (res === # TEE-TRUE) {
+    		var dummy ;
+    		dummy := TAMintAuthToken(authToken, timestamp, userId, authenticatorId, challenge) ;
+    		goto serializeResponse
+    	} else {
+    		if (res === # TEE-FALSE) {
+    			if (!  (timeout <= # 0)) {
+    				error := # ERROR-RETRY
+    			} else {
+    				error := # ERROR-INVALID
+    			}  ;
+    			goto serializeResponse
+    		} else {
+    			goto exit
+    		} 
+    	}  ;
+    
+      serializeResponse :
+    	if (error === # ERROR-INVALID || error === # ERROR-UNKNOWN) {
+    		skip
+    	} else {
+    		if (error === # ERROR-RETRY) {
+        skip
+    		} else {
+    			if (error === # ERROR-NONE) {
+        skip
+    			} else { 
+    				res := # TEE-ERROR-GENERIC
+    			} 
+    		} 
+    	}  ;
+    
+      exit :
+    	return res
+    }  ;
+
     main (cmdId, uid, desiredPassword, currentPassword, cphVersion, cphUserId, cphFlags, cphSalt, cphSignature, cphHardwareBacked, responseHandle, challenge, ephVersion, ephUserId, ephFlags, ephSalt, ephSignature, ephHardwareBacked, providedPassword, responseAuthToken) {
       var ret ;
       if (cmdId === # GK-ENROLL) {
@@ -56,8 +190,7 @@ mod GATEKEEPER-TA-PROGRAM is
           enrolledPasswordHandle . signature := ephSignature ;
           enrolledPasswordHandle . hardwareBacked := ephHardwareBacked ;
 
-          ret := # 406
-          --- ret := TAVerify(uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
+          ret := TAVerify(uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
         } else {
           ret := # 404
         }

@@ -5,14 +5,14 @@ run() {
     case $1 in
         mc-exp1) prog="normal" ty="mc1" ;;
         mc-exp2) prog="-patch" ty="mc2" ;;
-        mc-exp3) prog="-patch" ty="mc3" ;;
         ss-exp1) prog="-patch" ty="ss1" ;;
         ss-exp2) prog="normal" ty="ss2" ;;
+        mc-exp1-debug) prog="-patch" ty="mc1-debug" ;;
         *) echo "error: wrong table"; exit 65 ;;
     esac
 
     ltl=("p1" "p2" "p3" "p4" "p5" "p6")
-    ltl2=("p1p" "p2" "p3" "p4p" "p5" "p6")
+    ltl2=("p1n" "p2n" "p3n" "p4n" "p5" "p6")
     # ssltl=("p1" "p2" "p3" "p4" "p5" "p6")
     ssltl=("$3")
     tht=("non" "oom" "msg")
@@ -35,7 +35,7 @@ run() {
     else if [ "$ty" == "mc2" ]
     then
         
-        for v in "${ltl[@]}"
+        for v in "${ltl2[@]}"
         do
             for t in "${tht[@]}"
             do
@@ -43,10 +43,10 @@ run() {
             done
         done
 
-    else if [ "$ty" == "mc3" ]
+    else if [ "$ty" == "mc1-debug" ]
     then
         
-        for v in "${ltl2[@]}"
+        for v in "${ltl[@]}"
         do
             for t in "${tht[@]}"
             do
@@ -81,7 +81,6 @@ run() {
     fi
     fi
     fi
-
 
     case $2 in
         -non-parallel)  

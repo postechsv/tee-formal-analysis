@@ -32,8 +32,10 @@ run() {
         p4) p="p4" ;;
         p5) p="p5" ;;
         p6) p="p6" ;;
-        p1p) p="p1-no-msg" ;;
-        p4p) p="p4-no-msg" ;;
+        p1n) p="p1n" ;;
+        p2n) p="p2n" ;;
+        p3n) p="p3n" ;;
+        p4n) p="p4n" ;;
         no) p="no_prop" ;; # for invisible experiment
         *) echo "error: wrong property"; exit 65 ;;
     esac

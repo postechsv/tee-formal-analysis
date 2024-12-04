@@ -75,7 +75,8 @@ class Translator:
         self.struct_types = [       # TODO: accumulate struct types as translating
             'TEE_ObjectInfo',       # currently manually added
             'aes_cipher',
-            'password_handle_t'
+            'password_handle_t',
+            'hw_auth_token_t'
         ]
 
         self.translate_mapping = {
@@ -125,6 +126,7 @@ class Translator:
             'TEE_ObjectInfo'    : 'TeeObjectInfo',
             'aes_cipher'        : 'AesCipher',
             'password_handle_t' : 'PasswordHandleT',
+            'hw_auth_token_t'   : 'HwAuthTokenT',
 
             'TEE_ATTR_SECRET_VALUE' : '# TEE-ATTR-SECRET-VALUE',
 
@@ -277,6 +279,7 @@ class Translator:
         elif '}' in line: line = line # end of struct
         else: # var declar
             for var_type in self.var_types: line = line.replace(var_type, 'var')
+            if '[' in line and ']' in line: line = line[:line.find('[')] + line[line.find(']') + 1:]
         return line
 
     def special_process_func_start(self, line):

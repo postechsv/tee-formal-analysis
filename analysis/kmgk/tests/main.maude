@@ -3,12 +3,14 @@ load test-transient
 load test-persistent
 load test-data-stream
 load test-generic
+load test-cryptographic
 
 mod TEST-CASES is
   pr TEST-TRANSIENT .
   pr TEST-PERSISTENT .
   pr TEST-DATA-STREAM .
   pr TEST-GENERIC .
+  pr TEST-CRYPTOGRAPHIC .
 endm
 
 mod TEST-SCENARIO is
@@ -33,4 +35,5 @@ endm
 --- rew scenario(testTransientTA) .
 --- rew scenario(testPersistentTA) .
 --- rew scenario(testDataStreamTA) .
-rew scenario(testGenericTA) .
+--- rew scenario(testGenericTA) .
+rew scenario(testCryptographicTA) .

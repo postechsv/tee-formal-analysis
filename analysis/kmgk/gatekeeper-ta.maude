@@ -1,5 +1,5 @@
 fmod GATEKEEPER-DATA is
-  pr NAT .
+  pr CRYPTO-KEY-SIZE .
   pr RETURN-CODE .
 
   op GK-ENROLL : -> Nat [ctor] .
@@ -22,6 +22,9 @@ fmod GATEKEEPER-DATA is
 
   op TEE-FALSE : -> Nat [ctor] .
   eq TEE-FALSE = 1 .
+
+  op HMAC-SHA256-KEY-SIZE-BIT : -> CryptoKeySize [ctor] .
+  eq HMAC-SHA256-KEY-SIZE-BIT = 256 Bits .
 endfm
 
 mod GATEKEEPER-TA-PROGRAM-DECL is
@@ -31,7 +34,7 @@ mod GATEKEEPER-TA-PROGRAM-DECL is
   pr TEE-IMP-BEHAVIOR .
   pr GATEKEEPER-PROGRAM-DECL .
 
-  ops serializeResponse exit : -> Label [ctor] .
+  ops serializeResponse exit freeKey : -> Label [ctor] .
 endm
 
 mod GATEKEEPER-TA-PROGRAM is
@@ -61,10 +64,55 @@ mod GATEKEEPER-TA-PROGRAM is
     	var hmac
     } HwAuthTokenT ;
 
-    TACreatePasswordHandle(passwordHandle, salt, userId, flags, version, password)
+		TAGetMasterKey (masterKey)
     {
-      return # TEE-SUCCESS
-    } ;
+			return # TEE-SUCCESS
+    }  ;
+
+		TAComputePasswordSignature (signature, key, password, salt)
+    {
+    	return # noData
+    }  ;
+
+		TACreatePasswordHandle (passwordHandle, salt, userId, flags, handleVersion, password)
+    {
+    	struct PasswordHandleT pwHandle ;
+    	var toSign ;
+    
+    	var masterKey ;
+    	masterKey := # TEE-HANDLE-NULL ;
+    	var res ;
+    
+    	AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, masterKey) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	pwHandle . version := handleVersion ;
+    	pwHandle . salt := salt ;
+    	pwHandle . userId := userId ;
+    	pwHandle . flags := flags ;
+    	pwHandle . hardwareBacked := # true ;
+    
+        toSign := pwHandle + password  ;
+    
+    	res := TAGetMasterKey(masterKey) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto freeKey
+    	}  ;
+    
+    	res := TAComputePasswordSignature(pwHandle . signature, masterKey, toSign, salt) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto freeKey
+    	}  ;
+    
+        passwordHandle := pwHandle ;
+    
+      freeKey :
+    		FreeTransientObject(masterKey  ; masterKey) ;
+      exit :
+    		return res
+    }  ;
 
     TADoVerify (expectedHandle, password)
     {

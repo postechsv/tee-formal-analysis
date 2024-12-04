@@ -68,6 +68,11 @@ mod GATEKEEPER-PROGRAM-DECL is
   op res : -> Var [ctor] .
   op expectedHandle : -> Var [ctor] .
   op password : -> Var [ctor] .
+  op handleVersion : -> Var [ctor] .
+  op pwHandle : -> Var [ctor] .
+  op toSign : -> Var [ctor] .
+  op masterKey : -> Var [ctor] .
+  op key : -> Var [ctor] .
 
   op dummy : -> Var [ctor] .
 
@@ -75,5 +80,7 @@ mod GATEKEEPER-PROGRAM-DECL is
   op TAVerify : -> FuncId [ctor] .
   op TADoVerify : -> FuncId [ctor] .
   op TACreatePasswordHandle : -> FuncId [ctor] .
+  op TAGetMasterKey : -> FuncId [ctor] .
+  op TAComputePasswordSignature : -> FuncId [ctor] .
   op TAMintAuthToken : -> FuncId [ctor] .
 endm

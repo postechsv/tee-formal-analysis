@@ -93,9 +93,10 @@ class Translator:
             : 'TA_Verify (uid, challenge, enrolled_password_handle, provided_password, response_auth_token)',
 
             # C syntax to IMP syntax
-            '->' : ' . ', 
-            ' = ' : ' := ',
-            ' == ' : ' === ',
+            '.'     : ' . ',
+            '->'    : ' . ', 
+            ' = '   : ' := ',
+            ' == '  : ' === ',
             
             ' 0' : ' # 0',
             ' 1' : ' # 1',
@@ -121,7 +122,7 @@ class Translator:
 
 
             'TEE_TYPE_AES'                      : '# TEE-TYPE-AES',
-            'TEE_TYPE_HMAC_SHA256'              : '# TEE-TYPE-SHA256',
+            'TEE_TYPE_HMAC_SHA256'              : '# TEE-TYPE-HMAC-SHA256',
 
             'TEE_ObjectInfo'    : 'TeeObjectInfo',
             'aes_cipher'        : 'AesCipher',

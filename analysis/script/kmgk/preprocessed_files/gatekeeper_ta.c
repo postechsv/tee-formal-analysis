@@ -247,12 +247,17 @@ static TEE_Result TA_CreatePasswordHandle(password_handle_t *password_handle, sa
 	//@endignore
 	uint8_t to_sign[password_length + metadata_length];
 
-	TEE_ObjectHandle masterKey = TEE_HANDLE_NULL;
+	// Preprocess: separate variable delcarion & value assigment
+	// TEE_ObjectHandle masterKey = TEE_HANDLE_NULL;
+	TEE_ObjectHandle masterKey;
+	masterKey = TEE_HANDLE_NULL;
 	TEE_Result res;
 
 	//@func_annote |res(out)| masterKey(out)|, &masterKey(ignore)|
 	res = TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256, HMAC_SHA256_KEY_SIZE_BIT, &masterKey);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to allocate password key");
 		goto exit; //@no_semi_colon
 	}
@@ -270,15 +275,20 @@ static TEE_Result TA_CreatePasswordHandle(password_handle_t *password_handle, sa
 	//@endignore
 	//@add_line | to_sign = pw_handle + password ;
 
+	//@func_annote(assign)
 	res = TA_GetMasterKey(masterKey);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to get master key");
 		goto free_key; //@no_semi_colon
 	}
 
-	//@func_annote |, sizeof(pw_handle.signature)(ignore)|, sizeof(to_sign)(ignore)|
+	//@func_annote(assign) |, sizeof(pw_handle.signature)(ignore)|, sizeof(to_sign)(ignore)|
 	res = TA_ComputePasswordSignature(pw_handle.signature, sizeof(pw_handle.signature), masterKey, to_sign, sizeof(to_sign), salt);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to compute password signature");
 		goto free_key; //@no_semi_colon
 	}
@@ -286,7 +296,7 @@ static TEE_Result TA_CreatePasswordHandle(password_handle_t *password_handle, sa
 	//@ignore
 	memcpy(password_handle, &pw_handle, sizeof(pw_handle));
 	//@endignore
-	//@add_line | password_handle = pw_handle
+	//@add_line | password_handle = pw_handle;
 
 free_key:
 	//@func_annote |masterKey(out)|

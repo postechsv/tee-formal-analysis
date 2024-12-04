@@ -23,11 +23,9 @@
 #include "gatekeeper_ipc.h"
 #include "failure_record.h"
 
-// Preprocess: secret_ID just one for now
 //@ignore
 static uint8_t	secret_ID[] = {0xB1, 0x6B, 0x00, 0xB5};
 //@endignore
-//@add_line | secret_ID = 177
 
 //@process_struct
 // Manually copied from gatekeeper/ta/ta_gatekeeper.h
@@ -129,30 +127,42 @@ static TEE_Result TA_GetMasterKey(TEE_ObjectHandle masterKey)
 	TEE_Result		res;
 	TEE_Attribute		attrs[1];
 	uint8_t			secretData[HMAC_SHA256_KEY_SIZE_BYTE];
-	TEE_ObjectHandle	secretObj = TEE_HANDLE_NULL;
-	uint32_t		readSize = 0;
+	// Preprocess: separate variable delcarion & value assigment
+	// TEE_ObjectHandle	secretObj = TEE_HANDLE_NULL;
+	TEE_ObjectHandle	secretObj;
+	secretObj = TEE_HANDLE_NULL;
+	// uint32_t		readSize = 0;
+	uint32_t		readSize;
+	readSize = 0;
 
-	//@func_annote |res(out) | secretObj(out)|, sizeof(secret_ID)(ignore)|
+	// Preprocess: global variable secret_ID as predefined value
+	//@func_annote |res(out) | secretObj(out)|, # secret_ID, TEE_DATA_FLAG_ACCESS_READ(in)|, secret_ID, sizeof(secret_ID), TEE_DATA_FLAG_ACCESS_READ, &secretObj(ignore)|
 	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, secret_ID, sizeof(secret_ID), TEE_DATA_FLAG_ACCESS_READ, &secretObj);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to open secret, error=%X", res);
 		goto exit; //@no_semi_colon
 	}
 
-	//@func_annote |# dataSize(1)(in)|res(out)| secretData(out)|secretData, sizeof(secretData), &readSize(ignore)|
+	//@func_annote |# dataSize(1)(in)|res, secretData(out)|secretData, sizeof(secretData), &readSize(ignore)|
 	res = TEE_ReadObjectData(secretObj, secretData, sizeof(secretData), &readSize);
 	// if (res != TEE_SUCCESS || sizeof(secretData) != readSize) {
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to read secret data, bytes = %u", readSize);
 		goto close_obj; //@no_semi_colon
 	}
 
-	//@func_annote |attrs(out)|&attrs[0], (ignore)|, sizeof(secretData)(ignore)|
+	//@func_annote |# randomAttrVal(in)|attrs(out)|&attrs[0], (ignore)|secretData, sizeof(secretData)(ignore)|
 	TEE_InitRefAttribute(&attrs[0], TEE_ATTR_SECRET_VALUE, secretData, sizeof(secretData));
 
 	//@func_annote |res(out)|, sizeof(attrs)/sizeof(attrs[0])(ignore)|
 	res = TEE_PopulateTransientObject(masterKey, attrs, sizeof(attrs)/sizeof(attrs[0]));
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to set master key attributes");
 		goto close_obj; //@no_semi_colon
 	}
@@ -268,12 +278,12 @@ static TEE_Result TA_CreatePasswordHandle(password_handle_t *password_handle, sa
 	pw_handle.flags = flags;
 	pw_handle.hardware_backed = true;
 
-	// Preprocess: ad-hoc
+	// Preprocess: ad-hoc (for now just sign password only)
 	//@ignore
 	memcpy(to_sign, &pw_handle, metadata_length);
 	memcpy(to_sign + metadata_length, password, password_length);
 	//@endignore
-	//@add_line | to_sign = pw_handle + password ;
+	//@add_line | to_sign = password ;
 
 	//@func_annote(assign)
 	res = TA_GetMasterKey(masterKey);

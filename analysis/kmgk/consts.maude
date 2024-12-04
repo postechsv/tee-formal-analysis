@@ -73,6 +73,11 @@ mod GATEKEEPER-PROGRAM-DECL is
   op toSign : -> Var [ctor] .
   op masterKey : -> Var [ctor] .
   op key : -> Var [ctor] .
+  op secretData : -> Var [ctor] .
+  op secretObj : -> Var [ctor] .
+  op readSize : -> Var [ctor] .
+  op secretID : -> Var [ctor] .
+  op attrs : -> Var [ctor] .
 
   op dummy : -> Var [ctor] .
 

@@ -2,6 +2,8 @@ fmod GATEKEEPER-DATA is
   pr CRYPTO-KEY-SIZE .
   pr RETURN-CODE .
 	pr FILE-ID .
+	pr DATA .
+	pr TEE-ATTRIBUTE .
 
   op GK-ENROLL : -> Nat [ctor] .
   eq GK-ENROLL = 0 .
@@ -37,7 +39,7 @@ mod GATEKEEPER-TA-PROGRAM-DECL is
   pr TEE-IMP-BEHAVIOR .
   pr GATEKEEPER-PROGRAM-DECL .
 
-  ops serializeResponse exit freeKey : -> Label [ctor] .
+  ops serializeResponse exit freeKey closeObj : -> Label [ctor] .
 endm
 
 mod GATEKEEPER-TA-PROGRAM is
@@ -67,14 +69,43 @@ mod GATEKEEPER-TA-PROGRAM is
     	var hmac
     } HwAuthTokenT ;
 
-		TAGetMasterKey (masterKey)
+    TAGetMasterKey (masterKey)
     {
-			return # TEE-SUCCESS
+    	var		res ;
+    	var		attrs ;
+    	var			secretData ;
+    	var	secretObj ;
+    	secretObj := # TEE-HANDLE-NULL ;
+    	var		readSize ;
+    	readSize := # 0 ;
+    
+    	OpenPersistentObject(# TEE-STORAGE-PRIVATE, # secretID, # TEE-DATA-FLAG-ACCESS-READ  ; res , secretObj) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	ReadObjectData(secretObj, # dataSize(1)  ; res, secretData) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto closeObj
+    	}  ;
+    
+    	InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attrs) ;
+    
+    	PopulateTransientObject(masterKey, attrs  ; res) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto closeObj
+    	}  ;
+    
+      closeObj :
+    	CloseObject(secretObj  ; secretObj) ;
+      exit :
+    	return res
     }  ;
 
 		TAComputePasswordSignature (signature, key, password, salt)
     {
-    	return # noData
+			signature := # noData ;
+    	return # TEE-SUCCESS
     }  ;
 
 		TACreatePasswordHandle (passwordHandle, salt, userId, flags, handleVersion, password)
@@ -97,7 +128,7 @@ mod GATEKEEPER-TA-PROGRAM is
     	pwHandle . flags := flags ;
     	pwHandle . hardwareBacked := # true ;
     
-        toSign := pwHandle + password  ;
+        toSign := password  ;
     
     	res := TAGetMasterKey(masterKey) ;
     	if (!  (res === # TEE-SUCCESS)) {

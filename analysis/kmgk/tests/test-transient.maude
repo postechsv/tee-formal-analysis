@@ -1,12 +1,12 @@
-mod TEST-PROGRAM is
+mod TEST-TRANSIENT is
   pr TEE-BEHAVIOR .
   pr TEE-IMP-BEHAVIOR .
   pr GATEKEEPER-PROGRAM-DECL .
   pr GATEKEEPER-DATA .
 
-  op testTA : -> Program [ctor] .
+  op testTransientTA : -> Program [ctor] .
 
-  eq testTA = 
+  eq testTransientTA = 
     main () {
       --- Location: TA_CreatePasswordHandle
       var res ; var masterKey ;

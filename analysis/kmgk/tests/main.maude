@@ -1,34 +1,30 @@
 load ../main
 load test-transient
+load test-persistent
+
+mod TEST-CASES is
+  pr TEST-TRANSIENT .
+  pr TEST-PERSISTENT .
+endm
 
 mod TEST-SCENARIO is
-  pr KMGK .
-  pr ID-GEN .
-  pr TRUST-APP .
-  pr TEST-PROGRAM .
+  pr SCENARIO-AUX .
+  pr TEST-CASES .
 
   vars P TAPROG : Program .
 
-  op osId : -> Oid .
-  op initTrustedOS : -> Configuration .
-  eq initTrustedOS 
-  = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> ta) , session-counter : 1 ,
-                           storage : empty , storage-status : empty ,
-                           service-request-ta : noAppId , service-request-ta-inst : noInstId ,
-                           service-in : nil , service-out : nil ,
-                           temporary-objects : empty > .
-
-  op initTa : Program -> Configuration .
-  eq initTa(P) = < ta : TrustApp | proc : none , prog : P , running : false ,
-                                   app-status : normal , api-call : noCall , api-return : noReturn ,
-                                   current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
-                                   trust-app-id : GATEKEEPER ,
-                                   task : task({sessionId(0) , main , nil} , ra) , task-counter : 0 , state-changed : false > .
+  op initTestTa : Program -> Configuration .
+  eq initTestTa(P) = < ta : TrustApp | proc : none , prog : P , running : false ,
+                                       app-status : normal , api-call : noCall , api-return : noReturn ,
+                                       current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
+                                       trust-app-id : GATEKEEPER ,
+                                       task : task({sessionId(0) , main , nil} , ra) , task-counter : 0 , state-changed : false > .
 
   op scenario : Program -> Configuration .
   eq scenario(TAPROG) 
-   = initTa(TAPROG) initTrustedOS .
+   = initTestTa(TAPROG) initTrustedOS masterKey .
 
 endm
 
-rew scenario(testTA) .
+--- rew scenario(testTransientTA) .
+rew scenario(testPersistentTA) .

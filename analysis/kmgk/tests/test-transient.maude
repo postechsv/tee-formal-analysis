@@ -1,0 +1,17 @@
+mod TEST-PROGRAM is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr GATEKEEPER-PROGRAM-DECL .
+  pr GATEKEEPER-DATA .
+
+  op testTA : -> Program [ctor] .
+
+  eq testTA = 
+    main () {
+      --- Location: TA_CreatePasswordHandle
+      var res ; var masterKey ;
+      AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, masterKey) ;
+      return res
+    }
+  .
+endm

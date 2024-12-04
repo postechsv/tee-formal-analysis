@@ -27,7 +27,7 @@ omod SCENARIO-AUX is
   op initTrustedOS : -> Configuration .
   eq initTrustedOS 
   = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> ta) , session-counter : 1 ,
-                           storage : empty , storage-status : empty ,
+                           storage : GATEKEEPER |-> secretID , storage-status : (GATEKEEPER |-> storageNormal) ,
                            service-request-ta : noAppId , service-request-ta-inst : noInstId ,
                            service-in : nil , service-out : nil ,
                            temporary-objects : empty > .
@@ -43,7 +43,14 @@ omod SCENARIO-AUX is
                                    trust-app-id : GATEKEEPER ,
                                    task : noTask , task-counter : 0 , state-changed : false > .
 
-
+  ops masterKeyObj masterKeyObjStream : -> TaObjectId [ctor] .
+  op masterKey : -> Configuration .
+  eq masterKey = 
+    < masterKeyObj : PersistentObject | handle-set : none , object-type : TEE-TYPE-DATA , max-object-size : 0 Bits  , 
+                                        file-id : secretID , trust-app-id : GATEKEEPER ,
+                                        attribute-set : empty , object-usage-set : empty , data-stream-id : masterKeyObjStream >
+    < masterKeyObjStream : DataStreamObject | data-size : dataSize(1) , content : newContent(randomData) >
+  .
 endom
 
 mod BASE-SCENARIO is
@@ -55,7 +62,7 @@ mod BASE-SCENARIO is
   op initDevice : Program Program -> Configuration .
   eq initDevice(RAPROG, TAPROG) = 
   < device : Device | execution-envs : {initRa(RAPROG)} | 
-                                       {initTa(TAPROG) initTrustedOS} > 
+                                       {initTa(TAPROG) initTrustedOS masterKey} > 
   .
 
   op scenario : Program Program -> Configuration .

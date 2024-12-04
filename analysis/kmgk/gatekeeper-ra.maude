@@ -4,6 +4,8 @@ mod GATEKEEPER-RA-PROGRAM is
   pr GATEKEEPER-PROGRAM-DECL .
   pr GATEKEEPER-DATA .
 
+  op randomData : -> Data [ctor] .
+
   op gatekeeperRA : -> Program [ctor] .
   eq gatekeeperRA =
     struct {

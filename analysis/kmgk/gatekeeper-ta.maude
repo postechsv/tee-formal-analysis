@@ -1,6 +1,7 @@
 fmod GATEKEEPER-DATA is
   pr CRYPTO-KEY-SIZE .
   pr RETURN-CODE .
+	pr FILE-ID .
 
   op GK-ENROLL : -> Nat [ctor] .
   eq GK-ENROLL = 0 .
@@ -25,6 +26,8 @@ fmod GATEKEEPER-DATA is
 
   op HMAC-SHA256-KEY-SIZE-BIT : -> CryptoKeySize [ctor] .
   eq HMAC-SHA256-KEY-SIZE-BIT = 256 Bits .
+
+	op secretID : -> FileId [ctor] .
 endfm
 
 mod GATEKEEPER-TA-PROGRAM-DECL is

@@ -39,7 +39,7 @@ mod GATEKEEPER-TA-PROGRAM-DECL is
   pr TEE-IMP-BEHAVIOR .
   pr GATEKEEPER-PROGRAM-DECL .
 
-  ops serializeResponse exit freeKey closeObj : -> Label [ctor] .
+  ops serializeResponse exit freeKey closeObj freeOp : -> Label [ctor] .
 endm
 
 mod GATEKEEPER-TA-PROGRAM is
@@ -102,10 +102,46 @@ mod GATEKEEPER-TA-PROGRAM is
     	return res
     }  ;
 
-		TAComputePasswordSignature (signature, key, password, salt)
+    TAComputeSignature (signature, key, message)
     {
-			signature := # noData ;
-    	return # TEE-SUCCESS
+    	var buf ;
+    	var op ;
+    	op := # TEE-HANDLE-NULL ;
+    	var res ;
+    	var toWrite ;
+    
+    	AllocateOperation(# TEE-ALG-HMAC-SHA256, # TEE-MODE-MAC, # HMAC-SHA256-KEY-SIZE-BIT  ; res, op) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	SetOperationKey(op, key  ; res) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto freeOp
+    	}  ;
+    
+    	MACInit(op, # noData  ;   ) ;
+    
+    	var dummyRes ;
+    	MACComputeFinal(op, message  ; dummyRes, buf) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto freeOp
+    	}  ;
+    
+    
+          signature  := buf  ;
+    
+      freeOp :
+    	FreeOperation(op  ;  op) ;
+      exit :
+    	return res
+    }  ;
+
+    TAComputePasswordSignature (signature, key, password, salt)
+    {
+    	var saltedPassword ;
+        saltedPassword := password  ;
+    	return TAComputeSignature(signature, key, saltedPassword)
     }  ;
 
 		TACreatePasswordHandle (passwordHandle, salt, userId, flags, handleVersion, password)

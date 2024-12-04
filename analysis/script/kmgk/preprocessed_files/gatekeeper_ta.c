@@ -179,22 +179,31 @@ exit:
 static TEE_Result TA_ComputeSignature(uint8_t *signature, TEE_ObjectHandle key, const uint8_t *message)
 // static TEE_Result TA_ComputeSignature(uint8_t *signature, size_t signature_length, TEE_ObjectHandle key, const uint8_t *message, size_t length)
 {
+	//@ignore
 	uint32_t buf_length = HMAC_SHA256_KEY_SIZE_BYTE;
+	//@endignore
+	// Preprocess: separate variable delcarion & value assigment
 	uint8_t buf[buf_length];
-	TEE_OperationHandle op = TEE_HANDLE_NULL;
+	// TEE_OperationHandle op = TEE_HANDLE_NULL;
+	TEE_OperationHandle op;
+	op = TEE_HANDLE_NULL;
 	TEE_Result res;
 	uint32_t to_write;
 
 	//@func_annote |res(out)| op(out)|&op, (ignore)|
 	res = TEE_AllocateOperation(&op, TEE_ALG_HMAC_SHA256, TEE_MODE_MAC, HMAC_SHA256_KEY_SIZE_BIT);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to allocate HMAC operation");
 		goto exit; //@no_semi_colon
 	}
 
 	//@func_annote |res(out)|
 	res = TEE_SetOperationKey(op, key);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to set secret key");
 		goto free_op; //@no_semi_colon
 	}
@@ -202,9 +211,13 @@ static TEE_Result TA_ComputeSignature(uint8_t *signature, TEE_ObjectHandle key, 
 	//@func_annote |, # noData(in)|  (out)|, NULL, 0(ignore)|
 	TEE_MACInit(op, NULL, 0);
 
-	//@func_annote |buf(out)|, length, buf, &buf_length(ignore)|
-	TEE_MACComputeFinal(op, (void *)message, length, buf, &buf_length);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: add dummy res to store TEE_MACComputeFinal output
+	TEE_Result dummy_res;
+	//@func_annote |dummy_res(out)| buf(out)|, length, buf, &buf_length(ignore)|
+	dummy_res = TEE_MACComputeFinal(op, (void *)message, length, buf, &buf_length);
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to compute HMAC");
 		goto free_op; //@no_semi_colon
 	}
@@ -234,14 +247,14 @@ static TEE_Result TA_ComputePasswordSignature(uint8_t *signature, TEE_ObjectHand
 // static TEE_Result TA_ComputePasswordSignature(uint8_t *signature, size_t signature_length, TEE_ObjectHandle key, const uint8_t *password, size_t password_length, salt_t salt)
 {
 	uint8_t salted_password[password_length + sizeof(salt)];
-	// Preprocess: ad-hoc salting
+	// Preprocess: ad-hoc salting (no salting for now)
 	//@ignore
 	memcpy(salted_password, &salt, sizeof(salt));
 	memcpy(salted_password + sizeof(salt), password, password_length);
 	//@endignore
-	//@add_line | salted_password = salt + password ;
-	//@func_annote |, sizeof(salted_password)(ignore)|
-	return TA_ComputeSignature(signature, signature_length, key, salted_password, sizeof(salted_password));
+	//@add_line | salted_password = password ;
+	//@func_annote |, signature_length(ignore)|, sizeof(salted_password)(ignore)|
+	return TA_ComputeSignature(signature, signature_length, key, salted_password, sizeof(salted_password)); //@no_semi_colon
 }
 
 //@func_start

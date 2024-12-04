@@ -78,8 +78,14 @@ mod GATEKEEPER-PROGRAM-DECL is
   op readSize : -> Var [ctor] .
   op secretID : -> Var [ctor] .
   op attrs : -> Var [ctor] .
+  op saltedPassword : -> Var [ctor] .
+  op message : -> Var [ctor] .
+  op buf : -> Var [ctor] .
+  op op : -> Var [ctor] .
+  op toWrite : -> Var [ctor] .
 
   op dummy : -> Var [ctor] .
+  op dummyRes : -> Var [ctor] .
 
   op main : -> FuncId [ctor] .
   op TAVerify : -> FuncId [ctor] .
@@ -87,5 +93,6 @@ mod GATEKEEPER-PROGRAM-DECL is
   op TACreatePasswordHandle : -> FuncId [ctor] .
   op TAGetMasterKey : -> FuncId [ctor] .
   op TAComputePasswordSignature : -> FuncId [ctor] .
+  op TAComputeSignature : -> FuncId [ctor] .
   op TAMintAuthToken : -> FuncId [ctor] .
 endm

@@ -52,3 +52,16 @@ mod GATEKEEPER-RA-PROGRAM is
     }
   .
 endm
+
+omod GATEKEEPER-RA-BEHAVIOR is
+  pr GATEKEEPER-RA-PROGRAM .
+
+  var RI : Oid .
+  var P : Program .
+
+  rl [execute-ra]:
+    < RI : RichApp | proc : none, prog : P >
+    => 
+    < RI : RichApp | proc : execute(P, main, (# 1 , # 2 , # 3 , # 4 , # 5 , # 6 , # 7 , # 8 , # 9 , # 10 , # 11 , # 12 , # 13 , # 14 , # 15 , # 16 , # 17)) >
+  .
+endom

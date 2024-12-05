@@ -87,17 +87,10 @@ class Translator:
         ]
 
         self.translate_mapping = {
-            #TODO: need to update
-            'payload_reencryption (*session, param_types, TEE_Param params[4])'
-            : 'payload_reencryption (*session, ori_cli_id, ori_cli_iv, ori_cli_data, dest_cli_id, dest_cli_data)',
             '(char *) TEE_Malloc(sizeof *dest_cli_iv * (TA_AES_IV_SIZE + 1), 0);' : '# dummyIv;',
             '(char *) TEE_Malloc(sizeof *ori_cli_key * (TA_AES_KEY_SIZE + 1), 0);' : '# randomAttrVal;',
             '(char *) TEE_Malloc(sizeof *dest_cli_key * (TA_AES_KEY_SIZE + 1), 0);' : '# randomAttrVal;',
             '(char *) TEE_Malloc(sizeof *dec_data * dec_data_size, 0);' : '# noData;',
-            'TA_Enroll (TEE_Param params[TEE_NUM_PARAMS])'
-            : 'TA_Enroll (uid, desired_password, current_password, current_password_handle, error, password_handle)',
-            'TA_Verify (TEE_Param params[TEE_NUM_PARAMS])'
-            : 'TA_Verify (uid, challenge, enrolled_password_handle, provided_password, response_auth_token)',
 
             # C syntax to IMP syntax
             '.'     : ' . ',
@@ -214,6 +207,15 @@ class Translator:
             'KM_GET_AUTHTOKEN_KEY'                  : '# KM-GET-AUTHTOKEN-KEY'
         }
 
+        self.special_func_start_mapping = { #TODO: need to update
+            'payload_reencryption(*session, param_types, TEE_Param params[4])'
+            : 'payload_reencryption (*session, ori_cli_id, ori_cli_iv, ori_cli_data, dest_cli_id, dest_cli_data)',
+            'TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])'
+            : 'TA_Enroll (uid, desired_password, current_password, current_password_handle, password_handle)',
+            'TA_Verify(TEE_Param params[TEE_NUM_PARAMS])'
+            : 'TA_Verify (uid, challenge, enrolled_password_handle, provided_password, response_auth_token)',
+        }
+
         self.prev_translation_status = None
         self.translation_status = None
         self.current_annotation_info = None
@@ -294,6 +296,9 @@ class Translator:
 
     def special_process_func_start(self, line):
         if 'static' in line: # start of func
+            for func_start in self.special_func_start_mapping.keys():
+                if func_start in line: line = line.replace(func_start, self.special_func_start_mapping[func_start])
+            if line in self.special_func_start_mapping: line = line.replace()
             for var_type in self.var_types: line = line.replace(var_type + ' ', '')
             replacements = {'const ' : '', 'static ' : '', '(' : ' ('}
             line = reduce(lambda temp, repl: temp.replace(*repl), replacements.items(), line)

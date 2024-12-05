@@ -30,6 +30,10 @@ fmod GATEKEEPER-DATA is
   eq HMAC-SHA256-KEY-SIZE-BIT = 256 Bits .
 
 	op secretID : -> FileId [ctor] .
+
+	ops HW-AUTH-TOKEN-VERSION HW-AUTH-PASSWORD : -> Nat [ctor] .
+	eq HW-AUTH-TOKEN-VERSION = 0 .
+	eq HW-AUTH-PASSWORD = 1 .
 endfm
 
 mod GATEKEEPER-TA-PROGRAM-DECL is
@@ -206,10 +210,46 @@ mod GATEKEEPER-TA-PROGRAM is
     	return res
     }  ;
 
-    TAMintAuthToken (authToken, timestamp, userId, authenticatorId, challenge)
-    {
-      return # true
-    } ;
+    TAMintAuthToken (authToken, timestamp, userId, authenticatorId, challenge) {
+    	var		res ;
+    
+    	struct HwAuthTokenT		token ;
+    	var	authTokenKey ;
+    	authTokenKey := # TEE-HANDLE-NULL ;
+    
+    	var		toSign ;
+    	toSign := token ;
+    
+    	token . version := # HW-AUTH-TOKEN-VERSION ;
+    	token . challenge := challenge ;
+    	token . userId := userId ;
+    	token . authenticatorId := authenticatorId ;
+        token . authenticatorType := # HW-AUTH-PASSWORD ;
+        token . timestamp :=  timestamp ;
+          token . hmac  := # noData  ;
+    
+    	AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, authTokenKey) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	res := TAGetAuthTokenKey(authTokenKey) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto freeKey
+    	}  ;
+    
+    	res := TAComputeSignature(token . hmac, authTokenKey, toSign) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+          token . hmac  := # noData  ;
+    		goto freeKey
+    	}  ;
+    
+      freeKey :
+    	FreeTransientObject(authTokenKey  ; authTokenKey) ;
+      exit :
+          authToken  := token  ;
+    	return # true
+    }  ;
 
     TAVerify (uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
     {

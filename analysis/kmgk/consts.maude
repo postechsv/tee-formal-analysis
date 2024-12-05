@@ -83,6 +83,8 @@ mod GATEKEEPER-PROGRAM-DECL is
   op buf : -> Var [ctor] .
   op op : -> Var [ctor] .
   op toWrite : -> Var [ctor] .
+  op token : -> Var [ctor] .
+  op authTokenKey : -> Var [ctor] .
 
   op dummy : -> Var [ctor] .
   op dummyRes : -> Var [ctor] .
@@ -95,4 +97,5 @@ mod GATEKEEPER-PROGRAM-DECL is
   op TAComputePasswordSignature : -> FuncId [ctor] .
   op TAComputeSignature : -> FuncId [ctor] .
   op TAMintAuthToken : -> FuncId [ctor] .
+  op TAGetAuthTokenKey : -> FuncId [ctor] .
 endm

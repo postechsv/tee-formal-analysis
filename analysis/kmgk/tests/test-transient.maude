@@ -33,6 +33,10 @@ mod TEST-TRANSIENT is
   op testCase3 : -> Stmt [ctor] .
   eq testCase3 = testCase2 ; populateTransientObject .
 
+  --- Location: TA_MintAuthToken
+  op testCase4 : -> Stmt [ctor] .
+  eq testCase4 = testCase1 ; FreeTransientObject(masterKey ; masterKey) .
+
   eq testTransientTA = 
     main () {
       --- testCase1 ;
@@ -43,6 +47,8 @@ mod TEST-TRANSIENT is
 
       testCase3 ;
       return res
+
+      --- testCase4
     }
   .
 endm

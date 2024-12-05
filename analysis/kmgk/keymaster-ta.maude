@@ -1,0 +1,28 @@
+fmod KEYMASTER-DATA is
+	pr NAT .
+
+	op KM-GET-AUTHTOKEN-KEY : -> Nat [ctor] .
+	eq KM-GET-AUTHTOKEN-KEY = 65536 .
+endfm
+
+mod KEYMASTER-TA-PROGRAM-DECL is
+  pr TEE-IMP-STRUCT-DECL .
+  pr KEYMASTER-DATA .
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr KEYMASTER-PROGRAM-DECL .
+endm
+
+mod KEYMASTER-TA-PROGRAM is
+  pr KEYMASTER-TA-PROGRAM-DECL .
+
+  op keymasterTA : -> Program [ctor] .
+
+  eq keymasterTA = 
+    main (cmdId, authTokenKeyData) {
+      var ret ;
+			ret := # 404 ;
+      return ret
+    }
+  .
+endm

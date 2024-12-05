@@ -14,10 +14,21 @@ mod KMGK-CONSTANTS is
   op KEYMASTER : -> AppId [ctor] .
 endm
 
-mod GATEKEEPER-PROGRAM-DECL is
+mod KMGK-PROGRAM-DECL is
   pr IMP-PROGRAM .
 
   op cmdId : -> Var [ctor] .
+
+  op sess : -> Var [ctor] .
+  op ret : -> Var [ctor] .
+
+  op authTokenKeyData : -> Var [ctor] .
+
+  op main : -> FuncId [ctor] .
+endm
+
+mod GATEKEEPER-PROGRAM-DECL is
+  pr KMGK-PROGRAM-DECL .
 
   op uid : -> Var [ctor] .
   op desiredPassword : -> Var [ctor] .
@@ -88,7 +99,6 @@ mod GATEKEEPER-PROGRAM-DECL is
   op toWrite : -> Var [ctor] .
   op token : -> Var [ctor] .
   op authTokenKey : -> Var [ctor] .
-  op authTokenKeyData : -> Var [ctor] .
   op params : -> Var [ctor] .
   op returnOrigin : -> Var [ctor] .
   op uuid : -> Var [ctor] .
@@ -96,7 +106,6 @@ mod GATEKEEPER-PROGRAM-DECL is
   op dummy : -> Var [ctor] .
   op dummyRes : -> Var [ctor] .
 
-  op main : -> FuncId [ctor] .
   op TAVerify : -> FuncId [ctor] .
   op TADoVerify : -> FuncId [ctor] .
   op TACreatePasswordHandle : -> FuncId [ctor] .
@@ -107,4 +116,8 @@ mod GATEKEEPER-PROGRAM-DECL is
   op TAGetAuthTokenKey : -> FuncId [ctor] .
   op KeymasterTAPlaceHolder : -> FuncId [ctor] .
   op TAEnroll : -> FuncId [ctor] .
+endm
+
+mod KEYMASTER-PROGRAM-DECL is
+  pr KMGK-PROGRAM-DECL .
 endm

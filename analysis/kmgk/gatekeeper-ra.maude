@@ -56,18 +56,19 @@ mod GATEKEEPER-RA-PROGRAM is
 endm
 
 omod GATEKEEPER-RA-BEHAVIOR is
+  pr KMGK-CONSTANTS .
   pr GATEKEEPER-RA-PROGRAM .
 
   var RI : Oid .
   var P : Program .
 
   rl [execute-ra]:
-    < RI : RichApp | proc : none, prog : P >
+    < gkRa : RichApp | proc : none, prog : P >
     => 
-    < RI : RichApp | proc : execute(P, main, (# 1 , # noData , # noData , 
-                                              # 1 , # 1 , # 1 , # 1 , # macValue(nil, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
-                                              # 1 , 
-                                              # 1 , # 1 , # 1 , # 1 , # macValue(nil, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
-                                              # noData)) >
+    < gkRa : RichApp | proc : execute(P, main, (# 1 , # noData , # noData , 
+                                                # 1 , # 1 , # 1 , # 1 , # macValue(nil, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
+                                                # 1 , 
+                                                # 1 , # 1 , # 1 , # 1 , # macValue(nil, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
+                                                # noData)) >
   .
 endom

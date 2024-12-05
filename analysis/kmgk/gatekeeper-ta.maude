@@ -4,6 +4,7 @@ fmod GATEKEEPER-DATA is
 	pr FILE-ID .
 	pr DATA .
 	pr TEE-ATTRIBUTE .
+	--- pr APP-ID .
 
   op GK-ENROLL : -> Nat [ctor] .
   eq GK-ENROLL = 0 .
@@ -30,6 +31,8 @@ fmod GATEKEEPER-DATA is
   eq HMAC-SHA256-KEY-SIZE-BIT = 256 Bits .
 
 	op secretID : -> FileId [ctor] .
+	--- op TA-KEYMASTER-UUID : -> AppId [ctor] .
+	--- eq TA-KEYMASTER-UUID = KEYMASTER .
 
 	ops HW-AUTH-TOKEN-VERSION HW-AUTH-PASSWORD : -> Nat [ctor] .
 	eq HW-AUTH-TOKEN-VERSION = 0 .
@@ -43,7 +46,7 @@ mod GATEKEEPER-TA-PROGRAM-DECL is
   pr TEE-IMP-BEHAVIOR .
   pr GATEKEEPER-PROGRAM-DECL .
 
-  ops serializeResponse exit freeKey closeObj freeOp : -> Label [ctor] .
+  ops serializeResponse exit freeKey closeObj freeOp closeSess : -> Label [ctor] .
 endm
 
 mod GATEKEEPER-TA-PROGRAM is
@@ -134,7 +137,7 @@ mod GATEKEEPER-TA-PROGRAM is
     
     
           signature  := buf  ;
-    
+
       freeOp :
     	FreeOperation(op  ;  op) ;
       exit :
@@ -210,6 +213,53 @@ mod GATEKEEPER-TA-PROGRAM is
     	return res
     }  ;
 
+		KeymasterTAPlaceHolder (authTokenKeyData)
+		{
+			authTokenKeyData := # randomAttrVal ;
+			return # TEE-SUCCESS
+		} ;
+
+    TAGetAuthTokenKey (key)
+    {
+    	var		res ;
+    
+    	var			dummy ;
+    	var			authTokenKeyData ;
+    	var		params ;
+    	var	sess ;
+    	var 		returnOrigin ;
+    	--- var		uuid ;
+    	--- uuid := # TA-KEYMASTER-UUID ;
+    	var		attrs ;
+    
+    
+    
+    
+    	--- res := TeeOpenTASession(uuid, # TEE-TIMEOUT-INFINITE, params, sess, returnOrigin) ;
+    	--- if (res ! := # TEE-SUCCESS) {
+    	--- 	goto exit
+    	--- }  ;
+    
+    
+    
+    	--- res := TeeInvokeTACommand(sess, # KM-GET-AUTHTOKEN-KEY, params, returnOrigin) ;
+    	--- if (!  (res === # TEE-SUCCESS)) {
+    	--- 	goto closeSess
+    	--- }  ;
+			res := KeymasterTAPlaceHolder(authTokenKeyData) ;
+    
+    
+    	InitRefAttribute(# TEE-ATTR-SECRET-VALUE, authTokenKeyData  ; attrs) ;
+    	PopulateTransientObject(key, attrs  ; res) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto closeSess
+    	}  ;
+    
+      closeSess :
+      exit :
+    	return res
+    }  ;
+
     TAMintAuthToken (authToken, timestamp, userId, authenticatorId, challenge) {
     	var		res ;
     
@@ -238,6 +288,8 @@ mod GATEKEEPER-TA-PROGRAM is
     		goto freeKey
     	}  ;
     
+			--- Temporary preprocess: toSign to # noData (unable to compute signature of pointer for now)
+			toSign := # noData ;
     	res := TAComputeSignature(token . hmac, authTokenKey, toSign) ;
     	if (!  (res === # TEE-SUCCESS)) {
           token . hmac  := # noData  ;

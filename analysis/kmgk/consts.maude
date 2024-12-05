@@ -85,6 +85,10 @@ mod GATEKEEPER-PROGRAM-DECL is
   op toWrite : -> Var [ctor] .
   op token : -> Var [ctor] .
   op authTokenKey : -> Var [ctor] .
+  op authTokenKeyData : -> Var [ctor] .
+  op params : -> Var [ctor] .
+  op returnOrigin : -> Var [ctor] .
+  op uuid : -> Var [ctor] .
 
   op dummy : -> Var [ctor] .
   op dummyRes : -> Var [ctor] .
@@ -98,4 +102,6 @@ mod GATEKEEPER-PROGRAM-DECL is
   op TAComputeSignature : -> FuncId [ctor] .
   op TAMintAuthToken : -> FuncId [ctor] .
   op TAGetAuthTokenKey : -> FuncId [ctor] .
+
+  op KeymasterTAPlaceHolder : -> FuncId [ctor] .
 endm

@@ -335,11 +335,16 @@ static TEE_Result TA_GetAuthTokenKey(TEE_ObjectHandle key)
 
 	uint8_t			dummy[HMAC_SHA256_KEY_SIZE_BYTE];
 	uint8_t			authTokenKeyData[HMAC_SHA256_KEY_SIZE_BYTE];
+	//@ignore
 	uint32_t		paramTypes;
+	//@endignore
 	TEE_Param		params[TEE_NUM_PARAMS];
 	TEE_TASessionHandle	sess;
 	uint32_t 		returnOrigin;
-	const TEE_UUID		uuid = TA_KEYMASTER_UUID;
+	// Preprocess: separate variable delcarion & value assigment
+	// const TEE_UUID		uuid = TA_KEYMASTER_UUID;
+	const TEE_UUID		uuid;
+	uuid = TA_KEYMASTER_UUID;
 	TEE_Attribute		attrs[1];
 
 
@@ -353,7 +358,7 @@ static TEE_Result TA_GetAuthTokenKey(TEE_ObjectHandle key)
 	memset(params, 0, sizeof(params));
 	//@endignore
 
-	//@func_annote |, paramTypes(ignore)|
+	//@func_annote(assign) |, paramTypes(ignore)|
 	res = TEE_OpenTASession(&uuid, TEE_TIMEOUT_INFINITE, paramTypes, params, &sess, &returnOrigin);
 	if (res != TEE_SUCCESS) {
 		EMSG("Failed to connect to keymaster");
@@ -377,9 +382,11 @@ static TEE_Result TA_GetAuthTokenKey(TEE_ObjectHandle key)
 	params[1].memref.size = sizeof(authTokenKeyData);
 	//@endignore
 
-	//@func_annote |, TEE_TIMEOUT_INFINITE(ignore)|, paramTypes(ignore)|
+	//@func_annote(assign) |, TEE_TIMEOUT_INFINITE(ignore)|, paramTypes(ignore)|
 	res = TEE_InvokeTACommand(sess, TEE_TIMEOUT_INFINITE, KM_GET_AUTHTOKEN_KEY, paramTypes, params, &returnOrigin);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed in keymaster");
 		goto close_sess; //@no_semi_colon
 	}
@@ -396,7 +403,9 @@ static TEE_Result TA_GetAuthTokenKey(TEE_ObjectHandle key)
 	TEE_InitRefAttribute(&attrs[0], TEE_ATTR_SECRET_VALUE, authTokenKeyData, sizeof(authTokenKeyData));
 	//@func_annote |res(out)|, sizeof(attrs)/sizeof(attrs[0])(ignore)|
 	res = TEE_PopulateTransientObject(key, attrs, sizeof(attrs)/sizeof(attrs[0]));
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to set auth_token key attributes");
 		goto close_sess; //@no_semi_colon
 	}

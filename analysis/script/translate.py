@@ -66,6 +66,9 @@ class Translator:
 
             'TEE_OperationHandle',  # TEE types
             'TEE_ObjectHandle',
+            'TEE_TASessionHandle',
+            'TEE_Param',
+            'TEE_UUID',
             'TEE_Result',
             'TEE_Attribute',
 
@@ -183,7 +186,8 @@ class Translator:
 
             'TEE_GenerateRandom'                    : 'GenerateRandom',
 
-            'TEE_OpenTASession'                     : 'OpenTASession',
+            'TEE_OpenTASession'                     : 'TeeOpenTASession',
+            'TEE_InvokeTACommand'                   : 'TeeInvokeTACommand',
 
             # Custom constants translate (mqttz)
             'TA_AES_KEY_SIZE'                       : '# TA-AES-KEY-SIZE',

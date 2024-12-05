@@ -176,3 +176,6 @@ TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx __unused,
 		return KM_ERROR_UNIMPLEMENTED;
 	}
 }
+
+
+//@create_custom_main

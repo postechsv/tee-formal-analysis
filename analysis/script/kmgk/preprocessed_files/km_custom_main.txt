@@ -1,0 +1,11 @@
+    main (cmdId, authTokenKeyData) {
+      
+      var ret ;
+      if (cmdId === # KM-GET-AUTHTOKEN-KEY) {
+        ret := TAGetAuthTokenKey(authTokenKeyData)
+      } else {
+			  ret := # 404
+      } ;
+
+      return ret
+    }

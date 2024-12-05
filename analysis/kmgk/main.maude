@@ -4,7 +4,7 @@ load gatekeeper-ta
 load gatekeeper-ra
 
 mod KMGK is
-  pr GATEKEEPER-CONSTANTS .
+  pr KMGK-CONSTANTS .
   pr GATEKEEPER-RA-PROGRAM .
   pr GATEKEEPER-RA-BEHAVIOR .
   pr GATEKEEPER-TA-PROGRAM .
@@ -18,30 +18,33 @@ omod SCENARIO-AUX is
   pr TRUST-APP .
 
   var P : Program .
+  var RAID : Oid .
+  var TAINSTID : TaInstId .
+  var APPID : AppId .
 
 ------------------------------------------------------------
 --- Initialization Functions
 ------------------------------------------------------------
 
   op osId : -> Oid .
-  op initTrustedOS : -> Configuration .
-  eq initTrustedOS 
-  = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> ta) , session-counter : 1 ,
-                           storage : GATEKEEPER |-> secretID , storage-status : (GATEKEEPER |-> storageNormal) ,
+  op initTrustedOS : TaInstId AppId -> Configuration .
+  eq initTrustedOS(TAINSTID, APPID)
+  = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> TAINSTID) , session-counter : 1 ,
+                           storage : APPID |-> secretID , storage-status : (APPID |-> storageNormal) ,
                            service-request-ta : noAppId , service-request-ta-inst : noInstId ,
                            service-in : nil , service-out : nil ,
                            temporary-objects : empty > .
 
-  op initRa : Program -> Configuration .
-  eq initRa(P) = < ra : RichApp | proc : none , prog : P , running : false , 
-                                  invoke-req-queue : nil , invoke-ret-queue : nil > .
+  op initRa : Oid Program -> Configuration .
+  eq initRa(RAID, P) = < RAID : RichApp | proc : none , prog : P , running : false , 
+                                          invoke-req-queue : nil , invoke-ret-queue : nil > .
 
-  op initTa : Program -> Configuration .
-  eq initTa(P) = < ta : TrustApp | proc : none , prog : P , running : false ,
-                                   app-status : normal , api-call : noCall , api-return : noReturn ,
-                                   current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
-                                   trust-app-id : GATEKEEPER ,
-                                   task : noTask , task-counter : 0 , state-changed : false > .
+  op initTa : TaInstId Program AppId -> Configuration .
+  eq initTa(TAINSTID, P, APPID) = < TAINSTID : TrustApp | proc : none , prog : P , running : false ,
+                                                          app-status : normal , api-call : noCall , api-return : noReturn ,
+                                                          current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
+                                                          trust-app-id : APPID ,
+                                                          task : noTask , task-counter : 0 , state-changed : false > .
 
   ops masterKeyObj masterKeyObjStream : -> TaObjectId [ctor] .
   op masterKey : -> Configuration .
@@ -58,18 +61,21 @@ mod BASE-SCENARIO is
   pr SCENARIO-AUX .
 
   vars RAPROG TAPROG : Program .
+  var RAID : Oid .
+  var TAINSTID : TaInstId .
+  var APPID : AppId .
 
-  op initDevice : Program Program -> Configuration .
-  eq initDevice(RAPROG, TAPROG) = 
-  < device : Device | execution-envs : {initRa(RAPROG)} | 
-                                       {initTa(TAPROG) initTrustedOS masterKey} > 
+  op initDevice : Oid Program TaInstId Program AppId -> Configuration .
+  eq initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) = 
+  < device : Device | execution-envs : {initRa(RAID , RAPROG)} | 
+                                       {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) masterKey} > 
   .
 
-  op scenario : Program Program -> Configuration .
-  eq scenario(RAPROG, TAPROG) 
-   = initDevice(RAPROG, TAPROG) .
+  op scenario : Oid Program TaInstId Program AppId -> Configuration .
+  eq scenario(RAID, RAPROG, TAINSTID, TAPROG, APPID) 
+   = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) .
 
 endm
 
---- red scenario(gatekeeperRA, gatekeeperTA) .
-rew scenario(gatekeeperRA, gatekeeperTA) .
+--- red scenario(gkRa, gatekeeperRA, kmTa, gatekeeperTA, GATEKEEPER) .
+rew scenario(gkRa, gatekeeperRA, kmTa, gatekeeperTA, GATEKEEPER) .

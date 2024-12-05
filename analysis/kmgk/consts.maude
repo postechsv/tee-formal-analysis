@@ -1,14 +1,17 @@
-mod GATEKEEPER-CONSTANTS is
+mod KMGK-CONSTANTS is
   pr NAT .
   pr APP-ID .
   pr TA-INSTANCE-ID .
   pr CONFIGURATION .
 
   op device : -> Oid [ctor] .
-  op ra : -> Oid [ctor] .
-  op ta : -> TaInstId [ctor] .
+  op gkRa : -> Oid [ctor] .
+  op kmRa : -> Oid [ctor] .
+  op gkTa : -> TaInstId [ctor] .
+  op kmTa : -> TaInstId [ctor] .
 
   op GATEKEEPER : -> AppId [ctor] .
+  op KEYMASTER : -> AppId [ctor] .
 endm
 
 mod GATEKEEPER-PROGRAM-DECL is

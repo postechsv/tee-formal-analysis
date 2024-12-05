@@ -535,7 +535,10 @@ exit:
 //@func_start
 static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 {
-	TEE_Result res = TEE_SUCCESS;
+	// Preprocess: separate variable delcarion & value assigment
+	// TEE_Result res = TEE_SUCCESS;
+	TEE_Result res;
+	res = TEE_SUCCESS;
 
 	/*
 	 * Enroll request layout
@@ -577,8 +580,13 @@ static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 	 * | password_handle                | #password_handle_length         |
 	 * +--------------------------------+---------------------------------+
 	 */
-	uint32_t error = ERROR_NONE;
-	uint32_t timeout = 0;
+	// Preprocess: separate variable delcarion & value assigment
+	// uint32_t error = ERROR_NONE;
+	uint32_t error;
+	error = ERROR_NONE;
+	// uint32_t timeout = 0;
+	uint32_t timeout;
+	timeout = 0;
 	password_handle_t password_handle;
 
 	//@ignore
@@ -590,8 +598,13 @@ static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 		sizeof(password_handle_t);
 	//@endignore
 
-	secure_id_t user_id = 0;
-	uint64_t flags = 0;
+	// Preprocess: separate variable delcarion & value assigment
+	// secure_id_t user_id = 0;
+	secure_id_t user_id;
+	user_id = 0;
+	// uint64_t flags = 0;
+	uint64_t flags;
+	flags = 0;
 	salt_t salt;
 
 	//@ignore
@@ -631,14 +644,19 @@ static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 	// if (!current_password_handle_length) {
 		// Password handle does not match what is stored, generate new
 		// secure user_id
-		//@func_annote |user_id(out)|&user_id, sizeof(user_id)(ignore)|
+		//@func_annote |nil(in)|user_id(out)|&user_id, sizeof(user_id)(ignore)|
 		TEE_GenerateRandom(&user_id, sizeof(user_id)); //@no_semi_colon
 	} else {
 		uint64_t timestamp;
 		bool throttle;
 
-		password_handle_t *pw_handle = (password_handle_t *)current_password_handle;
-		if (pw_handle->version > HANDLE_VERSION) {
+		// Preprocess: separate variable delcarion & value assigment
+		// password_handle_t *pw_handle = (password_handle_t *)current_password_handle;
+		password_handle_t *pw_handle;
+		pw_handle = (password_handle_t *)current_password_handle;
+		// Preprocess: change to equivalent leq condition
+		if (! (pw_handle->version <= HANDLE_VERSION)) {
+		// if (pw_handle->version > HANDLE_VERSION) {
 			EMSG("Wrong handle version %u, required version is %u", pw_handle->version, HANDLE_VERSION);
 			error = ERROR_INVALID;
 			goto serialize_response; //@no_semi_colon
@@ -665,6 +683,7 @@ static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 		}
 		//@endignore
 
+		//@func_annote(assign) |, current_password_length(ignore)|
 		res = TA_DoVerify(pw_handle, current_password, current_password_length);
 		// Preprocess: change to equivalent if-else statements
 		// switch (res) {
@@ -697,19 +716,21 @@ static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
 			} else {
 				EMSG("Failed to verify password handle");
 				goto exit; //@no_semi_colon
-			}
-		}
+			} //@no_semi_colon
+		} //@no_semi_colon
 	}
 
 	//@ignore
 	ClearFailureRecord(user_id);
 	//@endignore
 
-	//@func_annote |salt(out)|&salt, sizeof(salt)(ignore)|
+	//@func_annote |nil(in)|salt(out)|&salt, sizeof(salt)(ignore)|
 	TEE_GenerateRandom(&salt, sizeof(salt));
-	//@func_annote |, desired_password_length(ignore)|
+	//@func_annote(assign) |, desired_password_length(ignore)|
 	res = TA_CreatePasswordHandle(&password_handle, salt, user_id, flags, HANDLE_VERSION, desired_password, desired_password_length);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to create password handle");
 		goto exit; //@no_semi_colon
 	}
@@ -744,8 +765,8 @@ serialize_response:
 			//@endignore
 		} else {
 			EMSG("Unknown error message!");
-			res = TEE_ERROR_GENERIC;
-		}
+			res = TEE_ERROR_GENERIC; //@no_semi_colon
+		} //@no_semi_colon
 	}
 
 	//@ignore

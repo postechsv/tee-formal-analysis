@@ -416,9 +416,14 @@ static bool TA_MintAuthToken(hw_auth_token_t *auth_token, int64_t timestamp, sec
 	TEE_Result		res;
 
 	hw_auth_token_t		token;
-	TEE_ObjectHandle	authTokenKey = TEE_HANDLE_NULL;
+	// Preprocess: separate variable delcarion & value assigment
+	// TEE_ObjectHandle	authTokenKey = TEE_HANDLE_NULL;
+	TEE_ObjectHandle	authTokenKey;
+	authTokenKey = TEE_HANDLE_NULL;
 
-	const uint8_t		*toSign = (const uint8_t *)&token;
+	// const uint8_t		*toSign = (const uint8_t *)&token;
+	const uint8_t		*toSign;
+	toSign = (const uint8_t *)&token;
 	//@ignore
 	const uint32_t		toSignLen = sizeof(token) - sizeof(token.hmac);
 	//@endignore
@@ -427,31 +432,44 @@ static bool TA_MintAuthToken(hw_auth_token_t *auth_token, int64_t timestamp, sec
 	token.challenge = challenge;
 	token.user_id = user_id;
 	token.authenticator_id = authenticator_id;
+	//@ignore
 	token.authenticator_type = TEE_U32_TO_BIG_ENDIAN((uint32_t)HW_AUTH_PASSWORD);
 	token.timestamp =  TEE_U64_TO_BIG_ENDIAN(timestamp);
+	//@endignore
+	//@add_line | token.authenticator_type = (uint32_t)HW_AUTH_PASSWORD;
+	//@add_line | token.timestamp =  timestamp;
 	//@ignore
 	memset(token.hmac, 0, sizeof(token.hmac));
 	//@endignore
-	//@add_line | token.hac := # noData
+	//@add_line | token.hmac := # noData ;
 
 	//@func_annote |res(out)| authTokenKey(out)|, &authTokenKey(ignore)|
 	res = TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256, HMAC_SHA256_KEY_SIZE_BIT, &authTokenKey);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to allocate auth_token key");
 		goto exit; //@no_semi_colon
 	}
 
 	res = TA_GetAuthTokenKey(authTokenKey);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to get auth_token key from keymaster");
 		goto free_key; //@no_semi_colon
 	}
 
-	//@func_annote |, sizeof(token.hamc)(ignore)|, toSignLen(ignore)|
+	//@func_annote(assign) |, sizeof(token.hmac)(ignore)|, toSignLen(ignore)|
 	res = TA_ComputeSignature(token.hmac, sizeof(token.hmac), authTokenKey, toSign, toSignLen);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to compute auth_token signature");
+		//@ignore
 		memset(token.hmac, 0, sizeof(token.hmac));
+		//@endignore
+		//@add_line | token.hmac := # noData ;
 		goto free_key; //@no_semi_colon
 	}
 
@@ -464,7 +482,7 @@ exit:
 	//@endignore
 	//@add_line | auth_token := token ;
 	// Preprocess: currently unable to handle void (no output), return dummy bool value for now
-	return true;
+	return true; //@no_semi_colon
 }
 
 //@func_start

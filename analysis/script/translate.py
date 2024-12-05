@@ -46,15 +46,18 @@ class Translator:
         ]
 
         self.need_to_strip_type_conversions = [ # type conversion currently not supported
-            ' (aes_cipher *)',
             ' (void *)',
+            ' (const uint8_t *)',
+            ' (uint32_t)',
+            ' (aes_cipher *)',
             ' (password_handle_t *)',
         ]
 
         self.var_types = [
+            'uint64_t',
+            'int64_t',
             'uint8_t',
             'uint32_t',             # C native
-            'uint64_t',
             'size_t',
             'void',
             'char',
@@ -69,7 +72,8 @@ class Translator:
             # custom types (kmgk)
             'secure_id_t',
             'salt_t',
-            'password_handle_t'
+            'password_handle_t',
+            'hw_auth_token_t'
         ]
 
         self.struct_types = [       # TODO: accumulate struct types as translating
@@ -110,9 +114,9 @@ class Translator:
 
             'TEE_HANDLE_NULL' : '# TEE-HANDLE-NULL',
 
-            'TEE_DATA_FLAG_ACCESS_READ,'         : '# TEE-DATA-FLAG-ACCESS-READ,',
+            'TEE_DATA_FLAG_ACCESS_READ'         : '# TEE-DATA-FLAG-ACCESS-READ',
             # 'TEE_DATA_FLAG_SHARE_READ'          : '# TEE-DATA-FLAG-SHARE-READ',
-            'TEE_DATA_FLAG_ACCESS_WRITE,'        : '# TEE-DATA-FLAG-ACCESS-WRITE,',
+            'TEE_DATA_FLAG_ACCESS_WRITE'        : '# TEE-DATA-FLAG-ACCESS-WRITE',
             # 'TEE_DATA_FLAG_ACCESS_WRITE_META'   : '# TEE-DATA-FLAG-ACCESS-WRITE-META',
             # 'TEE_DATA_FLAG_OVERWRITE'           : '# TEE-DATA-FLAG-SHARE-WRITE',
             'TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ'
@@ -193,6 +197,7 @@ class Translator:
             'TA_KEYMASTER_UUID'                     : '# TA-KEYMASTER-UUID',
             'KM_GET_AUTHTOKEN_KEY'                  : '# KM-GET-AUTHTOKEN-KEY',
             'HW_AUTH_TOKEN_VERSION'                 : '# HW-AUTH-TOKEN-VERSION',
+            'HW_AUTH_PASSWORD'                      : '# HW-AUTH-PASSWORD',
             'ERROR_NONE'                            : '# ERROR-NONE',
             'ERROR_INVALID'                         : '# ERROR-INVALID',
             'ERROR_UNKNOWN'                         : '# ERROR-UNKNOWN',

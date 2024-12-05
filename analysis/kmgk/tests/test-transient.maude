@@ -39,16 +39,32 @@ mod TEST-TRANSIENT is
 
   eq testTransientTA = 
     main () {
-      --- testCase1 ;
+      --- Location: TA_CreatePasswordHandle
+      --- Test Case 1
+      var res ; var masterKey ;
+      AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, masterKey) ;
       --- return res
 
-      --- testCase2 ;
-      --- return attrs
+      --- Location: TA_GetMasterKey
+      --- Test Case 2
+      var secretData ; secretData := # randomData ;
+      var attrs ;
+      InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attrs) ;
+      --- return attrs ;
 
-      testCase3 ;
-      return res
+      --- Test Case 3
+      PopulateTransientObject(masterKey, attrs  ; res) ;
+      --- return res
 
-      --- testCase4
+      --- Location: TA_MintAuthToken
+      --- Test Case 4
+      FreeTransientObject(masterKey ; masterKey) ;
+
+      --- Location: TA_Enroll
+      --- Test Case 5
+      var salt ;
+      GenerateRandom(nil ; salt) ;
+      return salt
     }
   .
 endm

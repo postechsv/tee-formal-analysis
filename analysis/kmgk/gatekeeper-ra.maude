@@ -40,7 +40,7 @@ mod GATEKEEPER-RA-PROGRAM is
       eph . salt := ephSalt ;
       eph . signature := ephSignature ;
       eph . hardwareBacked := ephHardwareBacked ;
-      var cmdId ; cmdId := # GK-VERIFY ;
+      var cmdId ; cmdId := # GK-ENROLL ;
 
       var responseHandle ; var responseAuthToken ;
       responseHandle := # 404 ; responseAuthToken := # 405 ;
@@ -64,6 +64,10 @@ omod GATEKEEPER-RA-BEHAVIOR is
   rl [execute-ra]:
     < RI : RichApp | proc : none, prog : P >
     => 
-    < RI : RichApp | proc : execute(P, main, (# 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1 , # 1)) >
+    < RI : RichApp | proc : execute(P, main, (# 1 , # noData , # noData , 
+                                              # 1 , # 1 , # 1 , # 1 , # macValue(nil, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
+                                              # 1 , 
+                                              # 1 , # 1 , # 1 , # 1 , # macValue(nil, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
+                                              # noData)) >
   .
 endom

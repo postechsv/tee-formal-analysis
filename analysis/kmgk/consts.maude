@@ -102,6 +102,6 @@ mod GATEKEEPER-PROGRAM-DECL is
   op TAComputeSignature : -> FuncId [ctor] .
   op TAMintAuthToken : -> FuncId [ctor] .
   op TAGetAuthTokenKey : -> FuncId [ctor] .
-
   op KeymasterTAPlaceHolder : -> FuncId [ctor] .
+  op TAEnroll : -> FuncId [ctor] .
 endm

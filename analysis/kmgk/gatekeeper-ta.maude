@@ -303,6 +303,78 @@ mod GATEKEEPER-TA-PROGRAM is
     	return # true
     }  ;
 
+    TAEnroll  (uid, desiredPassword, currentPassword, currentPasswordHandle, passwordHandle)
+    {
+    	var res ;
+    	res := # TEE-SUCCESS ;
+    
+    
+    	var error ;
+    	error := # ERROR-NONE ;
+    	var timeout ;
+    	timeout := # 0 ;
+    	struct PasswordHandleT passwordHandle ;
+    
+    
+    	var userId ;
+    	userId := # 0 ;
+    	var flags ;
+    	flags := # 0 ;
+    	var salt ;
+    
+    
+    
+        if ( # false) {
+    		GenerateRandom(nil ; userId)
+    	} else {
+    		var timestamp ;
+    		var throttle ;
+    
+    		struct PasswordHandleT pwHandle ;
+    		pwHandle := currentPasswordHandle ;
+    		if (!  (pwHandle . version <= # HANDLE-VERSION)) {
+    			error := # ERROR-INVALID ;
+    			goto serializeResponse
+    		}  ;
+    
+    		userId := pwHandle . userId ;
+    
+    
+    		res := TADoVerify(pwHandle, currentPassword) ;
+    		if (res === # TEE-TRUE) {
+    			skip
+    		} else {
+    			if (res === # TEE-FALSE) {
+        			error := # ERROR-INVALID ;
+    				goto serializeResponse
+    			} else {
+    				goto exit
+    			} 
+    		} 
+    	}  ;
+    
+    
+    	GenerateRandom(nil  ; salt) ;
+    	res := TACreatePasswordHandle(passwordHandle, salt, userId, flags, # HANDLE-VERSION, desiredPassword) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+      serializeResponse :
+    	if (error === # ERROR-INVALID || error === # ERROR-UNKNOWN) {
+    		skip
+    	} else {
+    		if (error === # ERROR-NONE) {
+        		skip
+    		} else {
+    			res := # TEE-ERROR-GENERIC
+    		} 
+    	}  ;
+    
+      exit :
+    	return res
+    }  ;
+
     TAVerify (uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
     {
     	var res ;
@@ -388,8 +460,7 @@ mod GATEKEEPER-TA-PROGRAM is
         currentPasswordHandle . signature := cphSignature ;
         currentPasswordHandle . hardwareBacked := cphHardwareBacked ;
 
-        ret := # 405
-        --- ret := TAEnroll(uid, desiredPassword, currentPassword, currentPasswordHandle, responseHandle)
+        ret := TAEnroll(uid, desiredPassword, currentPassword, currentPasswordHandle, responseHandle)
       } else {
         if (cmdId === # GK-VERIFY) {
           struct PasswordHandleT enrolledPasswordHandle ;

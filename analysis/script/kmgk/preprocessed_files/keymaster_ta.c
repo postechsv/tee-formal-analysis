@@ -4,9 +4,13 @@
  *
  * @return TEE_SUCCESS on success
  */
+//@process_func
 static TEE_Result TA_GetClientIdentity(TEE_Identity *identity)
 {
-	TEE_Result res = TEE_SUCCESS;
+	// Preprocess: separate variable delcarion & value assigment
+	// TEE_Result res = TEE_SUCCESS;
+	TEE_Result res;
+	res = TEE_SUCCESS;
 
 	res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT,
 			(char *)"gpd.client.identity", identity);
@@ -27,72 +31,97 @@ exit:
  *
  * @return TEE_SUCCESS on success
  */
+//@process_func
 static TEE_Result TA_ReadAuthTokenKey(uint8_t *key, uint32_t key_size)
 {
-	TEE_Result res = TEE_SUCCESS;
-	TEE_ObjectHandle auth_token_key_obj = TEE_HANDLE_NULL;
-	uint32_t read_size = 0;
+	// Preprocess: separate variable delcarion & value assigment
+	// TEE_Result res = TEE_SUCCESS;
+	TEE_Result res;
+	res = TEE_SUCCESS;
+	// TEE_ObjectHandle auth_token_key_obj = TEE_HANDLE_NULL;
+	TEE_ObjectHandle auth_token_key_obj;
+	auth_token_key_obj = TEE_HANDLE_NULL;
+	// uint32_t read_size = 0;
+	uint32_t read_size;
+	read_size = 0;
 
-	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE,
-			auth_token_key_id, sizeof(auth_token_key_id),
-			TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ,
-			&auth_token_key_obj);
-	if (res != TEE_SUCCESS) {
+	//@func_annote |res(out) | auth_token_key_obj(out)|, # auth_token_key_id, TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ(in)|, auth_token_key_id, sizeof(auth_token_key_id), TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ, &auth_token_key_obj(ignore)|
+	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, auth_token_key_id, sizeof(auth_token_key_id), TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ, &auth_token_key_obj);
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to open auth_token key secret, res=%x", res);
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
-	res = TEE_ReadObjectData(auth_token_key_obj, key,
-			key_size, &read_size);
-	if (res != TEE_SUCCESS || key_size != read_size) {
+	//@func_annote |# dataSize(1)(in)|res, key(out)|key, key_size, &read_size(ignore)|
+	res = TEE_ReadObjectData(auth_token_key_obj, key, key_size, &read_size);
+	// if (res != TEE_SUCCESS || key_size != read_size) {
+	// Preprocess: change to equivalent condition (not regarding read_size)
+	if (! (res == TEE_SUCCESS)) {
 		EMSG("Failed to read secret data, bytes = %u, res=%x", read_size, res);
-		goto close_obj;
+		goto close_obj; //@no_semi_colon
 	}
 
 close_obj:
+	//@func_annote |auth_token_key_obj(out)|
 	TEE_CloseObject(auth_token_key_obj);
 exit:
-	return res;
+	return res; //@no_semi_colon
 }
 
+//@process_func
 keymaster_error_t TA_GetAuthTokenKey(TEE_Param params[TEE_NUM_PARAMS])
 {
-	TEE_Result res = TEE_SUCCESS;
+	// Preprocess: separate variable delcarion & value assigment
+	// TEE_Result res = TEE_SUCCESS;
+	TEE_Result res;
+	res = TEE_SUCCESS;
 	TEE_Identity identity;
 	uint8_t auth_token_key[HMAC_SHA256_KEY_SIZE_BYTE];
 
 	res = TA_GetClientIdentity(&identity);
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to get identity property, res=%x", res);
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
 	if (identity.login != TEE_LOGIN_TRUSTED_APP) {
 		EMSG("Not trusted app trying to get auth_token key");
 		res = TEE_ERROR_ACCESS_DENIED;
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
 	DMSG("%pUl requests auth_token key", (void *)&identity.uuid);
+	//@func_annote(assign) |, sizeof(auth_token_key)(ignore)|
 	res = TA_ReadAuthTokenKey(auth_token_key, sizeof(auth_token_key));
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to get auth_token key, res=%x", res);
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
+	//@ignore
 	if (params[1].memref.size < sizeof(auth_token_key)) {
 		EMSG("Output buffer to small");
 		res = TEE_ERROR_SHORT_BUFFER;
 		goto exit;
 	}
+	//@endignore
 
+	//@ignore
 	TEE_MemMove(params[1].memref.buffer, auth_token_key,
 			sizeof(auth_token_key));
+	//@endignore
 
 exit:
-	return res;
+	return res; //@no_semi_colon
 }
 
+//@ignore
 TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx __unused,
 				      uint32_t cmd_id, uint32_t param_types,
 				      TEE_Param params[TEE_NUM_PARAMS])
@@ -176,6 +205,6 @@ TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx __unused,
 		return KM_ERROR_UNIMPLEMENTED;
 	}
 }
-
+//@endignore
 
 //@create_custom_main

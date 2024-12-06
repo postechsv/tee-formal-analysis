@@ -44,7 +44,7 @@ mod KMGK-TA-PROGRAM-DECL is
   pr TEE-BEHAVIOR .
   pr TEE-IMP-BEHAVIOR .
 
-	op exit : -> Label [ctor] .
+	ops exit closeObj : -> Label [ctor] .
 endm
 
 mod GATEKEEPER-TA-PROGRAM-DECL is

@@ -1,5 +1,6 @@
 fmod KEYMASTER-DATA is
 	pr NAT .
+  pr FILE-ID .
 
 	op KM-GET-AUTHTOKEN-KEY : -> Nat [ctor] .
 	eq KM-GET-AUTHTOKEN-KEY = 65536 .
@@ -7,6 +8,8 @@ fmod KEYMASTER-DATA is
   --- TODO: Login Type Constants to be handled in spec
   op TEE-LOGIN-TRUSTED-APP : -> Nat [ctor] .
   eq TEE-LOGIN-TRUSTED-APP = 4026531840 . --- 0xF0000000
+
+  op authTokenKeyId : -> FileId [ctor] .
 endfm
 
 mod KEYMASTER-TA-PROGRAM-DECL is
@@ -44,7 +47,30 @@ mod KEYMASTER-TA-PROGRAM is
     	return res
     }  ;
 
-
+    TAReadAuthTokenKey (key)
+    {
+    	var res ;
+    	res := # TEE-SUCCESS ;
+    	var authTokenKeyObj ;
+    	authTokenKeyObj := # TEE-HANDLE-NULL ;
+    	var readSize ;
+    	readSize := # 0 ;
+    
+    	OpenPersistentObject(# TEE-STORAGE-PRIVATE, # authTokenKeyId, # (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-SHARE-READ)  ; res , authTokenKeyObj) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	ReadObjectData(authTokenKeyObj, # dataSize(1)  ; res, key) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto closeObj
+    	}  ;
+    
+      closeObj :
+    	CloseObject(authTokenKeyObj  ; authTokenKeyObj) ;
+      exit :
+    	return res
+    }  ;
 
     TAGetAuthTokenKey (authTokenKeyData)
     {

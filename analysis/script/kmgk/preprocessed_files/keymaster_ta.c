@@ -42,7 +42,9 @@ exit:
  * @return TEE_SUCCESS on success
  */
 //@process_func
-static TEE_Result TA_ReadAuthTokenKey(uint8_t *key, uint32_t key_size)
+// Preprocess: removed key_size
+static TEE_Result TA_ReadAuthTokenKey(uint8_t *key)
+// static TEE_Result TA_ReadAuthTokenKey(uint8_t *key, uint32_t key_size)
 {
 	// Preprocess: separate variable delcarion & value assigment
 	// TEE_Result res = TEE_SUCCESS;
@@ -55,7 +57,7 @@ static TEE_Result TA_ReadAuthTokenKey(uint8_t *key, uint32_t key_size)
 	uint32_t read_size;
 	read_size = 0;
 
-	//@func_annote |res(out) | auth_token_key_obj(out)|, # auth_token_key_id, TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ(in)|, auth_token_key_id, sizeof(auth_token_key_id), TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ, &auth_token_key_obj(ignore)|
+	//@func_annote |res(out) | auth_token_key_obj(out)|# auth_token_key_id, (in)|TEE_DATA_FLAG_ACCESS_READ \| TEE_DATA_FLAG_SHARE_READ(in)|auth_token_key_id, sizeof(auth_token_key_id), TEE_DATA_FLAG_ACCESS_READ \| TEE_DATA_FLAG_SHARE_READ, &auth_token_key_obj(ignore)|
 	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, auth_token_key_id, sizeof(auth_token_key_id), TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ, &auth_token_key_obj);
 	// Preprocess: change to equivalent condition
 	if (! (res == TEE_SUCCESS)) {

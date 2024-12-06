@@ -26,6 +26,8 @@ mod KMGK-PROGRAM-DECL is
   op authTokenKeyData : -> Var [ctor] .
   op res : -> Var [ctor] .
   op authTokenKey : -> Var [ctor] .
+  op readSize : -> Var [ctor] .
+  op key : -> Var [ctor] .
 
   op main : -> FuncId [ctor] .
   op TAGetAuthTokenKey : -> FuncId [ctor] .
@@ -87,7 +89,6 @@ mod GATEKEEPER-PROGRAM-DECL is
   op pwHandle : -> Var [ctor] .
   op toSign : -> Var [ctor] .
   op masterKey : -> Var [ctor] .
-  op key : -> Var [ctor] .
   op secretData : -> Var [ctor] .
   op secretObj : -> Var [ctor] .
   op readSize : -> Var [ctor] .
@@ -122,6 +123,7 @@ mod KEYMASTER-PROGRAM-DECL is
   op identity : -> Var [ctor] .
   op login : -> Var [ctor] .
   op TeeIdentity : -> Var [ctor] .
+  op authTokenKeyObj : -> Var [ctor] .
 
   op TAGetClientIdentity : -> FuncId [ctor] .
   op TAReadAuthTokenKey : -> FuncId [ctor] .

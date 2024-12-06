@@ -288,6 +288,14 @@ class Translator:
     def process_func_annotation_line(self, line):
         ignore_args, more_out_args, more_in_args = [], [], []
         tokens = line.split('|')
+        need_to_join_tokens, need_to_join_token_idxes = [], []
+        for (t_idx, token) in enumerate(tokens.copy()):
+            if '\\' in token: 
+                need_to_join_tokens.append(token.replace('\\', '|'))
+                need_to_join_token_idxes.append(t_idx)
+            if '(out)' in token or '(in)' in token or '(ignore)' in token:
+                tokens[t_idx] = ''.join((need_to_join_tokens + [token]))
+                for idx in sorted(need_to_join_token_idxes, reverse=True): del tokens[idx]
         for token in tokens:
             if '(out)' in token: more_out_args.append(token.replace('(out)', ''))
             if '(in)' in token: more_in_args.append(token.replace('(in)', ''))

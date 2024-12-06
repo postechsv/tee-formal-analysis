@@ -113,16 +113,16 @@ class Translator:
 
             'TEE_HANDLE_NULL' : '# TEE-HANDLE-NULL',
 
-            'TEE_DATA_FLAG_ACCESS_READ'         : '# TEE-DATA-FLAG-ACCESS-READ',
+            
             # 'TEE_DATA_FLAG_SHARE_READ'          : '# TEE-DATA-FLAG-SHARE-READ',
-            'TEE_DATA_FLAG_ACCESS_WRITE'        : '# TEE-DATA-FLAG-ACCESS-WRITE',
             # 'TEE_DATA_FLAG_ACCESS_WRITE_META'   : '# TEE-DATA-FLAG-ACCESS-WRITE-META',
             # 'TEE_DATA_FLAG_OVERWRITE'           : '# TEE-DATA-FLAG-SHARE-WRITE',
             'TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ'
             : '# (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-SHARE-READ)',
             'TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_ACCESS_WRITE | TEE_DATA_FLAG_ACCESS_WRITE_META | TEE_DATA_FLAG_OVERWRITE'
             : '# (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-ACCESS-WRITE, TEE-DATA-FLAG-ACCESS-WRITE-META, TEE-DATA-FLAG-OVERWRITE)',
-
+            'TEE_DATA_FLAG_ACCESS_READ'         : '# TEE-DATA-FLAG-ACCESS-READ',
+            'TEE_DATA_FLAG_ACCESS_WRITE'        : '# TEE-DATA-FLAG-ACCESS-WRITE',
 
             'TEE_TYPE_AES'                      : '# TEE-TYPE-AES',
             'TEE_TYPE_HMAC_SHA256'              : '# TEE-TYPE-HMAC-SHA256',
@@ -288,14 +288,15 @@ class Translator:
     def process_func_annotation_line(self, line):
         ignore_args, more_out_args, more_in_args = [], [], []
         tokens = line.split('|')
-        need_to_join_tokens, need_to_join_token_idxes = [], []
+        need_to_join_tokens, joined_token_idxes = [], []
         for (t_idx, token) in enumerate(tokens.copy()):
             if '\\' in token: 
                 need_to_join_tokens.append(token.replace('\\', '|'))
-                need_to_join_token_idxes.append(t_idx)
+                joined_token_idxes.append(t_idx)
             if '(out)' in token or '(in)' in token or '(ignore)' in token:
                 tokens[t_idx] = ''.join((need_to_join_tokens + [token]))
-                for idx in sorted(need_to_join_token_idxes, reverse=True): del tokens[idx]
+                need_to_join_tokens = []
+        for idx in sorted(joined_token_idxes, reverse=True): del tokens[idx]
         for token in tokens:
             if '(out)' in token: more_out_args.append(token.replace('(out)', ''))
             if '(in)' in token: more_in_args.append(token.replace('(in)', ''))

@@ -18,22 +18,26 @@ mod TEST-SCENARIO is
   pr TEST-CASES .
 
   vars P TAPROG : Program .
+  var RAID : Oid .
+  var TAINSTID : TaInstId .
+  var APPID : AppId .
 
-  op initTestTa : Program -> Configuration .
-  eq initTestTa(P) = < ta : TrustApp | proc : none , prog : P , running : false ,
-                                       app-status : normal , api-call : noCall , api-return : noReturn ,
-                                       current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
-                                       trust-app-id : GATEKEEPER ,
-                                       task : task({sessionId(0) , main , nil} , ra) , task-counter : 0 , state-changed : false > .
+  op initTestTa : Oid TaInstId Program AppId -> Configuration .
+  eq initTestTa(RAID, TAINSTID, P, APPID) = 
+    < TAINSTID : TrustApp | proc : none , prog : P , running : false ,
+                            app-status : normal , api-call : noCall , api-return : noReturn ,
+                            current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
+                            trust-app-id : APPID ,
+                            task : task({sessionId(0) , main , nil} , RAID) , task-counter : 0 , state-changed : false > .
 
-  op scenario : Program -> Configuration .
-  eq scenario(TAPROG) 
-   = initTestTa(TAPROG) initTrustedOS masterKey .
+  op scenario : Oid TaInstId Program AppId -> Configuration .
+  eq scenario(RAID, TAINSTID, P, APPID) 
+   = initTestTa(RAID, TAINSTID, P, APPID) initTrustedOS(TAINSTID, APPID) keys .
 
 endm
 
 --- rew scenario(testTransientTA) .
---- rew scenario(testPersistentTA) .
+rew scenario(kmRa, kmTa, testPersistentTA, KEYMASTER) .
 --- rew scenario(testDataStreamTA) .
 --- rew scenario(testGenericTA) .
-rew scenario(testCryptographicTA) .
+--- rew scenario(testCryptographicTA) .

@@ -2,16 +2,27 @@ mod TEST-PERSISTENT is
   pr TEE-BEHAVIOR .
   pr TEE-IMP-BEHAVIOR .
   pr GATEKEEPER-PROGRAM-DECL .
+  pr KEYMASTER-PROGRAM-DECL .
   pr GATEKEEPER-DATA .
+  pr KEYMASTER-DATA .
 
   op testPersistentTA : -> Program [ctor] .
 
   eq testPersistentTA = 
     main () {
+      var res ; 
       --- Location: TA_GetMasterKey
-      var res ; var	secretObj ;
-    	secretObj := # TEE-HANDLE-NULL ;
-      OpenPersistentObject(# TEE-STORAGE-PRIVATE, # secretID, # TEE-DATA-FLAG-ACCESS-READ  ; res , secretObj) ;
+      --- Test Case 1
+      --- var	secretObj ;
+    	--- secretObj := # TEE-HANDLE-NULL ;
+      --- OpenPersistentObject(# TEE-STORAGE-PRIVATE, # secretID, # TEE-DATA-FLAG-ACCESS-READ  ; res , secretObj) ;
+      --- return res
+
+      --- Location: TA_ReadAuthTokenKey
+      --- Test Case 2
+      var authTokenKeyObj ;
+      authTokenKeyObj := # TEE-HANDLE-NULL ;
+      OpenPersistentObject(# TEE-STORAGE-PRIVATE, # authTokenKeyId, # (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-SHARE-READ)  ; res , authTokenKeyObj) ;
       return res
     }
   .

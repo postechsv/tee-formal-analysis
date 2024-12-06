@@ -35,7 +35,7 @@ omod SCENARIO-AUX is
   op initTrustedOS : TaInstId AppId -> Configuration .
   eq initTrustedOS(TAINSTID, APPID)
   = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> TAINSTID) , session-counter : 1 ,
-                           storage : APPID |-> secretID , storage-status : (APPID |-> storageNormal) ,
+                           storage : APPID |-> authTokenKeyId , storage-status : (APPID |-> storageNormal) ,
                            service-request-ta : noAppId , service-request-ta-inst : noInstId ,
                            service-in : nil , service-out : nil ,
                            temporary-objects : empty > .
@@ -59,6 +59,18 @@ omod SCENARIO-AUX is
                                         attribute-set : empty , object-usage-set : empty , data-stream-id : masterKeyObjStream >
     < masterKeyObjStream : DataStreamObject | data-size : dataSize(1) , content : newContent(randomData) >
   .
+
+  ops authKeyObj authKeyObjStream : -> TaObjectId [ctor] .
+  op authKey : -> Configuration .
+  eq authKey = 
+    < authKeyObj : PersistentObject | handle-set : none , object-type : TEE-TYPE-DATA , max-object-size : 0 Bits  , 
+                                      file-id : authTokenKeyId , trust-app-id : KEYMASTER ,
+                                      attribute-set : empty , object-usage-set : empty , data-stream-id : authKeyObjStream >
+    < authKeyObjStream : DataStreamObject | data-size : dataSize(1) , content : newContent(randomData) >
+  .
+
+  op keys : -> Configuration .
+  eq keys = masterKey authKey .
 endom
 
 mod BASE-SCENARIO is
@@ -73,7 +85,7 @@ mod BASE-SCENARIO is
   op initDevice : Oid Program TaInstId Program AppId -> Configuration .
   eq initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) = 
   < device : Device | execution-envs : {initRa(RAID , RAPROG)} | 
-                                       {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) masterKey} > 
+                                       {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys} > 
   .
 
   op scenario : Oid Program TaInstId Program AppId -> Configuration .

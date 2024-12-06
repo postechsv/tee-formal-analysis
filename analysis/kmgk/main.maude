@@ -1,5 +1,6 @@
 load ../../spec/src/main
 load consts
+load user
 load gatekeeper-ta
 load gatekeeper-ra
 load keymaster-ta
@@ -13,6 +14,7 @@ mod KMGK is
   pr KEYMASTER-RA-PROGRAM .
   pr KEYMASTER-RA-BEHAVIOR .
   pr KEYMASTER-TA-PROGRAM .
+  pr USER-BEHAVIOR .
   pr IMP-SEMANTICS .
 endm
 
@@ -95,4 +97,4 @@ mod BASE-SCENARIO is
 endm
 
 --- red scenario(kmRa, keymasterRA, kmTa, keymasterTA, KEYMASTER) .
-rew scenario(kmRa, keymasterRA, kmTa, keymasterTA, KEYMASTER) .
+--- rew scenario(kmRa, keymasterRA, kmTa, keymasterTA, KEYMASTER) .

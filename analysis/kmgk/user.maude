@@ -1,0 +1,48 @@
+fmod PASSWORD is  
+  pr NAT .
+  
+  sort Password .
+
+  op pwd : Nat -> Password [ctor] .
+endfm
+
+view Password from TRIV to PASSWORD is
+  sort Elt to Password .
+endv
+
+omod KMGK-USER is
+  pr LIST{Password} .
+
+  class User | authenticator : Oid, authenticated : Bool,
+               passwords : List{Password}, checking : Bool .
+endom
+
+omod USER-BEHAVIOR is
+  pr KMGK-USER .
+
+  vars UI AI : Oid .
+  var PWD : Password .
+  var PWDL : List{Password} .
+
+  rl [enter-password]:
+    < UI : User | authenticator : AI , authenticated : false , passwords : PWD PWDL , checking : false >
+    =>
+    < UI : User | passwords : PWDL , checking : true >
+    (msg tryAuthentication(PWD) from UI to AI)
+  .
+
+  rl [authenticated]:
+    (msg authenticationSuccess from AI to UI)
+    < UI : User | authenticator : AI , authenticated : false , checking : true >
+    =>
+    < UI : User | authenticated : true , checking : false >
+  .
+
+  rl [reenter-password]:
+    (msg authenticationFail from AI to UI)
+    < UI : User | authenticator : AI , authenticated : false , checking : true >
+    =>
+    < UI : User | checking : false >
+  .
+
+endom

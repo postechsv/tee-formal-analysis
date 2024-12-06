@@ -1,6 +1,36 @@
+fmod AUTH-REQ is
+  sort AuthReq .
+endfm
+
+omod KMKG-AUTH-REQ is
+  pr AUTH-REQ .
+  pr PASSWORD .
+
+  op authReq : Password -> AuthReq [ctor] .
+
+  msg reqRA : AuthReq -> Msg .
+endom
+
 omod KMGK-AUTHENTICATOR is
   pr DEVICE .
 
   class Authenticator .
   subclass Authenticator < Device .
+endom
+
+omod KMGK-AUTHENTICATOR-BEHAVIOR is
+  pr KMGK-AUTHENTICATOR .
+  pr KMGK-MSG .
+  pr KMKG-AUTH-REQ .
+
+  vars UI AI : Oid .
+  var PWD : Password .
+  vars REE TEE : Configuration .
+
+  rl [capture-entered-password]:
+    (msg tryAuthentication(PWD) from UI to AI)
+    < AI : Authenticator | execution-envs : {REE} | {TEE}>
+    =>
+    < AI : Authenticator | execution-envs : {REE reqRA(authReq(PWD))} | {TEE} >
+  .
 endom

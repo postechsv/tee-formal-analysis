@@ -16,7 +16,7 @@ mod KMGK is
   pr KEYMASTER-RA-BEHAVIOR .
   pr KEYMASTER-TA-PROGRAM .
   pr KMGK-USER-BEHAVIOR .
-  pr KMGK-AUTHENTICATOR .
+  pr KMGK-AUTHENTICATOR-BEHAVIOR .
   pr IMP-SEMANTICS .
 endm
 
@@ -40,7 +40,7 @@ omod SCENARIO-AUX is
   op initTrustedOS : TaInstId AppId -> Configuration .
   eq initTrustedOS(TAINSTID, APPID)
   = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> TAINSTID) , session-counter : 1 ,
-                           storage : APPID |-> authTokenKeyId , storage-status : (APPID |-> storageNormal) ,
+                           storage : APPID |-> secretID , storage-status : (APPID |-> storageNormal) ,
                            service-request-ta : noAppId , service-request-ta-inst : noInstId ,
                            service-in : nil , service-out : nil ,
                            temporary-objects : empty > .
@@ -95,15 +95,15 @@ mod BASE-SCENARIO is
   op initDevice : Oid Program TaInstId Program AppId -> Configuration .
   eq initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) = 
   < at : Authenticator | execution-envs : {initRa(RAID , RAPROG)} | 
-                                          {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys
-                                           initUser(ui(1), (pwd(1) pwd(2)))} > 
+                                          {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys} > 
   .
 
   op scenario : Oid Program TaInstId Program AppId -> Configuration .
   eq scenario(RAID, RAPROG, TAINSTID, TAPROG, APPID) 
-   = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) .
+   = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) initUser(ui(1), (pwd(randomData) pwd(randomData))).
+  ---  = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) initUser(ui(1), (pwd(noData) pwd(noData))) .
 
 endm
 
 --- red scenario(kmRa, keymasterRA, kmTa, keymasterTA, KEYMASTER) .
-rew scenario(kmRa, keymasterRA, kmTa, keymasterTA, KEYMASTER) .
+rew scenario(gkRa, gatekeeperRA, gkTa, gatekeeperTA, GATEKEEPER) .

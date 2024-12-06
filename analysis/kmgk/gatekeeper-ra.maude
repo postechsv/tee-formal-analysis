@@ -58,17 +58,20 @@ endm
 omod GATEKEEPER-RA-BEHAVIOR is
   pr KMGK-CONSTANTS .
   pr GATEKEEPER-RA-PROGRAM .
+  pr KMKG-AUTH-REQ .
 
   var RI : Oid .
   var P : Program .
+  var DATA : Data .
 
   rl [execute-ra]:
+    reqRA(authReq(pwd(DATA)))
     < gkRa : RichApp | proc : none, prog : P >
     => 
-    < gkRa : RichApp | proc : execute(P, main, (# 1 , # noData , # noData , 
-                                                # 1 , # 1 , # 1 , # 1 , # macValue(nil, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
+    < gkRa : RichApp | proc : execute(P, main, (# 1 , # DATA , # DATA , 
+                                                # 1 , # 1 , # 1 , # 1 , # macValue(DATA, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
                                                 # 1 , 
-                                                # 1 , # 1 , # 1 , # 1 , # macValue(nil, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
+                                                # 1 , # 1 , # 1 , # 1 , # macValue(DATA, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
                                                 # noData)) >
   .
 endom

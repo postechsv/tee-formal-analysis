@@ -1,9 +1,9 @@
 fmod PASSWORD is  
-  pr NAT .
+  pr DATA .
   
   sort Password .
 
-  op pwd : Nat -> Password [ctor] .
+  op pwd : Data -> Password [ctor] .
 endfm
 
 view Password from TRIV to PASSWORD is

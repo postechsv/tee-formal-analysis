@@ -21,16 +21,17 @@ static TEE_Result TA_GetClientIdentity(TEE_Identity *identity)
 	TEE_Result res;
 	res = TEE_SUCCESS;
 
-	res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT,
-			(char *)"gpd.client.identity", identity);
+	res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT, (char *)"gpd.client.identity", identity);
 
-	if (res != TEE_SUCCESS) {
+	// Preprocess: change to equivalent condition
+	if (! (res == TEE_SUCCESS)) {
+	// if (res != TEE_SUCCESS) {
 		EMSG("Failed to get property, res=%x", res);
-		goto exit;
+		goto exit; //@no_semi_colon
 	}
 
 exit:
-	return res;
+	return res; //@no_semi_colon
 }
 
 /*

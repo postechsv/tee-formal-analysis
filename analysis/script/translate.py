@@ -46,6 +46,7 @@ class Translator:
         ]
 
         self.need_to_strip_type_conversions = [ # type conversion currently not supported
+            ' (char *)',
             ' (void *)',
             ' (const uint8_t *)',
             ' (uint32_t)',
@@ -71,6 +72,7 @@ class Translator:
             'TEE_UUID',
             'TEE_Result',
             'TEE_Attribute',
+            'TEE_Identity',
 
             # custom types (kmgk)
             'secure_id_t',
@@ -152,7 +154,8 @@ class Translator:
 
             'TEE_SUCCESS' : '# TEE-SUCCESS',
 
-            'TEE_LOGIN_TRUSTED_APP' : '# TEE-LOGIN-TRUSTED-APP',
+            'TEE_LOGIN_TRUSTED_APP'         : '# TEE-LOGIN-TRUSTED-APP',
+            'TEE_PROPSET_CURRENT_CLIENT'    : '# TEE-PROPSET-CURRENT-CLIENT',
 
             # TEE API func call translate
             'TEE_GetObjectInfo1'                    : 'GetObjectInfo1',
@@ -186,6 +189,8 @@ class Translator:
 
             'TEE_OpenTASession'                     : 'TeeOpenTASession',
             'TEE_InvokeTACommand'                   : 'TeeInvokeTACommand',
+
+            'TEE_GetPropertyAsIdentity'             : 'GetPropertyAsIdentity',
 
             # Custom constants translate (mqttz)
             'TA_AES_KEY_SIZE'                       : '# TA-AES-KEY-SIZE',

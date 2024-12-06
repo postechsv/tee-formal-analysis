@@ -27,6 +27,25 @@ mod KEYMASTER-TA-PROGRAM is
     	var uuid
     } TeeIdentity ;
     
+    TAGetClientIdentity (identity)
+    {
+    	var res ;
+    	res := # TEE-SUCCESS ;
+    
+    	--- res := GetPropertyAsIdentity(# TEE-PROPSET-CURRENT-CLIENT, "gpd . client . identity", identity) ;
+    
+    	--- if (!  (res === # TEE-SUCCESS)) {
+    	--- 	goto exit
+    	--- }  ;
+      identity . uuid := # noData ;
+      identity . login := # TEE-LOGIN-TRUSTED-APP ;
+
+      exit :
+    	return res
+    }  ;
+
+
+
     TAGetAuthTokenKey (authTokenKeyData)
     {
     	var res ;

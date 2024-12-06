@@ -22,9 +22,13 @@ mod KMGK-PROGRAM-DECL is
   op sess : -> Var [ctor] .
   op ret : -> Var [ctor] .
 
+  op uuid : -> Var [ctor] .
   op authTokenKeyData : -> Var [ctor] .
+  op res : -> Var [ctor] .
+  op authTokenKey : -> Var [ctor] .
 
   op main : -> FuncId [ctor] .
+  op TAGetAuthTokenKey : -> FuncId [ctor] .
 endm
 
 mod GATEKEEPER-PROGRAM-DECL is
@@ -70,16 +74,13 @@ mod GATEKEEPER-PROGRAM-DECL is
   op hmac : -> Var [ctor] .
   op HwAuthTokenT : -> Var [ctor] .
 
-  op sess : -> Var [ctor] .
-  op ret : -> Var [ctor] .
-
   op error : -> Var [ctor] .
   op timeout : -> Var [ctor] .
   op authToken : -> Var [ctor] .
   op requestReenroll : -> Var [ctor] .
   op passwordHandle : -> Var [ctor] .
   op throttle : -> Var [ctor] .
-  op res : -> Var [ctor] .
+  
   op expectedHandle : -> Var [ctor] .
   op password : -> Var [ctor] .
   op handleVersion : -> Var [ctor] .
@@ -98,10 +99,8 @@ mod GATEKEEPER-PROGRAM-DECL is
   op op : -> Var [ctor] .
   op toWrite : -> Var [ctor] .
   op token : -> Var [ctor] .
-  op authTokenKey : -> Var [ctor] .
   op params : -> Var [ctor] .
   op returnOrigin : -> Var [ctor] .
-  op uuid : -> Var [ctor] .
 
   op dummy : -> Var [ctor] .
   op dummyRes : -> Var [ctor] .
@@ -113,11 +112,17 @@ mod GATEKEEPER-PROGRAM-DECL is
   op TAComputePasswordSignature : -> FuncId [ctor] .
   op TAComputeSignature : -> FuncId [ctor] .
   op TAMintAuthToken : -> FuncId [ctor] .
-  op TAGetAuthTokenKey : -> FuncId [ctor] .
   op KeymasterTAPlaceHolder : -> FuncId [ctor] .
   op TAEnroll : -> FuncId [ctor] .
 endm
 
 mod KEYMASTER-PROGRAM-DECL is
   pr KMGK-PROGRAM-DECL .
+
+  op identity : -> Var [ctor] .
+  op login : -> Var [ctor] .
+  op TeeIdentity : -> Var [ctor] .
+
+  op TAGetClientIdentity : -> FuncId [ctor] .
+  op TAReadAuthTokenKey : -> FuncId [ctor] .
 endm

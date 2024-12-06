@@ -39,12 +39,18 @@ fmod GATEKEEPER-DATA is
 	eq HW-AUTH-PASSWORD = 1 .
 endfm
 
-mod GATEKEEPER-TA-PROGRAM-DECL is
-  pr TEE-IMP-STRUCT-DECL .
-  pr GATEKEEPER-DATA .
+mod KMGK-TA-PROGRAM-DECL is
+	pr TEE-IMP-STRUCT-DECL .
   pr TEE-BEHAVIOR .
   pr TEE-IMP-BEHAVIOR .
+
+	op exit : -> Label [ctor] .
+endm
+
+mod GATEKEEPER-TA-PROGRAM-DECL is
+	pr KMGK-TA-PROGRAM-DECL .
   pr GATEKEEPER-PROGRAM-DECL .
+	pr GATEKEEPER-DATA .
 
   ops serializeResponse exit freeKey closeObj freeOp closeSess : -> Label [ctor] .
 endm

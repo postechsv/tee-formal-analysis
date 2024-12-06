@@ -3,14 +3,16 @@ fmod KEYMASTER-DATA is
 
 	op KM-GET-AUTHTOKEN-KEY : -> Nat [ctor] .
 	eq KM-GET-AUTHTOKEN-KEY = 65536 .
+
+  --- TODO: Login Type Constants to be handled in spec
+  op TEE-LOGIN-TRUSTED-APP : -> Nat [ctor] .
+  eq TEE-LOGIN-TRUSTED-APP = 4026531840 . --- 0xF0000000
 endfm
 
 mod KEYMASTER-TA-PROGRAM-DECL is
-  pr TEE-IMP-STRUCT-DECL .
-  pr KEYMASTER-DATA .
-  pr TEE-BEHAVIOR .
-  pr TEE-IMP-BEHAVIOR .
+  pr KMGK-TA-PROGRAM-DECL .
   pr KEYMASTER-PROGRAM-DECL .
+  pr KEYMASTER-DATA .
 endm
 
 mod KEYMASTER-TA-PROGRAM is
@@ -19,9 +21,50 @@ mod KEYMASTER-TA-PROGRAM is
   op keymasterTA : -> Program [ctor] .
 
   eq keymasterTA = 
+    struct 
+    {
+    	var login ;
+    	var uuid
+    } TeeIdentity ;
+    
+    TAGetAuthTokenKey (authTokenKeyData)
+    {
+    	var res ;
+    	res := # TEE-SUCCESS ;
+    	struct TeeIdentity identity ;
+    	var authTokenKey ;
+    
+    	res := TAGetClientIdentity(identity) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	if (!  (identity . login === # TEE-LOGIN-TRUSTED-APP)) {
+    		res := # TEE-ERROR-ACCESS-DENIED ;
+    		goto exit
+    	}  ;
+    
+    	res := TAReadAuthTokenKey(authTokenKey) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    
+        authTokenKeyData := authTokenKey ;
+    
+      exit :
+    	return res
+    }  ;
+
     main (cmdId, authTokenKeyData) {
+      
       var ret ;
-			ret := # 404 ;
+      if (cmdId === # KM-GET-AUTHTOKEN-KEY) {
+        ret := TAGetAuthTokenKey(authTokenKeyData)
+      } else {
+			  ret := # 404
+      } ;
+
       return ret
     }
   .

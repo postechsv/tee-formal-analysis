@@ -1,15 +1,3 @@
-fmod PASSWORD is  
-  pr NAT .
-  
-  sort Password .
-
-  op pwd : Nat -> Password [ctor] .
-endfm
-
-view Password from TRIV to PASSWORD is
-  sort Elt to Password .
-endv
-
 omod KMGK-USER is
   pr LIST{Password} .
 
@@ -17,8 +5,9 @@ omod KMGK-USER is
                passwords : List{Password}, checking : Bool .
 endom
 
-omod USER-BEHAVIOR is
+omod KMGK-USER-BEHAVIOR is
   pr KMGK-USER .
+  pr KMGK-MSG .
 
   vars UI AI : Oid .
   var PWD : Password .

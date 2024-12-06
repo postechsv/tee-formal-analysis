@@ -1,10 +1,39 @@
+fmod PASSWORD is  
+  pr NAT .
+  
+  sort Password .
+
+  op pwd : Nat -> Password [ctor] .
+endfm
+
+view Password from TRIV to PASSWORD is
+  sort Elt to Password .
+endv
+
+fmod AUTHENTICATION-ARG is
+  pr PASSWORD .
+
+  sort AuthenticationArg .
+
+  op tryAuthentication : Password -> AuthenticationArg [ctor] .
+  op authenticationSuccess : -> AuthenticationArg [ctor] .
+  op authenticationFail : -> AuthenticationArg [ctor] .
+endfm
+
+omod KMGK-MSG is
+  pr AUTHENTICATION-ARG .
+
+  msg msg_from_to_ : AuthenticationArg Oid Oid -> Msg .
+endom
+
 mod KMGK-CONSTANTS is
   pr NAT .
   pr APP-ID .
   pr TA-INSTANCE-ID .
   pr CONFIGURATION .
 
-  op device : -> Oid [ctor] .
+  op at : -> Oid [ctor] .
+  op ui : Nat -> Oid [ctor] .
   op gkRa : -> Oid [ctor] .
   op kmRa : -> Oid [ctor] .
   op gkTa : -> TaInstId [ctor] .

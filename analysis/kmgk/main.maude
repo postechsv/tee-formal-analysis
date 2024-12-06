@@ -1,6 +1,7 @@
 load ../../spec/src/main
 load consts
 load user
+load authenticator
 load gatekeeper-ta
 load gatekeeper-ra
 load keymaster-ta
@@ -14,7 +15,8 @@ mod KMGK is
   pr KEYMASTER-RA-PROGRAM .
   pr KEYMASTER-RA-BEHAVIOR .
   pr KEYMASTER-TA-PROGRAM .
-  pr USER-BEHAVIOR .
+  pr KMGK-USER-BEHAVIOR .
+  pr KMGK-AUTHENTICATOR .
   pr IMP-SEMANTICS .
 endm
 
@@ -25,9 +27,10 @@ omod SCENARIO-AUX is
   pr TRUST-APP .
 
   var P : Program .
-  var RAID : Oid .
+  vars RAID UI : Oid .
   var TAINSTID : TaInstId .
   var APPID : AppId .
+  var PWDL : List{Password} .
 
 ------------------------------------------------------------
 --- Initialization Functions
@@ -73,6 +76,11 @@ omod SCENARIO-AUX is
 
   op keys : -> Configuration .
   eq keys = masterKey authKey .
+
+  op initUser : Oid List{Password} -> Configuration .
+  eq initUser(UI, PWDL) = 
+    < UI : User | authenticator : at , authenticated : false , passwords : PWDL , checking : false >
+  .
 endom
 
 mod BASE-SCENARIO is
@@ -86,8 +94,9 @@ mod BASE-SCENARIO is
 
   op initDevice : Oid Program TaInstId Program AppId -> Configuration .
   eq initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) = 
-  < device : Device | execution-envs : {initRa(RAID , RAPROG)} | 
-                                       {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys} > 
+  < at : Authenticator | execution-envs : {initRa(RAID , RAPROG)} | 
+                                          {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys
+                                           initUser(ui(1), (pwd(1) pwd(2)))} > 
   .
 
   op scenario : Oid Program TaInstId Program AppId -> Configuration .
@@ -97,4 +106,4 @@ mod BASE-SCENARIO is
 endm
 
 --- red scenario(kmRa, keymasterRA, kmTa, keymasterTA, KEYMASTER) .
---- rew scenario(kmRa, keymasterRA, kmTa, keymasterTA, KEYMASTER) .
+rew scenario(kmRa, keymasterRA, kmTa, keymasterTA, KEYMASTER) .

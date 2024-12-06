@@ -1,0 +1,6 @@
+omod KMGK-AUTHENTICATOR is
+  pr DEVICE .
+
+  class Authenticator .
+  subclass Authenticator < Device .
+endom

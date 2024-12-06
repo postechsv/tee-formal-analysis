@@ -1,3 +1,12 @@
+//@process_struct
+// Maunally copied from the GlobalPlatform TEE Internal Core API Specification
+typedef struct 
+{
+	uint32_t login;
+	TEE_UUID uuid; //@no_semi_colon
+} TEE_Identity;
+//@endprocess_struct
+
 /*
  * This function fills @identity parameter with current client identity
  * value. @identity parameter should point to the valid TEE_Identity object
@@ -88,7 +97,9 @@ keymaster_error_t TA_GetAuthTokenKey(TEE_Param params[TEE_NUM_PARAMS])
 		goto exit; //@no_semi_colon
 	}
 
-	if (identity.login != TEE_LOGIN_TRUSTED_APP) {
+	// Preprocess: change to equivalent condition
+	if (! (identity.login == TEE_LOGIN_TRUSTED_APP)) {
+	// if (identity.login != TEE_LOGIN_TRUSTED_APP) {
 		EMSG("Not trusted app trying to get auth_token key");
 		res = TEE_ERROR_ACCESS_DENIED;
 		goto exit; //@no_semi_colon
@@ -116,6 +127,7 @@ keymaster_error_t TA_GetAuthTokenKey(TEE_Param params[TEE_NUM_PARAMS])
 	TEE_MemMove(params[1].memref.buffer, auth_token_key,
 			sizeof(auth_token_key));
 	//@endignore
+	//@add_line | authTokenKeyData = auth_token_key;
 
 exit:
 	return res; //@no_semi_colon

@@ -81,6 +81,7 @@ class Translator:
 
         self.struct_types = [       # TODO: accumulate struct types as translating
             'TEE_ObjectInfo',       # currently manually added
+            'TEE_Identity',
             'aes_cipher',
             'password_handle_t',
             'hw_auth_token_t'
@@ -125,6 +126,7 @@ class Translator:
             'TEE_TYPE_HMAC_SHA256'              : '# TEE-TYPE-HMAC-SHA256',
 
             'TEE_ObjectInfo'    : 'TeeObjectInfo',
+            'TEE_Identity'      : 'TeeIdentity',
             'aes_cipher'        : 'AesCipher',
             'password_handle_t' : 'PasswordHandleT',
             'hw_auth_token_t'   : 'HwAuthTokenT',
@@ -146,8 +148,11 @@ class Translator:
             'TEE_ERROR_NOT_SUPPORTED'   : '# TEE-ERROR-NOT-SUPPORTED',
             'TEE_ERROR_ITEM_NOT_FOUND'  : '# TEE-ERROR-ITEM-NOT-FOUND',
             'TEE_ERROR_CORRUPT_OBJECT'  : '# TEE-ERROR-CORRUPT-OBJECT',
+            'TEE_ERROR_ACCESS_DENIED'   : '# TEE-ERROR-ACCESS-DENIED',
 
             'TEE_SUCCESS' : '# TEE-SUCCESS',
+
+            'TEE_LOGIN_TRUSTED_APP' : '# TEE-LOGIN-TRUSTED-APP',
 
             # TEE API func call translate
             'TEE_GetObjectInfo1'                    : 'GetObjectInfo1',
@@ -214,6 +219,8 @@ class Translator:
             : 'TA_Enroll (uid, desired_password, current_password, current_password_handle, password_handle)',
             'TA_Verify(TEE_Param params[TEE_NUM_PARAMS])'
             : 'TA_Verify (uid, challenge, enrolled_password_handle, provided_password, response_auth_token)',
+            'keymaster_error_t TA_GetAuthTokenKey(TEE_Param params[TEE_NUM_PARAMS])'
+            : 'TA_GetAuthTokenKey (authTokenKeyData)'
         }
 
         self.prev_translation_status = None
@@ -284,7 +291,7 @@ class Translator:
         self.translation_status = TranslationStatus.TRANSLATING_FUNC_BODY_WITH_ANNOTATION
 
     def special_process_struct(self, line):
-        if '{' in line: # start of struct 
+        if '{' in line or 'typedef' in line: # start of struct 
             for struct_type in self.struct_types: line = line.replace(struct_type + ' ', '')
             replacements = {'typedef ' : '', '__packed ' : ''}
             line = reduce(lambda temp, repl: temp.replace(*repl), replacements.items(), line)
@@ -295,9 +302,11 @@ class Translator:
         return line
 
     def special_process_func_start(self, line):
-        if 'static' in line: # start of func
-            for func_start in self.special_func_start_mapping.keys():
-                if func_start in line: line = line.replace(func_start, self.special_func_start_mapping[func_start])
+        for func_start in self.special_func_start_mapping.keys():
+            if func_start in line: 
+                line = line.replace(func_start, self.special_func_start_mapping[func_start])
+                self.translation_status = TranslationStatus.TRANSLATING_FUNC_BODY_WITHOUT_ANNOTATION
+        if 'static' in line:
             if line in self.special_func_start_mapping: line = line.replace()
             for var_type in self.var_types: line = line.replace(var_type + ' ', '')
             replacements = {'const ' : '', 'static ' : '', '(' : ' ('}

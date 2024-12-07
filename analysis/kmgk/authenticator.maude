@@ -6,15 +6,16 @@ omod KMKG-AUTH-REQ is
   pr AUTH-REQ .
   pr PASSWORD .
 
-  op authReq : Password -> AuthReq [ctor] .
+  op authReq : Password Password -> AuthReq [ctor] .
 
   msg reqRA : AuthReq -> Msg .
 endom
 
 omod KMGK-AUTHENTICATOR is
   pr DEVICE .
+  pr MAP{Nat,Password} .
 
-  class Authenticator .
+  class Authenticator | enrolled-passwords : Map{Nat,Password} .
   subclass Authenticator < Device .
 endom
 
@@ -22,15 +23,18 @@ omod KMGK-AUTHENTICATOR-BEHAVIOR is
   pr KMGK-AUTHENTICATOR .
   pr KMGK-MSG .
   pr KMKG-AUTH-REQ .
+  pr KMGK-CONSTANTS .
 
+  var N : Nat .
   vars UI AI : Oid .
-  var PWD : Password .
+  vars PWD PWD' : Password .
+  var PWDS : Map{Nat,Password} .
   vars REE TEE : Configuration .
 
   rl [capture-entered-password]:
-    (msg tryAuthentication(PWD) from UI to AI)
-    < AI : Authenticator | execution-envs : {REE} | {TEE}>
+    (msg tryAuthentication(PWD) from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE} | {TEE} , enrolled-passwords : ((N |-> PWD') , PWDS) >
     =>
-    < AI : Authenticator | execution-envs : {REE reqRA(authReq(PWD))} | {TEE} >
+    < AI : Authenticator | execution-envs : {REE reqRA(authReq(PWD , PWD'))} | {TEE} >
   .
 endom

@@ -95,7 +95,8 @@ mod BASE-SCENARIO is
   op initDevice : Oid Program TaInstId Program AppId -> Configuration .
   eq initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) = 
   < at : Authenticator | execution-envs : {initRa(RAID , RAPROG)} | 
-                                          {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys} > 
+                                          {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys} ,
+                         enrolled-passwords : (1 |-> pwd(randomData)) > 
   .
 
   op scenario : Oid Program TaInstId Program AppId -> Configuration .

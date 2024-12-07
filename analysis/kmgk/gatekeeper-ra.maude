@@ -62,13 +62,13 @@ omod GATEKEEPER-RA-BEHAVIOR is
 
   var RI : Oid .
   var P : Program .
-  var DATA : Data .
+  vars DATA DATA' : Data .
 
   rl [execute-ra]:
-    reqRA(authReq(pwd(DATA)))
+    reqRA(authReq(pwd(DATA) , pwd(DATA')))
     < gkRa : RichApp | proc : none, prog : P >
     => 
-    < gkRa : RichApp | proc : execute(P, main, (# 1 , # DATA , # DATA , 
+    < gkRa : RichApp | proc : execute(P, main, (# 1 , # DATA , # DATA' , 
                                                 # 1 , # 1 , # 1 , # 1 , # macValue(DATA, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
                                                 # 1 , 
                                                 # 1 , # 1 , # 1 , # 1 , # macValue(DATA, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 

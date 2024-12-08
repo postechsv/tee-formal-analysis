@@ -85,19 +85,13 @@ mod GATEKEEPER-PROGRAM-DECL is
   op uid : -> Var [ctor] .
   op desiredPassword : -> Var [ctor] .
   op currentPassword : -> Var [ctor] .
-  op cphVersion : -> Var [ctor] .
-  op cphUserId : -> Var [ctor] .
-  op cphFlags : -> Var [ctor] .
-  op cphSalt : -> Var [ctor] .
-  op cphSignature : -> Var [ctor] .
-  op cphHardwareBacked : -> Var [ctor] .
+  op phVersion : -> Var [ctor] .
+  op phUserId : -> Var [ctor] .
+  op phFlags : -> Var [ctor] .
+  op phSalt : -> Var [ctor] .
+  op phSignature : -> Var [ctor] .
+  op phHardwareBacked : -> Var [ctor] .
   op challenge : -> Var [ctor] .
-  op ephVersion : -> Var [ctor] .
-  op ephUserId : -> Var [ctor] .
-  op ephFlags : -> Var [ctor] .
-  op ephSalt : -> Var [ctor] .
-  op ephSignature : -> Var [ctor] .
-  op ephHardwareBacked : -> Var [ctor] .
   op providedPassword : -> Var [ctor] .
 
   op responseHandle : -> Var [ctor] .
@@ -111,10 +105,9 @@ mod GATEKEEPER-PROGRAM-DECL is
   op hardwareBacked : -> Var [ctor] .
   op PasswordHandleT : -> Var [ctor] .
 
+  op ph : -> Var [ctor] .
   op currentPasswordHandle : -> Var [ctor] .
-  op cph : -> Var [ctor] .
   op enrolledPasswordHandle : -> Var [ctor] .
-  op eph : -> Var [ctor] .
 
   op authenticatorId : -> Var [ctor] .
   op authenticatorType : -> Var [ctor] .

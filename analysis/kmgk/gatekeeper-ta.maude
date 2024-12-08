@@ -455,27 +455,29 @@ mod GATEKEEPER-TA-PROGRAM is
     	return res
     }  ;
 
-    main (cmdId, uid, desiredPassword, currentPassword, cphVersion, cphUserId, cphFlags, cphSalt, cphSignature, cphHardwareBacked, responseHandle, challenge, ephVersion, ephUserId, ephFlags, ephSalt, ephSignature, ephHardwareBacked, providedPassword, responseAuthToken) {
-      var ret ;
+    main (cmdId, uid, phVersion, phUserId, phFlags, phSalt, phSignature, phHardwareBacked, 
+					desiredPassword, currentPassword, responseHandle, 
+					challenge, providedPassword, responseAuthToken) {
+			var ret ;
       if (cmdId === # GK-ENROLL) {
         struct PasswordHandleT currentPasswordHandle ;
-        currentPasswordHandle . version := cphVersion ;
-        currentPasswordHandle . userId := cphUserId ;
-        currentPasswordHandle . flags := cphFlags ;
-        currentPasswordHandle . salt := cphSalt ;
-        currentPasswordHandle . signature := cphSignature ;
-        currentPasswordHandle . hardwareBacked := cphHardwareBacked ;
+        currentPasswordHandle . version := phVersion ;
+        currentPasswordHandle . userId := phUserId ;
+        currentPasswordHandle . flags := phFlags ;
+        currentPasswordHandle . salt := phSalt ;
+        currentPasswordHandle . signature := phSignature ;
+        currentPasswordHandle . hardwareBacked := phHardwareBacked ;
 
         ret := TAEnroll(uid, desiredPassword, currentPassword, currentPasswordHandle, responseHandle)
       } else {
         if (cmdId === # GK-VERIFY) {
           struct PasswordHandleT enrolledPasswordHandle ;
-          enrolledPasswordHandle . version := ephVersion ;
-          enrolledPasswordHandle . userId := ephUserId ;
-          enrolledPasswordHandle . flags := ephFlags ;
-          enrolledPasswordHandle . salt := ephSalt ;
-          enrolledPasswordHandle . signature := ephSignature ;
-          enrolledPasswordHandle . hardwareBacked := ephHardwareBacked ;
+          enrolledPasswordHandle . version := phVersion ;
+          enrolledPasswordHandle . userId := phUserId ;
+          enrolledPasswordHandle . flags := phFlags ;
+          enrolledPasswordHandle . salt := phSalt ;
+          enrolledPasswordHandle . signature := phSignature ;
+          enrolledPasswordHandle . hardwareBacked := phHardwareBacked ;
 
           ret := TAVerify(uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
         } else {

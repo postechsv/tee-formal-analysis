@@ -17,38 +17,27 @@ mod GATEKEEPER-RA-PROGRAM is
     	var hardwareBacked
     } PasswordHandleT ;
 
-    main(uid, desiredPassword, currentPassword, cphVersion, cphUserId, cphFlags, cphSalt, cphSignature, cphHardwareBacked,
-		                  challenge, ephVersion, ephUserId, ephFlags, ephSalt, ephSignature, ephHardwareBacked, providedPassword) {
+    main(cmdId, uid, phVersion, phUserId, phFlags, phSalt, phSignature, phHardwareBacked,
+          desiredPassword, currentPassword, --- for enrollment
+          challenge, providedPassword)    --- for verification
+    {
       var ret ; var sess ;
       --- TeecOpenSession(# taInst(1) ; 'ret , 'sess) ;
       sess := # sessionId(0) ;
 
-      --- for enrollment
-      struct PasswordHandleT cph ; --- current password handle
-      cph . version := cphVersion ;
-      cph . userId := cphUserId ;
-      cph . flags := cphFlags ;
-      cph . salt := cphSalt ;
-      cph . signature := cphSignature ;
-      cph . hardwareBacked := cphHardwareBacked ;
-
-      --- for verification
-      struct PasswordHandleT eph ; --- enrolled password handle
-      eph . version := ephVersion ;
-      eph . userId := ephUserId ;
-      eph . flags := ephFlags ;
-      eph . salt := ephSalt ;
-      eph . signature := ephSignature ;
-      eph . hardwareBacked := ephHardwareBacked ;
-      var cmdId ; cmdId := # GK-ENROLL ;
+      struct PasswordHandleT ph ;
+      ph . version := phVersion ;
+      ph . userId := phUserId ;
+      ph . flags := phFlags ;
+      ph . salt := phSalt ;
+      ph . signature := phSignature ;
+      ph . hardwareBacked := phHardwareBacked ;
 
       var responseHandle ; var responseAuthToken ;
       responseHandle := # 404 ; responseAuthToken := # 405 ;
-      TeecInvokeCommand(sess, # main, (cmdId, uid, desiredPassword, currentPassword, 
-                                       cph . version, cph . userId, cph . flags, cph . salt, cph . signature, cph . hardwareBacked, 
-                                       responseHandle,
-                                       challenge, eph . version, eph . userId, eph . flags, eph . salt, eph . signature, eph . hardwareBacked, 
-                                       providedPassword, responseAuthToken) ; ret) ;
+      TeecInvokeCommand(sess, # main, (cmdId, uid, ph . version, ph . userId, ph . flags, ph . salt, ph . signature, ph . hardwareBacked, 
+                                       desiredPassword, currentPassword, responseHandle,
+                                       challenge, providedPassword, responseAuthToken) ; ret) ;
 
       return ret
     }
@@ -70,10 +59,19 @@ omod GATEKEEPER-RA-BEHAVIOR is
     reqRA(authEnroll authReq(pwd(DATA) , pwd(DATA') , pwdHandle(VER , UID , FLAGS , SALT , SIGN , HWBACKED)))
     < gkRa : RichApp | proc : none, prog : P >
     => 
-    < gkRa : RichApp | proc : execute(P, main, (# 1 , # DATA , # DATA' , 
+    < gkRa : RichApp | proc : execute(P, main, (# GK-ENROLL , # 1 , 
                                                 # VER , # UID , # FLAGS , # SALT , # SIGN , # HWBACKED , 
-                                                # 1 , 
-                                                # 1 , # 1 , # 1 , # 1 , # macValue(DATA, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , # 1 , 
-                                                # noData)) >
+                                                # DATA , # DATA' , 
+                                                # 1 , # noData)) >
+  .
+
+  rl [execute-ra-for-verification]:
+    reqRA(authVerif authReq(pwd(DATA) , pwdHandle(VER , UID , FLAGS , SALT , SIGN , HWBACKED)))
+    < gkRa : RichApp | proc : none, prog : P >
+    => 
+    < gkRa : RichApp | proc : execute(P, main, (# GK-VERIFY , # 1 , 
+                                                # VER , # UID , # FLAGS , # SALT , # SIGN , # HWBACKED , 
+                                                # noData , # noData ,
+                                                # 1 , # DATA)) >
   .
 endom

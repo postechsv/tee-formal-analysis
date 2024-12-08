@@ -14,6 +14,7 @@ omod KMKG-AUTH-REQ is
   op authVerif : -> AuthReq [ctor] .
   op authEnroll : -> AuthReq [ctor] .
   op authReq : Password Password PasswordHandle -> AuthReq [ctor] .
+  op authReq : Password PasswordHandle -> AuthReq [ctor] .
 
   msg reqRA : List{AuthReq} -> Msg .
 endom
@@ -49,5 +50,13 @@ omod KMGK-AUTHENTICATOR-BEHAVIOR is
                            enrolled-handles : ((N |-> PWDH)) , PWDHS >
     =>
     < AI : Authenticator | execution-envs : {REE reqRA(authEnroll authReq(PWD , PWD' , PWDH))} | {TEE} >
+  .
+
+  rl [capture-entered-password-for-verif]:
+    (msg tryVerification(PWD) from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE} | {TEE} , 
+                           enrolled-handles : ((N |-> PWDH)) , PWDHS >
+    =>
+    < AI : Authenticator | execution-envs : {REE reqRA(authEnroll authReq(PWD , PWDH))} | {TEE} >
   .
 endom

@@ -4,27 +4,27 @@ mod BASE-SCENARIO is
   pr DEVICE .
   pr SCENARIO-AUX .
 
-  vars RAPROG TAPROG : Program .
   var RAID : Oid .
-  var TAINSTID : TaInstId .
+  var INSTID : TaInstId .
+  vars RAPROG P : Program .
   var APPID : AppId .
+  var TAINFOL : List{TaInfo} .
 
-  op initDevice : Oid Program TaInstId Program AppId -> Configuration .
-  eq initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) = 
+  op initDevice : Oid Program List{TaInfo} -> Configuration .
+  eq initDevice(RAID, RAPROG, TAINFOL) = 
   < at : Authenticator | execution-envs : {initRa(RAID , RAPROG)} | 
-                                          {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys} ,
+                                          {initTas(TAINFOL) initTrustedOS(TAINFOL) keys} ,
                          enrolled-passwords : (1 |-> pwd(natData(7))) ,
                          enrolled-handles : (1 |-> pwdHandle(1 , 1 , 1 , 1 , macValue(natData(7), TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , 1)) ,
                          is-running : false > 
   .
 
-  op scenario : Oid Program TaInstId Program AppId -> Configuration .
-  eq scenario(RAID, RAPROG, TAINSTID, TAPROG, APPID) 
-   = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) 
+  op scenario : Oid Program List{TaInfo} -> Configuration .
+  eq scenario(RAID, RAPROG, TAINFOL) 
+   = initDevice(RAID, RAPROG, TAINFOL) 
      initUser(ui(1), userInput(ForVerification, pwd(natData(7))) userInput(ForEnrollment, pwd(natData(10)) pwd(natData(7))))
   .
 
 endm
 
---- red scenario(gkRa, gatekeeperRA, gkTa, gatekeeperTA, GATEKEEPER) .
-rew scenario(gkRa, gatekeeperRA, gkTa, gatekeeperTA, GATEKEEPER) .
+rew scenario(gkRa, gatekeeperRA, taInfo(gkTa, gatekeeperTA, GATEKEEPER) taInfo(kmTa, keymasterTA, KEYMASTER)) .

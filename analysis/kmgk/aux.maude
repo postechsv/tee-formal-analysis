@@ -1,26 +1,50 @@
 load main
 
+fmod TA-INFO is
+  pr ID-GEN .
+  pr IMP-PROGRAM .
+
+  sort TaInfo .
+
+  op taInfo : TaInstId Program AppId -> TaInfo [ctor] .
+endfm
+
+view TaInfo from TRIV to TA-INFO is
+  sort Elt to TaInfo .
+endv
+
 omod SCENARIO-AUX is
   pr KMGK .
-  pr ID-GEN .
   pr RICH-APP .
   pr TRUST-APP .
+  pr LIST{TaInfo} .
 
-  var P : Program .
   vars RAID UI : Oid .
-  var TAINSTID : TaInstId .
+  var INSTID : TaInstId .
+  var P : Program .
   var APPID : AppId .
+  var TAINFO : TaInfo .
+  var TAINFOL : List{TaInfo} .
   var UIL : List{UserInput} .
 
 ------------------------------------------------------------
 --- Initialization Functions
 ------------------------------------------------------------
 
+  op initStorage : List{TaInfo} -> Map{AppId,Set{FileId}} .
+  eq initStorage(taInfo(gkTa, P, GATEKEEPER) TAINFOL) = (GATEKEEPER |-> secretID), initStorage(TAINFOL) .
+  eq initStorage(taInfo(kmTa, P, KEYMASTER) TAINFOL) = (KEYMASTER |-> authTokenKeyId), initStorage(TAINFOL) .
+  eq initStorage(nil) = empty .
+  
+  op initStorStatus : List{TaInfo} -> Map{AppId,StorageStatus} .
+  eq initStorStatus(taInfo(INSTID, P, APPID) TAINFOL) = (APPID |-> storageNormal), initStorStatus(TAINFOL) .
+  eq initStorStatus(nil) = empty .
+
   op osId : -> Oid .
-  op initTrustedOS : TaInstId AppId -> Configuration .
-  eq initTrustedOS(TAINSTID, APPID)
-  = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> TAINSTID) , session-counter : 1 ,
-                           storage : APPID |-> secretID , storage-status : (APPID |-> storageNormal) ,
+  op initTrustedOS : List{TaInfo} -> Configuration .
+  eq initTrustedOS(TAINFOL)
+  = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> gkTa) , session-counter : 1 ,
+                           storage : initStorage(TAINFOL) , storage-status : initStorStatus(TAINFOL) ,
                            service-request-ta : noAppId , service-request-ta-inst : noInstId ,
                            service-in : nil , service-out : nil ,
                            temporary-objects : empty > .
@@ -29,12 +53,16 @@ omod SCENARIO-AUX is
   eq initRa(RAID, P) = < RAID : RichApp | proc : none , prog : P , running : false , 
                                           invoke-req-queue : nil , invoke-ret-queue : nil > .
 
-  op initTa : TaInstId Program AppId -> Configuration .
-  eq initTa(TAINSTID, P, APPID) = < TAINSTID : TrustApp | proc : none , prog : P , running : false ,
-                                                          app-status : normal , api-call : noCall , api-return : noReturn ,
-                                                          current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
-                                                          trust-app-id : APPID ,
-                                                          task : noTask , task-counter : 0 , state-changed : false > .
+  op initTa : TaInfo -> Configuration .
+  eq initTa(taInfo(INSTID, P, APPID)) = < INSTID : TrustApp | proc : none , prog : P , running : false ,
+                                                              app-status : normal , api-call : noCall , api-return : noReturn ,
+                                                              current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
+                                                              trust-app-id : APPID ,
+                                                              task : noTask , task-counter : 0 , state-changed : false > .
+
+  op initTas : List{TaInfo} -> Configuration .
+  eq initTas(TAINFO TAINFOL) = initTa(TAINFO) initTas(TAINFOL) .
+  eq initTas(nil) = none .
 
   ops masterKeyObj masterKeyObjStream : -> TaObjectId [ctor] .
   op masterKey : -> Configuration .

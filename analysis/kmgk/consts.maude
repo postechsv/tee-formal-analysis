@@ -32,7 +32,7 @@ fmod AUTHENTICATION-ARG is
   op verificationSuccess : -> AuthenticatorArg [ctor] .
   op verificationFail : -> AuthenticatorArg [ctor] .
 
-  op tryEnrollment : Password -> AuthenticatorArg [ctor] .
+  op tryEnrollment : Password Password -> AuthenticatorArg [ctor] .
   op enrollmentSuccess : -> AuthenticatorArg [ctor] .
   op enrollmentFail : -> AuthenticatorArg [ctor] .
 endfm
@@ -47,6 +47,7 @@ mod KMGK-CONSTANTS is
   pr NAT .
   pr APP-ID .
   pr TA-INSTANCE-ID .
+  pr DATA .
   pr CONFIGURATION .
 
   op at : -> Oid [ctor] .
@@ -55,6 +56,7 @@ mod KMGK-CONSTANTS is
   op kmRa : -> Oid [ctor] .
   op gkTa : -> TaInstId [ctor] .
   op kmTa : -> TaInstId [ctor] .
+  op natData : Nat -> Data [ctor] .
 
   op GATEKEEPER : -> AppId [ctor] .
   op KEYMASTER : -> AppId [ctor] .

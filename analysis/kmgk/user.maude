@@ -25,7 +25,7 @@ omod KMGK-USER-BEHAVIOR is
   pr KMGK-MSG .
 
   vars UI AI : Oid .
-  var PWD : Password .
+  vars PWD PWD' : Password .
   var PWDL : List{Password} .
   var UIL : List{UserInput} .
 
@@ -53,10 +53,10 @@ omod KMGK-USER-BEHAVIOR is
 
   rl [enter-password-for-enrollment]:
     < UI : User | authenticator : AI , authenticated : true , waiting : false ,
-                  inputs : userInput(ForEnrollment , PWD PWDL) UIL >
+                  inputs : userInput(ForEnrollment , PWD PWD' PWDL) UIL >
     =>
     < UI : User | waiting : true , inputs : UIL >
-    (msg tryEnrollment(PWD) from UI to AI)
+    (msg tryEnrollment(PWD , PWD') from UI to AI)
   .
 
   rl [enrollment-success]:

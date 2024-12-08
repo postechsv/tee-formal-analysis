@@ -96,15 +96,15 @@ mod BASE-SCENARIO is
   eq initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) = 
   < at : Authenticator | execution-envs : {initRa(RAID , RAPROG)} | 
                                           {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys} ,
-                         enrolled-passwords : (1 |-> pwd(randomData)) ,
-                         enrolled-handles : (1 |-> pwdHandle(1 , 1 , 1 , 1 , macValue(randomData, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , 1)) ,
+                         enrolled-passwords : (1 |-> pwd(natData(7))) ,
+                         enrolled-handles : (1 |-> pwdHandle(1 , 1 , 1 , 1 , macValue(natData(7), TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , 1)) ,
                          is-running : false > 
   .
 
   op scenario : Oid Program TaInstId Program AppId -> Configuration .
   eq scenario(RAID, RAPROG, TAINSTID, TAPROG, APPID) 
    = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) 
-     initUser(ui(1), userInput(ForVerification, pwd(randomData)) userInput(ForEnrollment, pwd(randomData)))
+     initUser(ui(1), userInput(ForVerification, pwd(natData(7))) userInput(ForEnrollment, pwd(natData(10)) pwd(natData(7))))
   .
 
 endm

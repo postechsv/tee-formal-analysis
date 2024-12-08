@@ -47,18 +47,17 @@ omod KMGK-AUTHENTICATOR-BEHAVIOR is
   vars REE TEE : Configuration .
 
   rl [capture-entered-password-for-enroll]:
-    (msg tryEnrollment(PWD) from ui(N) to AI)
+    (msg tryEnrollment(PWD , PWD') from ui(N) to AI)
     < AI : Authenticator | execution-envs : {REE} | {TEE} , is-running : false ,
-                           enrolled-passwords : ((N |-> PWD') , PWDS) ,
-                           enrolled-handles : ((N |-> PWDH)) , PWDHS >
+                           enrolled-handles : ((N |-> PWDH')) , PWDHS >
     =>
-    < AI : Authenticator | execution-envs : {REE reqRA(authEnroll authReq(PWD , PWD' , PWDH))} | {TEE} ,
+    < AI : Authenticator | execution-envs : {REE reqRA(authEnroll authReq(PWD , PWD' , PWDH'))} | {TEE} ,
                            is-running : true >
-    (msg tryEnrollment(PWD) from ui(N) to AI)
+    (msg tryEnrollment(PWD , PWD') from ui(N) to AI)
   .
 
   rl [new-password-enroll]:
-    (msg tryEnrollment(PWD) from ui(N) to AI)
+    (msg tryEnrollment(PWD , PWD') from ui(N) to AI)
     < AI : Authenticator | execution-envs : {REE retRA(authEnroll authReq(PWD , PWDH))} | {TEE} ,
                            enrolled-passwords : ((N |-> PWD') , PWDS) ,
                            enrolled-handles : ((N |-> PWDH')) , PWDHS ,
@@ -72,7 +71,7 @@ omod KMGK-AUTHENTICATOR-BEHAVIOR is
   .
 
   rl [new-password-enroll-fail]:
-    (msg tryEnrollment(PWD) from ui(N) to AI)
+    (msg tryEnrollment(PWD , PWD') from ui(N) to AI)
     < AI : Authenticator | execution-envs : {REE retRA(authEnroll authReq)} | {TEE} ,
                            is-running : true >
     =>

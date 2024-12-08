@@ -15,6 +15,7 @@ omod KMKG-AUTH-REQ is
   op authEnroll : -> AuthReq [ctor] .
   op authReq : Password Password PasswordHandle -> AuthReq [ctor] .
   op authReq : Password PasswordHandle -> AuthReq [ctor] .
+  op authReq : -> AuthReq [ctor] .
 
   msg reqRA : List{AuthReq} -> Msg .
   msg retRA : List{AuthReq} -> Msg .
@@ -69,6 +70,16 @@ omod KMGK-AUTHENTICATOR-BEHAVIOR is
                            is-running : false >
     (msg enrollmentSuccess from AI to ui(N))
   .
+
+  rl [new-password-enroll-fail]:
+    (msg tryEnrollment(PWD) from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE retRA(authEnroll authReq)} | {TEE} ,
+                           is-running : true >
+    =>
+    < AI : Authenticator | execution-envs : {REE} | {TEE} ,
+                           is-running : false >
+    (msg enrollmentFail from AI to ui(N))
+  . 
 
   rl [capture-entered-password-for-verif]:
     (msg tryVerification(PWD) from ui(N) to AI)

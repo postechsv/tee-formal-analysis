@@ -91,6 +91,15 @@ omod GATEKEEPER-RA-BEHAVIOR is
   if finished(KS) /\  RES := readReturn(main, KS) /\ normalFinish(RES) /\ PWDH := createPasswordHandleFromReturns
   .
 
+  crl [return-result-for-enrollment]:
+    reqRA(authEnroll authReq(PWD , PWD' , PWDH'))
+    < gkRa : RichApp | proc : KS >
+    =>
+    < gkRa : RichApp | proc : none >
+    retRA(authEnroll authReq)
+  if finished(KS) /\  RES := readReturn(main, KS) /\ not normalFinish(RES)
+  .
+
   rl [execute-ra-for-verification]:
     reqRA(authVerif authReq(pwd(DATA) , pwdHandle(VER , UID , FLAGS , SALT , SIGN , HWBACKED)))
     < gkRa : RichApp | proc : none, prog : P >

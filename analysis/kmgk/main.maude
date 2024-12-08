@@ -99,7 +99,8 @@ mod BASE-SCENARIO is
   < at : Authenticator | execution-envs : {initRa(RAID , RAPROG)} | 
                                           {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys} ,
                          enrolled-passwords : (1 |-> pwd(randomData)) ,
-                         enrolled-handles : (1 |-> pwdHandle(1 , 1 , 1 , 1 , macValue(randomData, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , 1)) > 
+                         enrolled-handles : (1 |-> pwdHandle(1 , 1 , 1 , 1 , macValue(randomData, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , 1)) ,
+                         is-running : false > 
   .
 
   op scenario : Oid Program TaInstId Program AppId -> Configuration .

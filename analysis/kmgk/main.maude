@@ -96,7 +96,8 @@ mod BASE-SCENARIO is
   eq initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) = 
   < at : Authenticator | execution-envs : {initRa(RAID , RAPROG)} | 
                                           {initTa(TAINSTID , TAPROG , APPID) initTrustedOS(TAINSTID , APPID) keys} ,
-                         enrolled-passwords : (1 |-> pwd(randomData)) > 
+                         enrolled-passwords : (1 |-> pwd(randomData)) ,
+                         enrolled-handles : (1 |-> pwdHandle(1 , 1 , 1 , 1 , macValue(randomData, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , 1)) > 
   .
 
   op scenario : Oid Program TaInstId Program AppId -> Configuration .
@@ -106,5 +107,5 @@ mod BASE-SCENARIO is
 
 endm
 
---- red scenario(kmRa, keymasterRA, kmTa, keymasterTA, KEYMASTER) .
+--- red scenario(gkRa, gatekeeperRA, gkTa, gatekeeperTA, GATEKEEPER) .
 rew scenario(gkRa, gatekeeperRA, gkTa, gatekeeperTA, GATEKEEPER) .

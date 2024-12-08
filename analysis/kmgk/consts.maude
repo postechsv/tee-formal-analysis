@@ -10,6 +10,19 @@ view Password from TRIV to PASSWORD is
   sort Elt to Password .
 endv
 
+fmod PASSWORD-HANDLE is
+  pr NAT .
+  pr LIST{Data} .
+
+  sort PasswordHandle .
+
+  op pwdHandle : Nat Nat Nat Nat List{Data} Nat -> PasswordHandle [ctor] .
+endfm
+
+view PasswordHandle from TRIV to PASSWORD-HANDLE is
+  sort Elt to PasswordHandle .
+endv
+
 fmod AUTHENTICATION-ARG is
   pr PASSWORD .
 

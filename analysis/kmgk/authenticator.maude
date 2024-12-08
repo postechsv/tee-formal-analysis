@@ -5,8 +5,9 @@ endfm
 omod KMKG-AUTH-REQ is
   pr AUTH-REQ .
   pr PASSWORD .
+  pr PASSWORD-HANDLE .
 
-  op authReq : Password Password -> AuthReq [ctor] .
+  op authReq : Password Password PasswordHandle -> AuthReq [ctor] .
 
   msg reqRA : AuthReq -> Msg .
 endom
@@ -14,8 +15,10 @@ endom
 omod KMGK-AUTHENTICATOR is
   pr DEVICE .
   pr MAP{Nat,Password} .
+  pr MAP{Nat,PasswordHandle} .
 
-  class Authenticator | enrolled-passwords : Map{Nat,Password} .
+  class Authenticator | enrolled-passwords : Map{Nat,Password},
+                        enrolled-handles : Map{Nat,PasswordHandle} .
   subclass Authenticator < Device .
 endom
 
@@ -29,12 +32,16 @@ omod KMGK-AUTHENTICATOR-BEHAVIOR is
   vars UI AI : Oid .
   vars PWD PWD' : Password .
   var PWDS : Map{Nat,Password} .
+  var PWDH : PasswordHandle .
+  var PWDHS : Map{Nat,PasswordHandle} .
   vars REE TEE : Configuration .
 
   rl [capture-entered-password]:
     (msg tryAuthentication(PWD) from ui(N) to AI)
-    < AI : Authenticator | execution-envs : {REE} | {TEE} , enrolled-passwords : ((N |-> PWD') , PWDS) >
+    < AI : Authenticator | execution-envs : {REE} | {TEE} , 
+                           enrolled-passwords : ((N |-> PWD') , PWDS) ,
+                           enrolled-handles : ((N |-> PWDH)) , PWDHS >
     =>
-    < AI : Authenticator | execution-envs : {REE reqRA(authReq(PWD , PWD'))} | {TEE} >
+    < AI : Authenticator | execution-envs : {REE reqRA(authReq(PWD , PWD' , PWDH))} | {TEE} >
   .
 endom

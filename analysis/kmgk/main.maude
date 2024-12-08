@@ -30,8 +30,7 @@ omod SCENARIO-AUX is
   vars RAID UI : Oid .
   var TAINSTID : TaInstId .
   var APPID : AppId .
-  var PWDL : List{Password} .
-  var ACCL : List{AccessType} .
+  var UIL : List{UserInput} .
 
 ------------------------------------------------------------
 --- Initialization Functions
@@ -78,10 +77,9 @@ omod SCENARIO-AUX is
   op keys : -> Configuration .
   eq keys = masterKey authKey .
 
-  op initUser : Oid List{Password} List{AccessType} -> Configuration .
-  eq initUser(UI, PWDL, ACCL) = 
-    < UI : User | authenticator : at , authenticated : false , waiting : false , 
-                  passwords : PWDL , acc-types : ACCL >
+  op initUser : Oid List{UserInput} -> Configuration .
+  eq initUser(UI, UIL) = 
+    < UI : User | authenticator : at , authenticated : false , waiting : false , inputs : UIL >
   .
 endom
 
@@ -105,8 +103,9 @@ mod BASE-SCENARIO is
 
   op scenario : Oid Program TaInstId Program AppId -> Configuration .
   eq scenario(RAID, RAPROG, TAINSTID, TAPROG, APPID) 
-   = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) initUser(ui(1), (pwd(randomData)), (AccForVerification)).
-  ---  = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) initUser(ui(1), (pwd(noData) pwd(noData))) .
+   = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) 
+     initUser(ui(1), userInput(ForVerification, pwd(randomData)) userInput(ForEnrollment, pwd(randomData)))
+  .
 
 endm
 

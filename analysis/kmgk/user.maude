@@ -1,20 +1,23 @@
-fmod AUTHENTICATOR-ACCESS-TYPE is
-  sort AccessType .
+fmod USER-INPUT is
+  pr LIST{Password} .
 
-  op AccForVerification : -> AccessType [ctor] .
-  op AccForEnrollment : -> AccessType [ctor] .
+  sorts UserInput InputType .
+
+  op ForVerification : -> InputType [ctor] .
+  op ForEnrollment : -> InputType [ctor] .
+
+  op userInput : InputType List{Password} -> UserInput [ctor] .
 endfm
 
-view AccessType from TRIV to AUTHENTICATOR-ACCESS-TYPE is
-  sort Elt to AccessType .
+view UserInput from TRIV to USER-INPUT is
+  sort Elt to UserInput .
 endv
 
 omod KMGK-USER is
-  pr LIST{Password} .
-  pr LIST{AccessType} .
+  pr LIST{UserInput} .
 
   class User | authenticator : Oid, authenticated : Bool, waiting : Bool,
-               passwords : List{Password}, acc-types : List{AccessType} .
+               inputs : List{UserInput} .
 endom
 
 omod KMGK-USER-BEHAVIOR is
@@ -24,20 +27,14 @@ omod KMGK-USER-BEHAVIOR is
   vars UI AI : Oid .
   var PWD : Password .
   var PWDL : List{Password} .
-  var ACC : AccessType .
-  var ACCL : List{AccessType} .
+  var UIL : List{UserInput} .
 
-  op isAccEnroll : AccessType -> Bool .
-  eq isAccEnroll(AccForEnrollment) = true .
-  eq isAccEnroll(ACC) = false [owise] .
-
-  crl [enter-password-for-verification]:
+  rl [enter-password-for-verification]:
     < UI : User | authenticator : AI , authenticated : false , waiting : false ,
-                  passwords : PWD PWDL , acc-types : ACC ACCL >
+                  inputs : userInput(ForVerification , PWD PWDL) UIL >
     =>
-    < UI : User | waiting : true , passwords : PWDL , acc-types : ACCL >
+    < UI : User | waiting : true , inputs : UIL >
     (msg tryVerification(PWD) from UI to AI)
-  if not isAccEnroll(ACC)
   .
 
   rl [verification-success]:
@@ -54,13 +51,12 @@ omod KMGK-USER-BEHAVIOR is
     < UI : User | waiting : false >
   .
 
-  crl [enter-password-for-enrollment]:
+  rl [enter-password-for-enrollment]:
     < UI : User | authenticator : AI , authenticated : true , waiting : false ,
-                  passwords : PWD PWDL , acc-types : ACC ACCL >
+                  inputs : userInput(ForEnrollment , PWD PWDL) UIL >
     =>
-    < UI : User | waiting : true , passwords : PWDL , acc-types : ACCL >
+    < UI : User | waiting : true , inputs : UIL >
     (msg tryEnrollment(PWD) from UI to AI)
-  if isAccEnroll(ACC)
   .
 
   rl [enrollment-success]:

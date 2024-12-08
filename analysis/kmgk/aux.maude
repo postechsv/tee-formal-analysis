@@ -1,0 +1,64 @@
+load main
+
+omod SCENARIO-AUX is
+  pr KMGK .
+  pr ID-GEN .
+  pr RICH-APP .
+  pr TRUST-APP .
+
+  var P : Program .
+  vars RAID UI : Oid .
+  var TAINSTID : TaInstId .
+  var APPID : AppId .
+  var UIL : List{UserInput} .
+
+------------------------------------------------------------
+--- Initialization Functions
+------------------------------------------------------------
+
+  op osId : -> Oid .
+  op initTrustedOS : TaInstId AppId -> Configuration .
+  eq initTrustedOS(TAINSTID, APPID)
+  = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> TAINSTID) , session-counter : 1 ,
+                           storage : APPID |-> secretID , storage-status : (APPID |-> storageNormal) ,
+                           service-request-ta : noAppId , service-request-ta-inst : noInstId ,
+                           service-in : nil , service-out : nil ,
+                           temporary-objects : empty > .
+
+  op initRa : Oid Program -> Configuration .
+  eq initRa(RAID, P) = < RAID : RichApp | proc : none , prog : P , running : false , 
+                                          invoke-req-queue : nil , invoke-ret-queue : nil > .
+
+  op initTa : TaInstId Program AppId -> Configuration .
+  eq initTa(TAINSTID, P, APPID) = < TAINSTID : TrustApp | proc : none , prog : P , running : false ,
+                                                          app-status : normal , api-call : noCall , api-return : noReturn ,
+                                                          current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
+                                                          trust-app-id : APPID ,
+                                                          task : noTask , task-counter : 0 , state-changed : false > .
+
+  ops masterKeyObj masterKeyObjStream : -> TaObjectId [ctor] .
+  op masterKey : -> Configuration .
+  eq masterKey = 
+    < masterKeyObj : PersistentObject | handle-set : none , object-type : TEE-TYPE-DATA , max-object-size : 0 Bits  , 
+                                        file-id : secretID , trust-app-id : GATEKEEPER ,
+                                        attribute-set : empty , object-usage-set : empty , data-stream-id : masterKeyObjStream >
+    < masterKeyObjStream : DataStreamObject | data-size : dataSize(1) , content : newContent(randomData) >
+  .
+
+  ops authKeyObj authKeyObjStream : -> TaObjectId [ctor] .
+  op authKey : -> Configuration .
+  eq authKey = 
+    < authKeyObj : PersistentObject | handle-set : none , object-type : TEE-TYPE-DATA , max-object-size : 0 Bits  , 
+                                      file-id : authTokenKeyId , trust-app-id : KEYMASTER ,
+                                      attribute-set : empty , object-usage-set : empty , data-stream-id : authKeyObjStream >
+    < authKeyObjStream : DataStreamObject | data-size : dataSize(1) , content : newContent(randomData) >
+  .
+
+  op keys : -> Configuration .
+  eq keys = masterKey authKey .
+
+  op initUser : Oid List{UserInput} -> Configuration .
+  eq initUser(UI, UIL) = 
+    < UI : User | authenticator : at , authenticated : false , waiting : false , inputs : UIL >
+  .
+endom

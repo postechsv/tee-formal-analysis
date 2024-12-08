@@ -84,8 +84,29 @@ omod KMGK-AUTHENTICATOR-BEHAVIOR is
   rl [capture-entered-password-for-verif]:
     (msg tryVerification(PWD) from ui(N) to AI)
     < AI : Authenticator | execution-envs : {REE} | {TEE} , 
-                           enrolled-handles : ((N |-> PWDH)) , PWDHS >
+                           enrolled-handles : ((N |-> PWDH)) , PWDHS ,
+                           is-running : false >
     =>
-    < AI : Authenticator | execution-envs : {REE reqRA(authEnroll authReq(PWD , PWDH))} | {TEE} >
+    < AI : Authenticator | execution-envs : {REE reqRA(authVerif authReq(PWD , PWDH))} | {TEE} ,
+                           is-running : true >
+    (msg tryVerification(PWD) from ui(N) to AI)
+  .
+
+  rl [entered-password-verif-success]:
+    (msg tryVerification(PWD) from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE retRA(authVerif authReq(PWD , PWDH))} | {TEE} , 
+                           is-running : true >
+    =>
+    < AI : Authenticator | execution-envs : {REE} | {TEE} , is-running : false >
+    (msg verificationSuccess from AI to ui(N))
+  .
+
+  rl [entered-password-verif-fail]:
+    (msg tryVerification(PWD) from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE retRA(authVerif authReq)} | {TEE} , 
+                           is-running : true >
+    =>
+    < AI : Authenticator | execution-envs : {REE} | {TEE} , is-running : false >
+    (msg verificationFail from AI to ui(N))
   .
 endom

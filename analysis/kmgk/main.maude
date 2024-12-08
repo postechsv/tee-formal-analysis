@@ -80,7 +80,7 @@ omod SCENARIO-AUX is
 
   op initUser : Oid List{Password} List{AccessType} -> Configuration .
   eq initUser(UI, PWDL, ACCL) = 
-    < UI : User | authenticator : at , authenticated : true , waiting : false , 
+    < UI : User | authenticator : at , authenticated : false , waiting : false , 
                   passwords : PWDL , acc-types : ACCL >
   .
 endom
@@ -105,7 +105,7 @@ mod BASE-SCENARIO is
 
   op scenario : Oid Program TaInstId Program AppId -> Configuration .
   eq scenario(RAID, RAPROG, TAINSTID, TAPROG, APPID) 
-   = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) initUser(ui(1), (pwd(randomData)), (AccForEnrollment)).
+   = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) initUser(ui(1), (pwd(randomData)), (AccForVerification)).
   ---  = initDevice(RAID, RAPROG, TAINSTID, TAPROG, APPID) initUser(ui(1), (pwd(noData) pwd(noData))) .
 
 endm

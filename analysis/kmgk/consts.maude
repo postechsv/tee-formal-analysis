@@ -26,17 +26,21 @@ endv
 fmod AUTHENTICATION-ARG is
   pr PASSWORD .
 
-  sort AuthenticationArg .
+  sort AuthenticatorArg .
 
-  op tryAuthentication : Password -> AuthenticationArg [ctor] .
-  op authenticationSuccess : -> AuthenticationArg [ctor] .
-  op authenticationFail : -> AuthenticationArg [ctor] .
+  op tryVerification : Password -> AuthenticatorArg [ctor] .
+  op verificationSuccess : -> AuthenticatorArg [ctor] .
+  op verificationFail : -> AuthenticatorArg [ctor] .
+
+  op tryEnrollment : Password -> AuthenticatorArg [ctor] .
+  op enrollmentSuccess : -> AuthenticatorArg [ctor] .
+  op enrollmentFail : -> AuthenticatorArg [ctor] .
 endfm
 
 omod KMGK-MSG is
   pr AUTHENTICATION-ARG .
 
-  msg msg_from_to_ : AuthenticationArg Oid Oid -> Msg .
+  msg msg_from_to_ : AuthenticatorArg Oid Oid -> Msg .
 endom
 
 mod KMGK-CONSTANTS is

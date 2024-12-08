@@ -66,8 +66,8 @@ omod GATEKEEPER-RA-BEHAVIOR is
   vars VER UID FLAGS SALT HWBACKED : Nat .
   var SIGN : List{Data} .
 
-  rl [execute-ra]:
-    reqRA(authReq(pwd(DATA) , pwd(DATA') , pwdHandle(VER , UID , FLAGS , SALT , SIGN , HWBACKED)))
+  rl [execute-ra-for-enrollment]:
+    reqRA(authEnroll authReq(pwd(DATA) , pwd(DATA') , pwdHandle(VER , UID , FLAGS , SALT , SIGN , HWBACKED)))
     < gkRa : RichApp | proc : none, prog : P >
     => 
     < gkRa : RichApp | proc : execute(P, main, (# 1 , # DATA , # DATA' , 

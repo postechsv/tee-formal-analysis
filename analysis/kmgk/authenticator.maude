@@ -2,14 +2,20 @@ fmod AUTH-REQ is
   sort AuthReq .
 endfm
 
+view AuthReq from TRIV to AUTH-REQ is
+  sort Elt to AuthReq .
+endv
+
 omod KMKG-AUTH-REQ is
-  pr AUTH-REQ .
+  pr LIST{AuthReq} .
   pr PASSWORD .
   pr PASSWORD-HANDLE .
 
+  op authVerif : -> AuthReq [ctor] .
+  op authEnroll : -> AuthReq [ctor] .
   op authReq : Password Password PasswordHandle -> AuthReq [ctor] .
 
-  msg reqRA : AuthReq -> Msg .
+  msg reqRA : List{AuthReq} -> Msg .
 endom
 
 omod KMGK-AUTHENTICATOR is
@@ -36,12 +42,12 @@ omod KMGK-AUTHENTICATOR-BEHAVIOR is
   var PWDHS : Map{Nat,PasswordHandle} .
   vars REE TEE : Configuration .
 
-  rl [capture-entered-password]:
-    (msg tryAuthentication(PWD) from ui(N) to AI)
+  rl [capture-entered-password-for-enroll]:
+    (msg tryEnrollment(PWD) from ui(N) to AI)
     < AI : Authenticator | execution-envs : {REE} | {TEE} , 
                            enrolled-passwords : ((N |-> PWD') , PWDS) ,
                            enrolled-handles : ((N |-> PWDH)) , PWDHS >
     =>
-    < AI : Authenticator | execution-envs : {REE reqRA(authReq(PWD , PWD' , PWDH))} | {TEE} >
+    < AI : Authenticator | execution-envs : {REE reqRA(authEnroll authReq(PWD , PWD' , PWDH))} | {TEE} >
   .
 endom

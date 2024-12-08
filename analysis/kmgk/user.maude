@@ -1,8 +1,20 @@
+fmod AUTHENTICATOR-ACCESS-TYPE is
+  sort AccessType .
+
+  op AccForVerification : -> AccessType [ctor] .
+  op AccForEnrollment : -> AccessType [ctor] .
+endfm
+
+view AccessType from TRIV to AUTHENTICATOR-ACCESS-TYPE is
+  sort Elt to AccessType .
+endv
+
 omod KMGK-USER is
   pr LIST{Password} .
+  pr LIST{AccessType} .
 
-  class User | authenticator : Oid, authenticated : Bool,
-               passwords : List{Password}, checking : Bool .
+  class User | authenticator : Oid, authenticated : Bool, waiting : Bool,
+               passwords : List{Password}, acc-types : List{AccessType} .
 endom
 
 omod KMGK-USER-BEHAVIOR is
@@ -12,26 +24,57 @@ omod KMGK-USER-BEHAVIOR is
   vars UI AI : Oid .
   var PWD : Password .
   var PWDL : List{Password} .
+  var ACC : AccessType .
+  var ACCL : List{AccessType} .
 
-  rl [enter-password]:
-    < UI : User | authenticator : AI , authenticated : false , passwords : PWD PWDL , checking : false >
+  op isAccEnroll : AccessType -> Bool .
+  eq isAccEnroll(AccForEnrollment) = true .
+  eq isAccEnroll(ACC) = false [owise] .
+
+  crl [enter-password-for-verification]:
+    < UI : User | authenticator : AI , authenticated : false , waiting : false ,
+                  passwords : PWD PWDL , acc-types : ACC ACCL >
     =>
-    < UI : User | passwords : PWDL , checking : true >
-    (msg tryAuthentication(PWD) from UI to AI)
+    < UI : User | waiting : true , passwords : PWDL , acc-types : ACCL >
+    (msg tryVerification(PWD) from UI to AI)
+  if not isAccEnroll(ACC)
   .
 
-  rl [authenticated]:
-    (msg authenticationSuccess from AI to UI)
-    < UI : User | authenticator : AI , authenticated : false , checking : true >
+  rl [verification-success]:
+    (msg verificationSuccess from AI to UI)
+    < UI : User | authenticator : AI , authenticated : false , waiting : true >
     =>
-    < UI : User | authenticated : true , checking : false >
+    < UI : User | authenticated : true , waiting : false >
   .
 
-  rl [reenter-password]:
-    (msg authenticationFail from AI to UI)
-    < UI : User | authenticator : AI , authenticated : false , checking : true >
+  rl [verification-fail]:
+    (msg verificationFail from AI to UI)
+    < UI : User | authenticator : AI , authenticated : false , waiting : true >
     =>
-    < UI : User | checking : false >
+    < UI : User | waiting : false >
+  .
+
+  crl [enter-password-for-enrollment]:
+    < UI : User | authenticator : AI , authenticated : true , waiting : false ,
+                  passwords : PWD PWDL , acc-types : ACC ACCL >
+    =>
+    < UI : User | waiting : true , passwords : PWDL , acc-types : ACCL >
+    (msg tryEnrollment(PWD) from UI to AI)
+  if isAccEnroll(ACC)
+  .
+
+  rl [enrollment-success]:
+    (msg enrollmentSuccess from AI to UI)
+    < UI : User | authenticator : AI , waiting : true >
+    =>
+    < UI : User | waiting : false >
+  .
+
+  rl [enrollment-fail]:
+    (msg enrollmentFail from AI to UI)
+    < UI : User | authenticator : AI , waiting : true >
+    =>
+    < UI : User | waiting : false >
   .
 
 endom

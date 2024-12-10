@@ -1,3 +1,5 @@
+--- This module defines the user input (passwords & purpose of input).
+
 fmod USER-INPUT is
   pr LIST{Password} .
 
@@ -13,12 +15,16 @@ view UserInput from TRIV to USER-INPUT is
   sort Elt to UserInput .
 endv
 
+--- This module defines the user sending inputs to the authenticator.
+
 omod KMGK-USER is
   pr LIST{UserInput} .
 
   class User | authenticator : Oid, authenticated : Bool, waiting : Bool,
                inputs : List{UserInput} .
 endom
+
+--- This module defines the user behavior.
 
 omod KMGK-USER-BEHAVIOR is
   pr KMGK-USER .
@@ -28,6 +34,11 @@ omod KMGK-USER-BEHAVIOR is
   vars PWD PWD' : Password .
   var PWDL : List{Password} .
   var UIL : List{UserInput} .
+
+--- The following three rules define user behavior during password verification.
+--- (1) an unauthenticated user enters password for verification.
+--- (2) if verification is successful, user is authenticated.
+--- (3) if verification fails, user is ready to send new inputs.
 
   rl [enter-password-for-verification]:
     < UI : User | authenticator : AI , authenticated : false , waiting : false ,
@@ -50,6 +61,10 @@ omod KMGK-USER-BEHAVIOR is
     =>
     < UI : User | waiting : false >
   .
+
+--- The following three rules define user behavior during password enrollment.
+--- (1) an authenticated user enters a password and a new/desired password for enrollment.
+--- (2),(3) when enrollment ends, user is ready to send new inputs.
 
   rl [enter-password-for-enrollment]:
     < UI : User | authenticator : AI , authenticated : true , waiting : false ,

@@ -1,0 +1,19 @@
+======================================================
+The Structure of the KMGK Benchmark Script Directory
+======================================================
+
+
+The directory 'script/kmgk' contains files used to prepare the KMGK benchmark for formal analysis.
+There are two subdirectories in 'script/kmgk': 
+
+  - raw_files     	    : raw C codes from https://github.com/linaro-swg/kmgk.
+  - preprocessed_files  : files annotated and merges with relevant header files.
+
+Below are brief descriptions of each file in the 'preprocessed_files' subdirectory.
+
+- Preprocessed files
+
+  - keymaster_ta.c  	  : Keymaster(KM) TA program.
+  - km_custom_main.txt  : Custom main function for keymaster TA.
+  - gatekeeper_ta.c   	: Gatekeeper(GK) TA program.
+  - gk_custom_main.txt  : Custom main function for gatekeeper TA.

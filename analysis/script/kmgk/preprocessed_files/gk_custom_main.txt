@@ -1,0 +1,32 @@
+    main (cmdId, uid, phVersion, phUserId, phFlags, phSalt, phSignature, phHardwareBacked, 
+					desiredPassword, currentPassword, responseHandle, 
+					challenge, providedPassword, responseAuthToken) {
+			var ret ;
+      if (cmdId === # GK-ENROLL) {
+        struct PasswordHandleT currentPasswordHandle ;
+        currentPasswordHandle . version := phVersion ;
+        currentPasswordHandle . userId := phUserId ;
+        currentPasswordHandle . flags := phFlags ;
+        currentPasswordHandle . salt := phSalt ;
+        currentPasswordHandle . signature := phSignature ;
+        currentPasswordHandle . hardwareBacked := phHardwareBacked ;
+
+        ret := TAEnroll(uid, desiredPassword, currentPassword, currentPasswordHandle, responseHandle)
+      } else {
+        if (cmdId === # GK-VERIFY) {
+          struct PasswordHandleT enrolledPasswordHandle ;
+          enrolledPasswordHandle . version := phVersion ;
+          enrolledPasswordHandle . userId := phUserId ;
+          enrolledPasswordHandle . flags := phFlags ;
+          enrolledPasswordHandle . salt := phSalt ;
+          enrolledPasswordHandle . signature := phSignature ;
+          enrolledPasswordHandle . hardwareBacked := phHardwareBacked ;
+
+          ret := TAVerify(uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
+        } else {
+          ret := # 404
+        }
+      } ;
+
+      return ret
+    }

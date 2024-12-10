@@ -1,0 +1,139 @@
+mod GATEKEEPER-RA-PROGRAM is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr GATEKEEPER-PROGRAM-DECL .
+  pr GATEKEEPER-DATA .
+
+  op randomData : -> Data [ctor] .
+
+  op gatekeeperRA : -> Program [ctor] .
+  eq gatekeeperRA =
+    struct {
+    	var version ;
+    	var userId ;
+    	var flags ;
+    	var salt ;
+    	var signature ;
+    	var hardwareBacked
+    } PasswordHandleT ;
+
+    main(cmdId, uid, phVersion, phUserId, phFlags, phSalt, phSignature, phHardwareBacked,
+          desiredPassword, currentPassword, --- for enrollment
+          challenge, providedPassword)    --- for verification
+    {
+      var ret ; var sess ;
+      --- TeecOpenSession(# taInst(1) ; 'ret , 'sess) ;
+      sess := # sessionId(0) ;
+
+      struct PasswordHandleT ph ;
+      ph . version := phVersion ;
+      ph . userId := phUserId ;
+      ph . flags := phFlags ;
+      ph . salt := phSalt ;
+      ph . signature := phSignature ;
+      ph . hardwareBacked := phHardwareBacked ;
+
+      var responseHandle ; var responseAuthToken ;
+      responseHandle := # 404 ; responseAuthToken := # 405 ;
+      TeecInvokeCommand(sess, # main, (cmdId, uid, ph . version, ph . userId, ph . flags, ph . salt, ph . signature, ph . hardwareBacked, 
+                                       desiredPassword, currentPassword, responseHandle,
+                                       challenge, providedPassword, responseAuthToken) ; ret) ;
+
+      return ret
+    }
+  .
+endm
+
+omod GATEKEEPER-RA-BEHAVIOR is
+  pr KMGK-CONSTANTS .
+  pr GATEKEEPER-RA-PROGRAM .
+  pr KMKG-AUTH-REQ .
+
+  var RI : Oid .
+  var P : Program .
+  vars DATA DATA' : Data .
+  vars VER UID FLAGS SALT HWBACKED : Nat .
+  var SIGN : List{Data} .
+  vars PWD PWD' : Password .
+  var PWDH PWDH' : PasswordHandle .
+  var KS : KConfig .
+  vars RES VL : ValueList .
+
+  op finished : KConfig -> Bool .
+  eq finished(k(.K) KS) = true .
+  eq finished(KS) = false [owise] .
+
+  op normalFinish : ValueList -> Bool .
+  eq normalFinish((# TEE-SUCCESS , VL)) = true .
+  eq normalFinish(VL) = false [owise] .
+
+  --- TODO: Update operator to acquire ValueList from variable 'responseHandle'.
+  op createPasswordHandleFromReturns : -> PasswordHandle .
+  eq createPasswordHandleFromReturns =
+    pwdHandle(1 , 1 , 1 , 1 , macValue(randomData, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , 1) .
+
+--- The following three rules define gatekeeper RA behavior during password enrollment.
+--- [1] executes the gatekeeper RA (and in turn TA) for authentication.
+--- [2] if the gatekeeper TA authentication is successful, a handle for the new password is created.
+--- [3] if authentication fails, RA is ready to handle a new request.
+
+  rl [execute-ra-for-enrollment]:
+    reqRA(authEnroll authReq(pwd(DATA) , pwd(DATA') , pwdHandle(VER , UID , FLAGS , SALT , SIGN , HWBACKED)))
+    < gkRa : RichApp | proc : none, prog : P >
+    => 
+    < gkRa : RichApp | proc : execute(P, main, (# GK-ENROLL , # 1 , 
+                                                # VER , # UID , # FLAGS , # SALT , # SIGN , # HWBACKED , 
+                                                # DATA , # DATA' , 
+                                                # 1 , # noData)) >
+    reqRA(authEnroll authReq(pwd(DATA) , pwd(DATA') , pwdHandle(VER , UID , FLAGS , SALT , SIGN , HWBACKED)))
+  .
+
+  crl [return-result-for-enrollment]:
+    reqRA(authEnroll authReq(PWD , PWD' , PWDH'))
+    < gkRa : RichApp | proc : KS >
+    =>
+    < gkRa : RichApp | proc : none >
+    retRA(authEnroll authReq(PWD , PWDH))
+  if finished(KS) /\  RES := readReturn(main, KS) /\ normalFinish(RES) /\ PWDH := createPasswordHandleFromReturns
+  .
+
+  crl [return-result-for-enrollment]:
+    reqRA(authEnroll authReq(PWD , PWD' , PWDH'))
+    < gkRa : RichApp | proc : KS >
+    =>
+    < gkRa : RichApp | proc : none >
+    retRA(authEnroll authReq)
+  if finished(KS) /\  RES := readReturn(main, KS) /\ not normalFinish(RES)
+  .
+
+--- The following three rules define gatekeeper RA behavior during password verification.
+
+  rl [execute-ra-for-verification]:
+    reqRA(authVerif authReq(pwd(DATA) , pwdHandle(VER , UID , FLAGS , SALT , SIGN , HWBACKED)))
+    < gkRa : RichApp | proc : none , prog : P >
+    => 
+    < gkRa : RichApp | proc : execute(P, main, (# GK-VERIFY , # 1 , 
+                                                # VER , # UID , # FLAGS , # SALT , # SIGN , # HWBACKED , 
+                                                # noData , # noData ,
+                                                # 1 , # DATA)) >
+    reqRA(authVerif authReq(pwd(DATA) , pwdHandle(VER , UID , FLAGS , SALT , SIGN , HWBACKED)))
+  .
+
+  crl [return-result-for-verification]:
+    reqRA(authVerif authReq(PWD , PWDH'))
+    < gkRa : RichApp | proc : KS >
+    => 
+    < gkRa : RichApp | proc : none >
+    retRA(authVerif authReq(PWD , PWDH'))
+  if finished(KS) /\  RES := readReturn(main, KS) /\ normalFinish(RES)
+  .
+
+  crl [return-result-for-verification]:
+    reqRA(authVerif authReq(PWD , PWDH'))
+    < gkRa : RichApp | proc : KS >
+    => 
+    < gkRa : RichApp | proc : none >
+    retRA(authVerif authReq)
+  if finished(KS) /\  RES := readReturn(main, KS) /\ not normalFinish(RES)
+  .
+endom

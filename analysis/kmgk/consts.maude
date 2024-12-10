@@ -1,0 +1,171 @@
+fmod PASSWORD is  
+  pr DATA .
+  
+  sort Password .
+
+  op pwd : Data -> Password [ctor] .
+endfm
+
+view Password from TRIV to PASSWORD is
+  sort Elt to Password .
+endv
+
+fmod PASSWORD-HANDLE is
+  pr NAT .
+  pr LIST{Data} .
+
+  sort PasswordHandle .
+
+  op pwdHandle : Nat Nat Nat Nat List{Data} Nat -> PasswordHandle [ctor] .
+endfm
+
+view PasswordHandle from TRIV to PASSWORD-HANDLE is
+  sort Elt to PasswordHandle .
+endv
+
+fmod AUTHENTICATION-ARG is
+  pr PASSWORD .
+
+  sort AuthenticatorArg .
+
+  op tryVerification : Password -> AuthenticatorArg [ctor] .
+  op verificationSuccess : -> AuthenticatorArg [ctor] .
+  op verificationFail : -> AuthenticatorArg [ctor] .
+
+  op tryEnrollment : Password Password -> AuthenticatorArg [ctor] .
+  op enrollmentSuccess : -> AuthenticatorArg [ctor] .
+  op enrollmentFail : -> AuthenticatorArg [ctor] .
+endfm
+
+omod KMGK-MSG is
+  pr AUTHENTICATION-ARG .
+
+  msg msg_from_to_ : AuthenticatorArg Oid Oid -> Msg .
+endom
+
+mod KMGK-CONSTANTS is
+  pr NAT .
+  pr APP-ID .
+  pr TA-INSTANCE-ID .
+  pr DATA .
+  pr CONFIGURATION .
+
+  op at : -> Oid [ctor] .
+  op ui : Nat -> Oid [ctor] .
+  op gkRa : -> Oid [ctor] .
+  op kmRa : -> Oid [ctor] .
+  op gkTa : -> TaInstId [ctor] .
+  op kmTa : -> TaInstId [ctor] .
+  op natData : Nat -> Data [ctor] .
+
+  op GATEKEEPER : -> AppId [ctor] .
+  op KEYMASTER : -> AppId [ctor] .
+endm
+
+mod KMGK-PROGRAM-DECL is
+  pr IMP-PROGRAM .
+
+  op cmdId : -> Var [ctor] .
+
+  op sess : -> Var [ctor] .
+  op ret : -> Var [ctor] .
+
+  op uuid : -> Var [ctor] .
+  op authTokenKeyData : -> Var [ctor] .
+  op res : -> Var [ctor] .
+  op authTokenKey : -> Var [ctor] .
+  op readSize : -> Var [ctor] .
+  op key : -> Var [ctor] .
+
+  op main : -> FuncId [ctor] .
+  op TAGetAuthTokenKey : -> FuncId [ctor] .
+endm
+
+mod GATEKEEPER-PROGRAM-DECL is
+  pr KMGK-PROGRAM-DECL .
+
+  op uid : -> Var [ctor] .
+  op desiredPassword : -> Var [ctor] .
+  op currentPassword : -> Var [ctor] .
+  op phVersion : -> Var [ctor] .
+  op phUserId : -> Var [ctor] .
+  op phFlags : -> Var [ctor] .
+  op phSalt : -> Var [ctor] .
+  op phSignature : -> Var [ctor] .
+  op phHardwareBacked : -> Var [ctor] .
+  op challenge : -> Var [ctor] .
+  op providedPassword : -> Var [ctor] .
+
+  op responseHandle : -> Var [ctor] .
+  op responseAuthToken : -> Var [ctor] .
+
+  op version : -> Var [ctor] .
+  op userId : -> Var [ctor] .
+  op flags : -> Var [ctor] .
+  op salt : -> Var [ctor] .
+  op signature : -> Var [ctor] .
+  op hardwareBacked : -> Var [ctor] .
+  op PasswordHandleT : -> Var [ctor] .
+
+  op ph : -> Var [ctor] .
+  op currentPasswordHandle : -> Var [ctor] .
+  op enrolledPasswordHandle : -> Var [ctor] .
+
+  op authenticatorId : -> Var [ctor] .
+  op authenticatorType : -> Var [ctor] .
+  op timestamp : -> Var [ctor] .
+  op hmac : -> Var [ctor] .
+  op HwAuthTokenT : -> Var [ctor] .
+
+  op error : -> Var [ctor] .
+  op timeout : -> Var [ctor] .
+  op authToken : -> Var [ctor] .
+  op requestReenroll : -> Var [ctor] .
+  op passwordHandle : -> Var [ctor] .
+  op throttle : -> Var [ctor] .
+  
+  op expectedHandle : -> Var [ctor] .
+  op password : -> Var [ctor] .
+  op handleVersion : -> Var [ctor] .
+  op pwHandle : -> Var [ctor] .
+  op toSign : -> Var [ctor] .
+  op masterKey : -> Var [ctor] .
+  op secretData : -> Var [ctor] .
+  op secretObj : -> Var [ctor] .
+  op readSize : -> Var [ctor] .
+  op secretID : -> Var [ctor] .
+  op attrs : -> Var [ctor] .
+  op saltedPassword : -> Var [ctor] .
+  op message : -> Var [ctor] .
+  op buf : -> Var [ctor] .
+  op op : -> Var [ctor] .
+  op toWrite : -> Var [ctor] .
+  op token : -> Var [ctor] .
+  op params : -> Var [ctor] .
+  op returnOrigin : -> Var [ctor] .
+
+  op dummy : -> Var [ctor] .
+  op dummyRes : -> Var [ctor] .
+
+  op TAVerify : -> FuncId [ctor] .
+  op TADoVerify : -> FuncId [ctor] .
+  op TACreatePasswordHandle : -> FuncId [ctor] .
+  op TAGetMasterKey : -> FuncId [ctor] .
+  op TAComputePasswordSignature : -> FuncId [ctor] .
+  op TAComputeSignature : -> FuncId [ctor] .
+  op TAMintAuthToken : -> FuncId [ctor] .
+  op KeymasterTAPlaceHolder : -> FuncId [ctor] .
+  op TAEnroll : -> FuncId [ctor] .
+endm
+
+mod KEYMASTER-PROGRAM-DECL is
+  pr KMGK-PROGRAM-DECL .
+
+  op identity : -> Var [ctor] .
+  op login : -> Var [ctor] .
+  op TeeIdentity : -> Var [ctor] .
+  op authTokenKeyObj : -> Var [ctor] .
+
+  op TAGetClientIdentity : -> FuncId [ctor] .
+  op TAReadAuthTokenKey : -> FuncId [ctor] .
+endm

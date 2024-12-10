@@ -1,0 +1,126 @@
+fmod AUTH-REQ is
+  sort AuthReq .
+endfm
+
+view AuthReq from TRIV to AUTH-REQ is
+  sort Elt to AuthReq .
+endv
+
+--- This module defines the authenticator (gatekeeper) RA request data structure.
+
+omod KMKG-AUTH-REQ is
+  pr LIST{AuthReq} .
+  pr PASSWORD .
+  pr PASSWORD-HANDLE .
+
+  op authVerif : -> AuthReq [ctor] .
+  op authEnroll : -> AuthReq [ctor] .
+  op authReq : Password Password PasswordHandle -> AuthReq [ctor] .
+  op authReq : Password PasswordHandle -> AuthReq [ctor] .
+  op authReq : -> AuthReq [ctor] .
+
+  msg reqRA : List{AuthReq} -> Msg .
+  msg retRA : List{AuthReq} -> Msg .
+endom
+
+--- This module defines the authenticator.
+
+omod KMGK-AUTHENTICATOR is
+  pr DEVICE .
+  pr MAP{Nat,Password} .
+  pr MAP{Nat,PasswordHandle} .
+
+  class Authenticator | enrolled-passwords : Map{Nat,Password},
+                        enrolled-handles : Map{Nat,PasswordHandle},
+                        is-running : Bool .
+  subclass Authenticator < Device .
+endom
+
+--- This module defines the authenticator behavior.
+
+omod KMGK-AUTHENTICATOR-BEHAVIOR is
+  pr KMGK-AUTHENTICATOR .
+  pr KMGK-MSG .
+  pr KMKG-AUTH-REQ .
+  pr KMGK-CONSTANTS .
+
+  var N : Nat .
+  vars UI AI : Oid .
+  vars PWD PWD' : Password .
+  var PWDS : Map{Nat,Password} .
+  vars PWDH PWDH' : PasswordHandle .
+  var PWDHS : Map{Nat,PasswordHandle} .
+  vars REE TEE : Configuration .
+
+--- The following three rules define authenticator behavior during password enrollment.
+--- [1] password and a desired new password from user is captured and forwarded to RA.
+--- [2] if enrollment is successful, the enrolled passwords & handles are updated.
+--- [3] if the enrollment fails, authenticator is ready to capture a new user input.
+
+  rl [capture-entered-password-for-enroll]:
+    (msg tryEnrollment(PWD , PWD') from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE} | {TEE} , is-running : false ,
+                           enrolled-handles : ((N |-> PWDH')) , PWDHS >
+    =>
+    < AI : Authenticator | execution-envs : {REE reqRA(authEnroll authReq(PWD , PWD' , PWDH'))} | {TEE} ,
+                           is-running : true >
+    (msg tryEnrollment(PWD , PWD') from ui(N) to AI)
+  .
+
+  rl [new-password-enroll]:
+    (msg tryEnrollment(PWD , PWD') from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE retRA(authEnroll authReq(PWD , PWDH))} | {TEE} ,
+                           enrolled-passwords : ((N |-> PWD') , PWDS) ,
+                           enrolled-handles : ((N |-> PWDH')) , PWDHS ,
+                           is-running : true >
+    =>
+    < AI : Authenticator | execution-envs : {REE} | {TEE} ,
+                           enrolled-passwords : ((N |-> PWD) , PWDS) ,
+                           enrolled-handles : ((N |-> PWDH)) , PWDHS ,
+                           is-running : false >
+    (msg enrollmentSuccess from AI to ui(N))
+  .
+
+  rl [new-password-enroll-fail]:
+    (msg tryEnrollment(PWD , PWD') from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE retRA(authEnroll authReq)} | {TEE} ,
+                           is-running : true >
+    =>
+    < AI : Authenticator | execution-envs : {REE} | {TEE} ,
+                           is-running : false >
+    (msg enrollmentFail from AI to ui(N))
+  . 
+
+--- This following three rules define authenticator behavior during password verification.
+--- [1] password from user is captured and forwarded to RA.
+--- [2],[3] the result of verification is sent back to the user.
+
+  rl [capture-entered-password-for-verif]:
+    (msg tryVerification(PWD) from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE} | {TEE} , 
+                           enrolled-handles : ((N |-> PWDH)) , PWDHS ,
+                           is-running : false >
+    =>
+    < AI : Authenticator | execution-envs : {REE reqRA(authVerif authReq(PWD , PWDH))} | {TEE} ,
+                           is-running : true >
+    (msg tryVerification(PWD) from ui(N) to AI)
+  .
+
+  rl [entered-password-verif-success]:
+    (msg tryVerification(PWD) from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE retRA(authVerif authReq(PWD , PWDH))} | {TEE} , 
+                           is-running : true >
+    =>
+    < AI : Authenticator | execution-envs : {REE} | {TEE} , is-running : false >
+    (msg verificationSuccess from AI to ui(N))
+  .
+
+  rl [entered-password-verif-fail]:
+    (msg tryVerification(PWD) from ui(N) to AI)
+    < AI : Authenticator | execution-envs : {REE retRA(authVerif authReq)} | {TEE} , 
+                           is-running : true >
+    =>
+    < AI : Authenticator | execution-envs : {REE} | {TEE} , is-running : false >
+    (msg verificationFail from AI to ui(N))
+  .
+endom

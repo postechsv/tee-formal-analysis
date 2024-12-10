@@ -1,0 +1,494 @@
+fmod GATEKEEPER-DATA is
+  pr CRYPTO-KEY-SIZE .
+  pr RETURN-CODE .
+	pr FILE-ID .
+	pr DATA .
+	pr TEE-ATTRIBUTE .
+	--- pr APP-ID .
+
+  op GK-ENROLL : -> Nat [ctor] .
+  eq GK-ENROLL = 0 .
+
+  op GK-VERIFY : -> Nat [ctor] .
+  eq GK-VERIFY = 1 .
+
+  ops ERROR-NONE ERROR-INVALID ERROR-RETRY ERROR-UNKNOWN : -> Nat [ctor] .
+  eq ERROR-NONE = 0 .
+  eq ERROR-INVALID = 1 .
+  eq ERROR-RETRY = 2 .
+  eq ERROR-RETRY = 3 .
+
+  op HANDLE-VERSION : -> Nat [ctor] .
+  eq HANDLE-VERSION = 2 .
+
+  op TEE-TRUE : -> ReturnCode [ctor] .
+  eq TEE-TRUE = TEE-SUCCESS .
+
+  op TEE-FALSE : -> Nat [ctor] .
+  eq TEE-FALSE = 1 .
+
+  op HMAC-SHA256-KEY-SIZE-BIT : -> CryptoKeySize [ctor] .
+  eq HMAC-SHA256-KEY-SIZE-BIT = 256 Bits .
+
+	op secretID : -> FileId [ctor] .
+	--- op TA-KEYMASTER-UUID : -> AppId [ctor] .
+	--- eq TA-KEYMASTER-UUID = KEYMASTER .
+
+	ops HW-AUTH-TOKEN-VERSION HW-AUTH-PASSWORD : -> Nat [ctor] .
+	eq HW-AUTH-TOKEN-VERSION = 0 .
+	eq HW-AUTH-PASSWORD = 1 .
+endfm
+
+mod KMGK-TA-PROGRAM-DECL is
+	pr TEE-IMP-STRUCT-DECL .
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+
+	ops exit closeObj : -> Label [ctor] .
+endm
+
+mod GATEKEEPER-TA-PROGRAM-DECL is
+	pr KMGK-TA-PROGRAM-DECL .
+  pr GATEKEEPER-PROGRAM-DECL .
+	pr GATEKEEPER-DATA .
+
+  ops serializeResponse exit freeKey closeObj freeOp closeSess : -> Label [ctor] .
+endm
+
+mod GATEKEEPER-TA-PROGRAM is
+  pr GATEKEEPER-TA-PROGRAM-DECL .
+
+  op gatekeeperTA : -> Program [ctor] .
+
+	--- TODO: Update to include functions in failure_record.c (currently ignored)
+  eq gatekeeperTA = 
+    struct {
+    	var version ;
+    	var userId ;
+    	var flags ;
+    
+    	var salt ;
+    	var signature ;
+    
+    	var hardwareBacked
+    } PasswordHandleT ;
+    
+    struct {
+    	var version ;
+    	var challenge ;
+    	var userId ;
+    	var authenticatorId ;
+    	var authenticatorType ;
+    	var timestamp ;
+    	var hmac
+    } HwAuthTokenT ;
+
+    TAGetMasterKey (masterKey)
+    {
+    	var		res ;
+    	var		attrs ;
+    	var			secretData ;
+    	var	secretObj ;
+    	secretObj := # TEE-HANDLE-NULL ;
+    	var		readSize ;
+    	readSize := # 0 ;
+    
+    	OpenPersistentObject(# TEE-STORAGE-PRIVATE, # secretID, # TEE-DATA-FLAG-ACCESS-READ  ; res , secretObj) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	ReadObjectData(secretObj, # dataSize(1)  ; res, secretData) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto closeObj
+    	}  ;
+    
+			--- TODO: Update to allow key data to be used for attribute initialization.
+    	InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attrs) ;
+    
+    	PopulateTransientObject(masterKey, attrs  ; res) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto closeObj
+    	}  ;
+    
+      closeObj :
+    	CloseObject(secretObj  ; secretObj) ;
+      exit :
+    	return res
+    }  ;
+
+    TAComputeSignature (signature, key, message)
+    {
+    	var buf ;
+    	var op ;
+    	op := # TEE-HANDLE-NULL ;
+    	var res ;
+    	var toWrite ;
+    
+    	AllocateOperation(# TEE-ALG-HMAC-SHA256, # TEE-MODE-MAC, # HMAC-SHA256-KEY-SIZE-BIT  ; res, op) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	SetOperationKey(op, key  ; res) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto freeOp
+    	}  ;
+    
+    	MACInit(op, # noData  ;   ) ;
+    
+    	var dummyRes ;
+    	MACComputeFinal(op, message  ; dummyRes, buf) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto freeOp
+    	}  ;
+    
+    
+          signature  := buf  ;
+
+      freeOp :
+    	FreeOperation(op  ;  op) ;
+      exit :
+    	return res
+    }  ;
+
+    TAComputePasswordSignature (signature, key, password, salt)
+    {
+    	var saltedPassword ;
+        saltedPassword := password  ;
+    	return TAComputeSignature(signature, key, saltedPassword)
+    }  ;
+
+		TACreatePasswordHandle (passwordHandle, salt, userId, flags, handleVersion, password)
+    {
+    	struct PasswordHandleT pwHandle ;
+    	var toSign ;
+    
+    	var masterKey ;
+    	masterKey := # TEE-HANDLE-NULL ;
+    	var res ;
+    
+    	AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, masterKey) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	pwHandle . version := handleVersion ;
+    	pwHandle . salt := salt ;
+    	pwHandle . userId := userId ;
+    	pwHandle . flags := flags ;
+    	pwHandle . hardwareBacked := # true ;
+    
+        toSign := password  ;
+    
+    	res := TAGetMasterKey(masterKey) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto freeKey
+    	}  ;
+    
+    	res := TAComputePasswordSignature(pwHandle . signature, masterKey, toSign, salt) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto freeKey
+    	}  ;
+    
+        passwordHandle := pwHandle ;
+    
+      freeKey :
+    		FreeTransientObject(masterKey  ; masterKey) ;
+      exit :
+    		return res
+    }  ;
+
+    TADoVerify (expectedHandle, password)
+    {
+    	var res ;
+    	struct PasswordHandleT passwordHandle ;
+    
+    
+    	res := TACreatePasswordHandle(passwordHandle, expectedHandle . salt, expectedHandle . userId, expectedHandle . flags, expectedHandle . version, password) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	
+        if (passwordHandle . signature === expectedHandle . signature) {
+    		res := # TEE-TRUE
+    	} else {
+    		res := # TEE-FALSE
+    	}  ;
+    
+      exit :
+    	return res
+    }  ;
+
+		KeymasterTAPlaceHolder (authTokenKeyData)
+		{
+			authTokenKeyData := # randomAttrVal ;
+			return # TEE-SUCCESS
+		} ;
+
+    TAGetAuthTokenKey (key)
+    {
+    	var		res ;
+    
+    	var			dummy ;
+    	var			authTokenKeyData ;
+    	var		params ;
+    	var	sess ;
+    	var 		returnOrigin ;
+    	--- var		uuid ;
+    	--- uuid := # TA-KEYMASTER-UUID ;
+    	var		attrs ;
+    
+    
+    
+			--- TODO: Uncomment after Internal Client API functions are handled in spec.
+    	--- res := TeeOpenTASession(uuid, # TEE-TIMEOUT-INFINITE, params, sess, returnOrigin) ;
+    	--- if (res ! := # TEE-SUCCESS) {
+    	--- 	goto exit
+    	--- }  ;
+    
+    
+    
+    	--- res := TeeInvokeTACommand(sess, # KM-GET-AUTHTOKEN-KEY, params, returnOrigin) ;
+    	--- if (!  (res === # TEE-SUCCESS)) {
+    	--- 	goto closeSess
+    	--- }  ;
+			res := KeymasterTAPlaceHolder(authTokenKeyData) ;
+    
+    
+    	InitRefAttribute(# TEE-ATTR-SECRET-VALUE, authTokenKeyData  ; attrs) ;
+    	PopulateTransientObject(key, attrs  ; res) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto closeSess
+    	}  ;
+    
+      closeSess :
+      exit :
+    	return res
+    }  ;
+
+    TAMintAuthToken (authToken, timestamp, userId, authenticatorId, challenge) {
+    	var		res ;
+    
+    	struct HwAuthTokenT		token ;
+    	var	authTokenKey ;
+    	authTokenKey := # TEE-HANDLE-NULL ;
+    
+    	var		toSign ;
+    	toSign := token ;
+    
+    	token . version := # HW-AUTH-TOKEN-VERSION ;
+    	token . challenge := challenge ;
+    	token . userId := userId ;
+    	token . authenticatorId := authenticatorId ;
+        token . authenticatorType := # HW-AUTH-PASSWORD ;
+        token . timestamp :=  timestamp ;
+          token . hmac  := # noData  ;
+    
+    	AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, authTokenKey) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+    	res := TAGetAuthTokenKey(authTokenKey) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto freeKey
+    	}  ;
+    
+			--- TODO: Remove temp. preprocesses after spec update.
+			--- Temporary preprocess: toSign to # noData (unable to compute signature of pointer for now)
+			toSign := # noData ;
+    	res := TAComputeSignature(token . hmac, authTokenKey, toSign) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+          token . hmac  := # noData  ;
+    		goto freeKey
+    	}  ;
+    
+      freeKey :
+    	FreeTransientObject(authTokenKey  ; authTokenKey) ;
+      exit :
+          authToken  := token  ;
+    	return # true
+    }  ;
+
+    TAEnroll  (uid, desiredPassword, currentPassword, currentPasswordHandle, passwordHandle)
+    {
+    	var res ;
+    	res := # TEE-SUCCESS ;
+    
+    
+    	var error ;
+    	error := # ERROR-NONE ;
+    	var timeout ;
+    	timeout := # 0 ;
+    	struct PasswordHandleT passwordHandle ;
+    
+    
+    	var userId ;
+    	userId := # 0 ;
+    	var flags ;
+    	flags := # 0 ;
+    	var salt ;
+    
+    
+    
+        if ( # false) {
+    		GenerateRandom(nil ; userId)
+    	} else {
+    		var timestamp ;
+    		var throttle ;
+    
+    		struct PasswordHandleT pwHandle ;
+    		pwHandle := currentPasswordHandle ;
+    		if (!  (pwHandle . version <= # HANDLE-VERSION)) {
+    			error := # ERROR-INVALID ;
+    			goto serializeResponse
+    		}  ;
+    
+    		userId := pwHandle . userId ;
+    
+    
+    		res := TADoVerify(pwHandle, currentPassword) ;
+    		if (res === # TEE-TRUE) {
+    			skip
+    		} else {
+    			if (res === # TEE-FALSE) {
+        			error := # ERROR-INVALID ;
+    				goto serializeResponse
+    			} else {
+    				goto exit
+    			} 
+    		} 
+    	}  ;
+    
+    
+    	GenerateRandom(nil  ; salt) ;
+    	res := TACreatePasswordHandle(passwordHandle, salt, userId, flags, # HANDLE-VERSION, desiredPassword) ;
+    	if (!  (res === # TEE-SUCCESS)) {
+    		goto exit
+    	}  ;
+    
+      serializeResponse :
+    	if (error === # ERROR-INVALID || error === # ERROR-UNKNOWN) {
+    		skip
+    	} else {
+    		if (error === # ERROR-NONE) {
+        		skip
+    		} else {
+    			res := # TEE-ERROR-GENERIC
+    		} 
+    	}  ;
+    
+      exit :
+    	return res
+    }  ;
+
+    TAVerify (uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
+    {
+    	var res ;
+    	res := # TEE-SUCCESS ;
+    
+    
+    	var error ;
+    	error := # ERROR-NONE ;
+    	var timeout ;
+    	timeout := # 0 ;
+    	struct HwAuthTokenT authToken ;
+    	var requestReenroll ;
+    	requestReenroll := # false ;
+    
+    
+    
+    	struct PasswordHandleT passwordHandle ;
+    	var userId ;
+    	var authenticatorId ;
+    	authenticatorId := # 0 ;
+    
+    	var timestamp ;
+    	timestamp := # 0 ;
+    	var throttle ;
+    
+    
+    
+    	passwordHandle := enrolledPasswordHandle ;
+    
+    	if (!  (passwordHandle . version <= # HANDLE-VERSION)) {
+    		error := # ERROR-INVALID ;
+    		goto serializeResponse
+    	}  ;
+    
+    	userId := passwordHandle . userId ;
+    
+    
+    	res := TADoVerify(passwordHandle, providedPassword) ;
+    	if (res === # TEE-TRUE) {
+    		var dummy ;
+    		dummy := TAMintAuthToken(authToken, timestamp, userId, authenticatorId, challenge) ;
+    		goto serializeResponse
+    	} else {
+    		if (res === # TEE-FALSE) {
+    			if (!  (timeout <= # 0)) {
+    				error := # ERROR-RETRY
+    			} else {
+    				error := # ERROR-INVALID
+    			}  ;
+    			goto serializeResponse
+    		} else {
+    			goto exit
+    		} 
+    	}  ;
+    
+      serializeResponse :
+    	if (error === # ERROR-INVALID || error === # ERROR-UNKNOWN) {
+    		skip
+    	} else {
+    		if (error === # ERROR-RETRY) {
+        skip
+    		} else {
+    			if (error === # ERROR-NONE) {
+        skip
+    			} else { 
+    				res := # TEE-ERROR-GENERIC
+    			} 
+    		} 
+    	}  ;
+    
+      exit :
+    	return res
+    }  ;
+
+    main (cmdId, uid, phVersion, phUserId, phFlags, phSalt, phSignature, phHardwareBacked, 
+					desiredPassword, currentPassword, responseHandle, 
+					challenge, providedPassword, responseAuthToken) {
+			var ret ;
+      if (cmdId === # GK-ENROLL) {
+        struct PasswordHandleT currentPasswordHandle ;
+        currentPasswordHandle . version := phVersion ;
+        currentPasswordHandle . userId := phUserId ;
+        currentPasswordHandle . flags := phFlags ;
+        currentPasswordHandle . salt := phSalt ;
+        currentPasswordHandle . signature := phSignature ;
+        currentPasswordHandle . hardwareBacked := phHardwareBacked ;
+
+        ret := TAEnroll(uid, desiredPassword, currentPassword, currentPasswordHandle, responseHandle)
+      } else {
+        if (cmdId === # GK-VERIFY) {
+          struct PasswordHandleT enrolledPasswordHandle ;
+          enrolledPasswordHandle . version := phVersion ;
+          enrolledPasswordHandle . userId := phUserId ;
+          enrolledPasswordHandle . flags := phFlags ;
+          enrolledPasswordHandle . salt := phSalt ;
+          enrolledPasswordHandle . signature := phSignature ;
+          enrolledPasswordHandle . hardwareBacked := phHardwareBacked ;
+
+          ret := TAVerify(uid, challenge, enrolledPasswordHandle, providedPassword, responseAuthToken)
+        } else {
+          ret := # 404
+        }
+      } ;
+
+      return ret
+    }
+  .
+endm

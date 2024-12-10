@@ -1,0 +1,27 @@
+======================================================
+The Structure of the KMGK Benchmark Directory
+======================================================
+
+
+The directory 'analysis/kmgk' contains the files used to formally analyze the KMGK benchmark.
+Below are brief descriptions of each file & subdirectory.
+
+- Formal model of KMGK
+
+  - keymaster-ra.maude 	  : Keymaster(KM) RA program.
+  - keymaster-ta.maude 	  : Keymaster(KM) TA program.
+  - gatekeeper-ra.maude 	: Gatekeeper(GK) RA program.
+  - gatekeeper-ta.maude 	: Gatekeeper(GK) MQT-TZ TA programs.
+  - authenticator.maude   : Authenticator object and its behavior.
+  - user.maude    	      : User object and its behaviors.
+  - consts.maude    	    : Data structures for KMGK.
+
+- KMGK scenarios
+
+  - aux.maude   	: Functions used to initialize scenarios.
+  - base.maude  	: Our base KMGK scenario (description in file).
+
+- Test cases (files in 'tests')
+
+  - main.maude    	            : Functions used to check test cases.
+  - test-[API category].maude  	: Test cases for TEE API functions used in KMGK TA programs.

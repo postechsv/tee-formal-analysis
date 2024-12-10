@@ -1,0 +1,19 @@
+mod TEST-GENERIC is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr GATEKEEPER-PROGRAM-DECL .
+  pr GATEKEEPER-DATA .
+  pr TEST-TRANSIENT .
+
+  op testGenericTA : -> Program [ctor] .
+
+  eq testGenericTA = 
+    main () {
+      --- Location: TA_GetMasterKey
+      var res ; var secretObj ;
+      OpenPersistentObject(# TEE-STORAGE-PRIVATE, # secretID, # TEE-DATA-FLAG-ACCESS-READ  ; res , secretObj) ;
+      CloseObject(secretObj  ; secretObj) ;
+      return res
+    }
+  .
+endm

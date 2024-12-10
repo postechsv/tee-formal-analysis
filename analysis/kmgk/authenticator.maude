@@ -53,9 +53,9 @@ omod KMGK-AUTHENTICATOR-BEHAVIOR is
   vars REE TEE : Configuration .
 
 --- The following three rules define authenticator behavior during password enrollment.
---- (1) password and a desired new password from user is captured and forwarded to RA.
---- (2) if enrollment is successful, the enrolled passwords & handles are updated.
---- (3) if the enrollment fails, authenticator is ready to capture a new user input.
+--- [1] password and a desired new password from user is captured and forwarded to RA.
+--- [2] if enrollment is successful, the enrolled passwords & handles are updated.
+--- [3] if the enrollment fails, authenticator is ready to capture a new user input.
 
   rl [capture-entered-password-for-enroll]:
     (msg tryEnrollment(PWD , PWD') from ui(N) to AI)
@@ -92,8 +92,8 @@ omod KMGK-AUTHENTICATOR-BEHAVIOR is
   . 
 
 --- This following three rules define authenticator behavior during password verification.
---- (1) password from user is captured and forwarded to RA.
---- (2),(3) the result of verification is sent back to the user.
+--- [1] password from user is captured and forwarded to RA.
+--- [2],[3] the result of verification is sent back to the user.
 
   rl [capture-entered-password-for-verif]:
     (msg tryVerification(PWD) from ui(N) to AI)

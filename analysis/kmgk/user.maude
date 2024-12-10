@@ -36,12 +36,12 @@ omod KMGK-USER-BEHAVIOR is
   var UIL : List{UserInput} .
 
 --- The following three rules define user behavior during password verification.
---- (1) an unauthenticated user enters password for verification.
---- (2) if verification is successful, user is authenticated.
---- (3) if verification fails, user is ready to send new inputs.
+--- [1] a user enters password for verification.
+--- [2] if verification is successful, user is authenticated.
+--- [3] if verification fails, user is ready to send new inputs.
 
   rl [enter-password-for-verification]:
-    < UI : User | authenticator : AI , authenticated : false , waiting : false ,
+    < UI : User | authenticator : AI , waiting : false ,
                   inputs : userInput(ForVerification , PWD PWDL) UIL >
     =>
     < UI : User | waiting : true , inputs : UIL >
@@ -50,24 +50,24 @@ omod KMGK-USER-BEHAVIOR is
 
   rl [verification-success]:
     (msg verificationSuccess from AI to UI)
-    < UI : User | authenticator : AI , authenticated : false , waiting : true >
+    < UI : User | authenticator : AI , waiting : true >
     =>
     < UI : User | authenticated : true , waiting : false >
   .
 
   rl [verification-fail]:
     (msg verificationFail from AI to UI)
-    < UI : User | authenticator : AI , authenticated : false , waiting : true >
+    < UI : User | authenticator : AI , waiting : true >
     =>
     < UI : User | waiting : false >
   .
 
 --- The following three rules define user behavior during password enrollment.
---- (1) an authenticated user enters a password and a new/desired password for enrollment.
---- (2),(3) when enrollment ends, user is ready to send new inputs.
+--- [1] a user enters a password and a new/desired password for enrollment.
+--- [2],[3] when enrollment ends, user is ready to send new inputs.
 
   rl [enter-password-for-enrollment]:
-    < UI : User | authenticator : AI , authenticated : true , waiting : false ,
+    < UI : User | authenticator : AI , waiting : false ,
                   inputs : userInput(ForEnrollment , PWD PWD' PWDL) UIL >
     =>
     < UI : User | waiting : true , inputs : UIL >

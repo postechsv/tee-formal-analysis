@@ -73,9 +73,9 @@ omod GATEKEEPER-RA-BEHAVIOR is
     pwdHandle(1 , 1 , 1 , 1 , macValue(randomData, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , 1) .
 
 --- The following three rules define gatekeeper RA behavior during password enrollment.
---- (1) executes the gatekeeper RA (and in turn TA) for authentication.
---- (2) if the gatekeeper TA authentication is successful, a handle for the new password is created.
---- (3) if authentication fails, RA is ready to handle a new request.
+--- [1] executes the gatekeeper RA (and in turn TA) for authentication.
+--- [2] if the gatekeeper TA authentication is successful, a handle for the new password is created.
+--- [3] if authentication fails, RA is ready to handle a new request.
 
   rl [execute-ra-for-enrollment]:
     reqRA(authEnroll authReq(pwd(DATA) , pwd(DATA') , pwdHandle(VER , UID , FLAGS , SALT , SIGN , HWBACKED)))

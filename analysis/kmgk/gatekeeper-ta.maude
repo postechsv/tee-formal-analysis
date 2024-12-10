@@ -60,6 +60,7 @@ mod GATEKEEPER-TA-PROGRAM is
 
   op gatekeeperTA : -> Program [ctor] .
 
+	--- TODO: Update to include functions in failure_record.c (currently ignored)
   eq gatekeeperTA = 
     struct {
     	var version ;

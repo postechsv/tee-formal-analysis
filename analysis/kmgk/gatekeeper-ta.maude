@@ -102,6 +102,7 @@ mod GATEKEEPER-TA-PROGRAM is
     		goto closeObj
     	}  ;
     
+			--- TODO: Update to allow key data to be used for attribute initialization.
     	InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attrs) ;
     
     	PopulateTransientObject(masterKey, attrs  ; res) ;

@@ -64,6 +64,7 @@ omod SCENARIO-AUX is
   eq initTas(TAINFO TAINFOL) = initTa(TAINFO) initTas(TAINFOL) .
   eq initTas(nil) = none .
 
+  --- TODO: Update key data (currently, transient object storing key data in TA initiailized with randomAttrVal)
   ops masterKeyObj masterKeyObjStream : -> TaObjectId [ctor] .
   op masterKey : -> Configuration .
   eq masterKey = 

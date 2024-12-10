@@ -10,6 +10,7 @@ mod BASE-SCENARIO is
   var APPID : AppId .
   var TAINFOL : List{TaInfo} .
 
+  --- TODO: Require more research on appropriate values for the enrolled password handles.
   op initDevice : Oid Program List{TaInfo} -> Configuration .
   eq initDevice(RAID, RAPROG, TAINFOL) = 
   < at : Authenticator | execution-envs : {initRa(RAID , RAPROG)} | 
@@ -19,6 +20,8 @@ mod BASE-SCENARIO is
                          is-running : false > 
   .
 
+--- Scenario descrption: 
+--- A single user first enter the correct password to be verified and then, enters a new password to enroll.
   op scenario : Oid Program List{TaInfo} -> Configuration .
   eq scenario(RAID, RAPROG, TAINFOL) 
    = initDevice(RAID, RAPROG, TAINFOL) 

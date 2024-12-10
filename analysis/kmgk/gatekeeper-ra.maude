@@ -67,6 +67,7 @@ omod GATEKEEPER-RA-BEHAVIOR is
   eq normalFinish((# TEE-SUCCESS , VL)) = true .
   eq normalFinish(VL) = false [owise] .
 
+  --- TODO: Update operator to acquire ValueList from variable 'responseHandle'.
   op createPasswordHandleFromReturns : -> PasswordHandle .
   eq createPasswordHandleFromReturns =
     pwdHandle(1 , 1 , 1 , 1 , macValue(randomData, TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , 1) .

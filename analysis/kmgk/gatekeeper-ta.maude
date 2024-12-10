@@ -240,7 +240,7 @@ mod GATEKEEPER-TA-PROGRAM is
     
     
     
-    
+			--- TODO: Uncomment after Internal Client API functions are handled in spec.
     	--- res := TeeOpenTASession(uuid, # TEE-TIMEOUT-INFINITE, params, sess, returnOrigin) ;
     	--- if (res ! := # TEE-SUCCESS) {
     	--- 	goto exit
@@ -294,6 +294,7 @@ mod GATEKEEPER-TA-PROGRAM is
     		goto freeKey
     	}  ;
     
+			--- TODO: Remove temp. preprocesses after spec update.
 			--- Temporary preprocess: toSign to # noData (unable to compute signature of pointer for now)
 			toSign := # noData ;
     	res := TAComputeSignature(token . hmac, authTokenKey, toSign) ;

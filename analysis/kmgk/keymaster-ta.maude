@@ -35,6 +35,7 @@ mod KEYMASTER-TA-PROGRAM is
     	var res ;
     	res := # TEE-SUCCESS ;
     
+			--- TODO: Uncomment after Property Access Functions are handled in spec.
     	--- res := GetPropertyAsIdentity(# TEE-PROPSET-CURRENT-CLIENT, "gpd . client . identity", identity) ;
     
     	--- if (!  (res === # TEE-SUCCESS)) {

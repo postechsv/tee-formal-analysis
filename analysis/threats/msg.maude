@@ -14,12 +14,16 @@ view Log from TRIV to LOG is
   sort Elt to Log .
 endv
 
+--- This module defines the intruder.
+
 omod INTRUDER is
   pr SET{Log} .
   pr SET{AttackTarget} .
 
   class Intruder | subs-list : Set{AttackTarget} .
 endom
+
+--- This module defines the message modification threat.
 
 omod MSG-THREAT is
   pr INTRUDER .
@@ -43,13 +47,18 @@ omod MSG-THREAT is
   op _::>_ : Oid Oid -> AttackTarget [ctor] .
   op _@_ : Msg Oid -> Log [ctor] .
 
+--- Intruder does not need to record already learned subscription.
+  op learnBefore : Oid Oid Set{AttackTarget} -> Bool .
+  eq learnBefore(PUB, SUB, (PUB ::> SUB, SUBSC)) = true .
+  eq learnBefore(PUB, SUB, SUBSC) = false [owise] .
+
+--- Unused
   op exploitedBefore : Oid Oid Set{Log} -> Bool .
   eq exploitedBefore(PUB, SUB, (msg mqttz[MQTTZ-ARGS] from PUB to BI @ SUB, HISTORY)) = true .
   eq exploitedBefore(PUB, SUB, HISTORY) = false [owise] . 
 
-  op learnBefore : Oid Oid Set{AttackTarget} -> Bool .
-  eq learnBefore(PUB, SUB, (PUB ::> SUB, SUBSC)) = true .
-  eq learnBefore(PUB, SUB, SUBSC) = false [owise] .
+--- This rule defines how the intruder learns the subscription list of a target broker
+--- from the messages in the broker's REE and records it.
 
   crl [learn-attack-targets] :
     < BI : Broker | infra : {REE reqRA(reEncReq(DATA, PUB, SUB, MSG, N))} | {TEE} > 
@@ -57,6 +66,9 @@ omod MSG-THREAT is
     => 
     < BI : Broker | > < INT : Intruder | subs-list : PUB ::> SUB , SUBSC > 
   if not learnBefore(PUB, SUB, SUBSC) .
+
+--- This rule defines how the intruder uses the learned subscription list
+--- to modify any incoming messages of the broker by replacing the sender with any one of its subscribers.
 
   rl [message-modification-threat] :
     < PUB : Publisher | out-buffer : [msg mqttz[MQTTZ-ARGS] from PUB to BI] OUT-BUFFER >

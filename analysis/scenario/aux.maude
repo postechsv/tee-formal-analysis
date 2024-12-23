@@ -1,3 +1,5 @@
+--- This module defines the initialization functions used to construct MQT-TZ scenarios.
+
 omod SCENARIO-AUX is
   pr MQTTZ .
   pr ID-GEN .
@@ -13,10 +15,6 @@ omod SCENARIO-AUX is
   var TOPIC : Topic .
   var P : Program .
   var BI : Oid .
-
-------------------------------------------------------------
---- Initialization Functions
-------------------------------------------------------------
 
   ops keyObj streamId : Oid -> TaObjectId [ctor] . 
 
@@ -71,6 +69,7 @@ omod SCENARIO-AUX is
 
 endom
 
+--- This module defines the topics the broker manages and subscribers subscribe to.
 
 mod SCENARIO-TOPICS is
   pr TOPIC .

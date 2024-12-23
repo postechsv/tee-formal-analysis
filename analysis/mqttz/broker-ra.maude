@@ -1,3 +1,5 @@
+--- This file defines the MQT-TZ RA program and its behaviors.
+
 mod MQTTZ-RA-PROGRAM is
   pr TEE-BEHAVIOR .
   pr TEE-IMP-BEHAVIOR .
@@ -10,6 +12,8 @@ mod MQTTZ-RA-PROGRAM is
   op anyMode : -> OperationMode [ctor] .
   op anyKeySize : -> CryptoKeySize [ctor] .
   op anyData : -> Data [ctor] .
+
+  --- The original MQT-TZ RA program.
 
   op mqttzHost : -> Program [ctor] .
   eq mqttzHost =
@@ -45,6 +49,8 @@ mod MQTTZ-RA-PROGRAM is
       return destCliData
     }
   .
+
+  --- The MQT-TZ program with a code-level patch.
 
   op mqttzHostPatched : -> Program [ctor] .
   eq mqttzHostPatched =
@@ -84,6 +90,8 @@ mod MQTTZ-RA-PROGRAM is
     }
   .
 endm
+
+--- This module defines the behaviors of the MQT-TZ RA.
 
 omod MQTTZ-RA-BEHAVIOR is
   --- pr MQTTZ-BROKER .
@@ -167,9 +175,23 @@ omod MQTTZ-RA-BEHAVIOR is
   ---   waitReqRA(msg DATA from PUB to TOPIC , SUB)
   --- .
 
+------------------------------------------------------------
+--- Auxilary Functions
+------------------------------------------------------------
+
   op finished : KConfig -> Bool .
   eq finished(k(.K) KS) = true .
   eq finished(KS) = false [owise] .
+
+  op extractData : ValueList -> List{Data} .
+  eq extractData((# DATA , V1 , V2 , V3)) = DATA .
+  eq extractData(VL) = anyData [owise] .
+
+  op normalFinish : ValueList -> Bool .
+  eq normalFinish((# DATA , V1 , V2 , V3)) = true .
+  eq normalFinish((V , V1 , V2 , V3)) = false [owise] .
+
+--- The following three rules define how the MQT-TZ RA program is executed and its results are returned.
 
   rl [accept-re-enc-req]:
     < RI : RichApp | proc : none, prog : P > reqRA(reEncReq(DATA, PUB, SUB, MSG, N))
@@ -187,14 +209,6 @@ omod MQTTZ-RA-BEHAVIOR is
     => 
     < RI : RichApp | proc : none > ignoreRA(reEncReq(DATA, PUB, SUB, MSG, N))
   if finished(KS) /\ RES := readReturn(main, KS) /\ not normalFinish(RES) .
-
-  op extractData : ValueList -> List{Data} .
-  eq extractData((# DATA , V1 , V2 , V3)) = DATA .
-  eq extractData(VL) = anyData [owise] .
-
-  op normalFinish : ValueList -> Bool .
-  eq normalFinish((# DATA , V1 , V2 , V3)) = true .
-  eq normalFinish((V , V1 , V2 , V3)) = false [owise] .
 
   --- rl [return-ra-request] :
   ---   waitReqRA(msg DATA from PUB to TOPIC , SUB)

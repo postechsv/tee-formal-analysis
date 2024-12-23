@@ -93,6 +93,8 @@ omod MQTTZ-MSG-BASE is
   op reqArg : Nat -> ReqArg [ctor] .
 endom
 
+--- This module defines the auxiliary operators to handle messages to and from the broker.
+
 omod MQTTZ-MSG-AUX is 
   pr MQTTZ-MSG-BASE .
 
@@ -168,7 +170,7 @@ mod MQTTZ-CONSTANTS is
 endm
 
 ------------------------------------------------------------
---- MQT-TZ Program Variables
+--- MQT-TZ Program Variables & Function Ids
 ------------------------------------------------------------
 
 mod MQTTZ-PROGRAM-DECL is 

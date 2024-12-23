@@ -1,3 +1,5 @@
+--- This module defines the basic behaviors for the broker.
+
 omod MQTTZ-BROKER-BEHAVIOR is
   pr BROKER .
   pr SUBSCRIBER .
@@ -31,11 +33,18 @@ omod MQTTZ-BROKER-BEHAVIOR is
   op mkMqttzMsg : Data Oid Nat Oid Oid -> Msg .
   eq mkMqttzMsg(DATA, PUB, N, BI, SUB) = msg mqttz[reqArg(DATA) reqArg(PUB) reqArg(N)] from BI to SUB .
 
+--- This rule defines how messages from publishers are captured and stored by the broker.
+
   rl [broker-capture-message]:
     < BI : Broker | in-buffer : IN-BUFFER > (msg mqttz[MQTTZ-ARGS] from PUB to BI)
     => 
     < BI : Broker | in-buffer : IN-BUFFER [(msg mqttz[MQTTZ-ARGS] from PUB to BI)] > 
     (msg mqttzReceived[] from BI to PUB) .
+
+--- The following three rules define the broker's re-encryption process.
+--- [1] stored messages encrypted with publisher's key are prepped for re-encryption.
+--- [2] starts the re-encryption process by running the MTQ-TZ RA program.
+--- [3] receives re-encrypted message with subscriber's key from the MQT-TZ TA.
 
   crl [make-re-enc-reqs]:
     < BI : Broker | in-buffer : [MSG] IN-BUFFER, re-enc-queue : nil, subscriptions : SUBSC, 
@@ -56,6 +65,8 @@ omod MQTTZ-BROKER-BEHAVIOR is
     => 
     < BI : Broker | out-buffer : OUT-BUFFER [OUT-MSG], infra : {REE} | {TEE}, is-running : false >
   if MSG-INDEX := getMsgIndex(MSG) /\ OUT-MSG := mkMqttzMsg(DATA, PUB, MSG-INDEX, BI, SUB) .
+
+--- This rule defines how re-encrypted messages are forwarded to the subscribers.
 
   crl [broker-send-message]:
     < BI : Broker | out-buffer : [MSG] OUT-BUFFER, is-running : false > < SUB : Subscriber | in-buffer : IN-BUFFER >

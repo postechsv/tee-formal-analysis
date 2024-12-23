@@ -1,5 +1,7 @@
 load model-checker
 
+--- This module defines the propositions used to construct LTL properties.
+
 omod PROPOSITION is
   pr SATISFACTION .
   pr MQTTZ-MSG .

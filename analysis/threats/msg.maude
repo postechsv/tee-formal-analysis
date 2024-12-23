@@ -14,6 +14,7 @@ view Log from TRIV to LOG is
   sort Elt to Log .
 endv
 
+--- TODO: seperate intruder definition with message modification threat to better support additional threats in the future.
 --- This module defines the intruder.
 
 omod INTRUDER is
@@ -77,6 +78,7 @@ omod MSG-THREAT is
     < INT : Intruder | > 
     < PUB : Publisher | out-buffer : [msg mqttz[MQTTZ-ARGS] from SUB to BI] OUT-BUFFER > .
 
+--- TODO: seperate behavior definition with initialization functions.
   op int : -> Oid [ctor] .
   op initInt : -> Configuration .
   eq initInt = < int : Intruder | subs-list : empty > .

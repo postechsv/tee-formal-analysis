@@ -19,7 +19,7 @@ This artifact consists of the following files and directories:
 - INSTALL         : an instruction file for installation instructions,
 - LICENSE         : the license of the artifact,
 - REQUIREMENTS    : hardware and software requirements for the artifact,
-- formal-model  	: the source codes of our TEE API formal model,
+- spec          	: the source codes of our TEE API formal model,
 - analysis      	: the source codes for formal analysis of the MQT-TZ benchmark,
 - paper-logs      : the raw log files for the experiments shown in the paper,
 - scripts         : the scripts to reproduce the experiments of our paper,
@@ -56,11 +56,11 @@ To install our artifact, follow the below instruction steps:
 
 1. Run 'make' at the top directory:
 
-  - ~/tee-formal-spec$ make
+  - ~/tee-formal-analysis$ make
   
 2. Use the following command to run smoke tests for our installation:
   
-  - ~/tee-formal-spec$ make test
+  - ~/tee-formal-analysis$ make test
 
   This command requires sudo permission.
 
@@ -90,18 +90,18 @@ To reproduce the experiments of our paper (Table 2 and 3), follow the instructio
 
 1. Go to the 'scripts' directory.
 
-   ~/tee-formal-spec$ cd ./scripts
+   ~/tee-formal-analysis$ cd ./scripts
 
 2. Use the 'run-exp' script to reproduce each experiment (in parallel).
    For example, to reproduce the Table 2 of our paper, use the following command:
 
-   ~/tee-formal-spec/scripts$ ./run-exp table2             	  # Reproducing Table 2 of our paper, in parallel.
+   ~/tee-formal-analysis/scripts$ ./run-exp table2             	  # Reproducing Table 2 of our paper, in parallel.
 
    The script can also reproduce experiments in non-parallel. 
    To run the script in non-parallel, set the option '-non-parallel'.
    For example, to reproduce the Table 3 of our paper in non-parallel, use the following command:
 
-   ~/tee-formal-spec/scripts$ ./run-exp table3 -non-parallel   # Reproducing Table 3 of our paper, in non-parallel.
+   ~/tee-formal-analysis/scripts$ ./run-exp table3 -non-parallel   # Reproducing Table 3 of our paper, in non-parallel.
 
 The above commands create two directories: (1) 'table2' and (2) 'table3', where each directory contains raw log files 
 in the 'logs' directory and Maude files, used for each experiment, in the 'maude-files' directory. 
@@ -113,14 +113,14 @@ Remark: We conducted the reproduction on an Intel Mac (dual-core Intel Core i5 a
 3. Use the 'gen-report' script to create a spread sheet report file from the log files.
    For example, to create a report file for the 'table2' directory, use the following command:
 
-   ~/tee-formal-spec/scripts$ ./gen-report ./table2
+   ~/tee-formal-analysis/scripts$ ./gen-report ./table2
 
 The above command creates a 'table2-report.csv' file, which contains the data for the Table 2 of our paper.
 
 4. Then, use the 'gen-table' script to create a html table from the report file.
    For example, to create a html table for the 'table2-report.csv', use the following command:
 
-   ~/tee-formal-spec/scripts$ ./gen-table ./table2-report.csv
+   ~/tee-formal-analysis/scripts$ ./gen-table ./table2-report.csv
 
 The above command creates a 'table2.html' file, which is the same table of our paper.
 
@@ -145,9 +145,9 @@ The script takes three arguments:
 
 To run specific scenario, use the 'run' script. For example, we can use the following commands: 
 
-   ~/tee-formal-spec/scripts$ ./run p1 msg
-   ~/tee-formal-spec/scripts$ ./run p1 oom -patch
-   ~/tee-formal-spec/scripts$ ./run p2 non
+   ~/tee-formal-analysis/scripts$ ./run p1 msg
+   ~/tee-formal-analysis/scripts$ ./run p1 oom -patch
+   ~/tee-formal-analysis/scripts$ ./run p2 non
 
 to run the following scenarios, respectively:
 

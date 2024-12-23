@@ -44,6 +44,8 @@ omod SCENARIO-AUX is
                                    trust-app-id : REENCRYPT ,
                                    task : noTask , task-counter : 0, state-changed : false > .
 
+--- Clients (publishers and subscribers) share symmetric keys with brokers.
+
   op shareKeys : List{SubId} -> Configuration .
   eq shareKeys({ID} IL) = sharedKey(ID) shareKeys(IL) .
   eq shareKeys(nil) = none .

@@ -1,5 +1,7 @@
 load propositions
 
+--- This module defines various MQT-TZ requirements as LTL properties.
+
 mod LTL-PROPERTIES is
   pr PROPOSITION .
   pr MODEL-CHECKER .

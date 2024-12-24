@@ -8,6 +8,11 @@ mod BASE-SCENARIO is
   var THREAT : Configuration .
   var BI : Oid .
 
+--- Two subscribers (sub1, sub2), two publishers (pub1, pub2) participate.
+--- One broker with two topics (topic1, topic2) participate.
+--- sub1 subscribes to a single topic, while sub2 subscribes to all topcis.
+--- pub1 sends a single message, while pub2 sends two.
+
   op clients : -> List{SubId} .
   eq clients = {pub(1)} {pub(2)} {sub(1)} {sub(2)} .
 

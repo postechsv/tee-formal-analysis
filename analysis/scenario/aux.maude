@@ -1,3 +1,5 @@
+--- This module defines the initialization functions used to construct MQT-TZ scenarios.
+
 omod SCENARIO-AUX is
   pr MQTTZ .
   pr ID-GEN .
@@ -13,10 +15,6 @@ omod SCENARIO-AUX is
   var TOPIC : Topic .
   var P : Program .
   var BI : Oid .
-
-------------------------------------------------------------
---- Initialization Functions
-------------------------------------------------------------
 
   ops keyObj streamId : Oid -> TaObjectId [ctor] . 
 
@@ -44,6 +42,8 @@ omod SCENARIO-AUX is
                                    trust-app-id : REENCRYPT ,
                                    task : noTask , task-counter : 0, state-changed : false > .
 
+--- Clients (publishers and subscribers) share symmetric keys with brokers.
+
   op shareKeys : List{SubId} -> Configuration .
   eq shareKeys({ID} IL) = sharedKey(ID) shareKeys(IL) .
   eq shareKeys(nil) = none .
@@ -69,6 +69,7 @@ omod SCENARIO-AUX is
 
 endom
 
+--- This module defines the topics the broker manages and subscribers subscribe to.
 
 mod SCENARIO-TOPICS is
   pr TOPIC .

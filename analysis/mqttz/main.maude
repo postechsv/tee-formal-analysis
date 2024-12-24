@@ -6,6 +6,8 @@ load broker
 load broker-ta
 load broker-ra
 
+--- This module includes all defined behaviors of MQT-TZ entities and MQT-TZ RA and TA.
+
 mod MQTTZ is
   pr MQTTZ-BROKER-BEHAVIOR .
   pr MQTTZ-RA-PROGRAM .

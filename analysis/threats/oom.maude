@@ -1,3 +1,5 @@
+--- This module defines the out-of-memory threat.
+
 omod OOM-THREAT is
   pr BASE-SCENARIO .
 

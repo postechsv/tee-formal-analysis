@@ -1,5 +1,7 @@
 load model-checker
 
+--- This module defines the propositions used to construct LTL properties.
+
 omod PROPOSITION is
   pr SATISFACTION .
   pr MQTTZ-MSG .
@@ -57,57 +59,69 @@ omod PROPOSITION is
 
   subsort Configuration < State .
 
+--- True if TA has panicked.
   op panic.TA : -> Prop .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | app-status : panic > TEE} > CF |= panic.TA = true .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= panic.TA = false [owise] .
 
+--- True if TA is out of memory.
   op memErr.TA : -> Prop .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | app-status : outOfMemory > TEE} > CF |= memErr.TA = true .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= memErr.TA = false [owise] .
 
+--- True if TA is executing a program.
   op running.TA : -> Prop .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | running : true > TEE} > CF |= running.TA = true .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= running.TA = false [owise] .
 
+--- True if publisher 'I' will send the 'K'th message.
   op send.P : Nat Nat -> Prop .
   ceq < pub(I) : Publisher | out-buffer : BUFFER-HEAD [MSG] BUFFER-TAIL > CF |= send.P(I,K) = true
    if pub(I) == getSender(MSG) /\ K == getMsgIndex(MSG) .
   eq < pub(I) : Publisher | > CF |= send.P(I,K) = false [owise] .
 
+--- True if subscriber 'J' has received the 'K'th message from publisher 'I'.
   op recv.S : Nat Nat Oid -> Prop .
   ceq < sub(J) : Subscriber | in-buffer : BUFFER-HEAD [MSG] BUFFER-TAIL > CF |= recv.S(J,K,pub(I)) = true
    if sub(J) == getReceiver(MSG) /\ K == getMsgIndex(MSG) /\ pub(I) == getPublisher(MSG) .
   eq < sub(J) : Subscriber | > CF |= recv.S(J,K,pub(I)) = false [owise] .
 
+--- True if the MQT-TZ TA has started running/executing.
   op start.TA : -> Prop .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | state-changed : true, 
                                                         running : true > TEE} > CF |= start.TA = true .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= start.TA = false [owise] .
 
+--- True if the MQT-TZ TA has finished its execution.
   op term.TA : -> Prop .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | state-changed : true,
                                                         running : false > TEE} > CF |= term.TA = true .
   eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= term.TA = false [owise] .
 
+--- True if publisher 'I' can send a message with a topic that subscriber 'J' is subscribed to.
   op topic.P : Nat Oid -> Prop .
   ceq < pub(I) : Publisher | topic : TOPIC, broker : BI >
       < BI : Broker | subscriptions : SUBSC > CF |= topic.P(I,sub(J)) = true
    if occurs({sub(J)}, getSubscribers(TOPIC, SUBSC)) .
   eq < pub(I) : Publisher | broker : BI > < BI : Broker | > CF |= topic.P(I,sub(J)) = false [owise] .
 
+--- True if broker has sent a re-encryption request to MQT-TZ RA.
   op reEncReq : Nat -> Prop .
   eq < BI : Broker | infra : {REE reqRA(reEncReq(DATA, PUB, SUB, MSG, N))} | {TEE} > CF |= reEncReq(N) = true .
   eq < BI : Broker | > CF |= reEncReq(N) = false [owise] .
   
+--- True if re-encryption was successful.
   op reEncSucc : Nat -> Prop .
   eq < BI : Broker | infra : {REE retRA(reEncReq(DATA, PUB, SUB, MSG, N))} | {TEE} > CF |= reEncSucc(N) = true .
   eq < BI : Broker | > CF |= reEncSucc(N) = false [owise] .
 
+--- True if messages received by subscriber 'J' from publisher 'I' is in order that 'I' sent them.
   op inOrderQueue.S : Nat Oid -> Prop .
   ceq < sub(J) : Subscriber | in-buffer : BUFFER > CF |= inOrderQueue.S(J,pub(I)) = true
    if PUB-I-MSGS := filter(BUFFER, pub(I)) /\ isOrdered(PUB-I-MSGS, 0) == true .
   eq < sub(J) : Subscriber | > CF |= inOrderQueue.S(J,pub(I)) = false [owise] .
 
+--- True if the number of tasks (re-encryption) handled by TA, 'N' has exceeded 'M'.
   op numTaskExceed.TA : Nat -> Prop .
   ceq < BI : Broker | counter : N > CF |= numTaskExceed.TA(M) = true if N > M .
    eq < BI : Broker | > CF |= numTaskExceed.TA(M) = false [owise] .

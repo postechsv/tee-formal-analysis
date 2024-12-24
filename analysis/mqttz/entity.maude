@@ -1,8 +1,14 @@
+--- This file defins the entities that participate in the MQT-TZ protocol.
+
+--- This module defines an abstract entity that participates in the MQT-TZ protocol.
+
 omod ENTITY is
   pr LIST{MqttzMsg} .
 
   class Entity | in-buffer : List{MqttzMsg}, out-buffer : List{MqttzMsg} .
 endom
+
+--- This module defines a client that sends messages to broker or receives them from broker.
 
 omod CLIENT is
   pr ENTITY .
@@ -12,12 +18,16 @@ omod CLIENT is
   subclass Client < Entity .
 endom
 
+--- This module defines a subscriber that receives messages by subscribing to a topic.
+
 omod SUBSCRIBER is 
   pr CLIENT .
 
   class Subscriber .
   subclass Subscriber < Client .
 endom
+
+--- This module defines a publisher that collect, encrypt, and send data as messages.
 
 omod PUBLISHER is 
   pr NAT .
@@ -27,6 +37,8 @@ omod PUBLISHER is
   class Publisher | cur-data : Nat, max-data : Nat, topic : Topic .
   subclass Publisher < Client .
 endom
+
+--- This module defines the broker that manage topics, subscriptions, and message delivery.
 
 omod BROKER is
   pr ENTITY .

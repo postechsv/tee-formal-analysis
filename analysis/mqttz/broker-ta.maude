@@ -1,3 +1,7 @@
+--- This file defines the MQT-TZ TA program.
+
+--- This module defines the constants used in the MQT-TZ TA program.
+
 fmod MQTTZ-DATA is
   pr CRYPTO-KEY-SIZE .
 
@@ -24,6 +28,8 @@ mod MQTTZ-TA-PROGRAM-DECL is
   ops err exit : -> Label [ctor] .
   op dummyIv : -> List{Data} [ctor] .
 endm
+
+--- This module defines the original MQT-TZ TA program.
 
 mod MQTTZ-TA-PROGRAM is
   pr MQTTZ-TA-PROGRAM-DECL .
@@ -309,6 +315,8 @@ mod MQTTZ-TA-PROGRAM is
   .
 
 endm
+
+--- This module defines the MQT-TZ TA program after a code-level patch.
 
 mod MQTTZ-TA-PROGRAM-PATCHED is
   pr MQTTZ-TA-PROGRAM-DECL .

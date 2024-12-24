@@ -1,0 +1,91 @@
+--- This module defines the user input (passwords & purpose of input).
+
+fmod USER-INPUT is
+  pr LIST{Password} .
+
+  sorts UserInput InputType .
+
+  op ForVerification : -> InputType [ctor] .
+  op ForEnrollment : -> InputType [ctor] .
+
+  op userInput : InputType List{Password} -> UserInput [ctor] .
+endfm
+
+view UserInput from TRIV to USER-INPUT is
+  sort Elt to UserInput .
+endv
+
+--- This module defines the user sending inputs to the authenticator.
+
+omod KMGK-USER is
+  pr LIST{UserInput} .
+
+  class User | authenticator : Oid, authenticated : Bool, waiting : Bool,
+               inputs : List{UserInput} .
+endom
+
+--- This module defines the user behavior.
+
+omod KMGK-USER-BEHAVIOR is
+  pr KMGK-USER .
+  pr KMGK-MSG .
+
+  vars UI AI : Oid .
+  vars PWD PWD' : Password .
+  var PWDL : List{Password} .
+  var UIL : List{UserInput} .
+
+--- The following three rules define user behavior during password verification.
+--- [1] a user enters password for verification.
+--- [2] if verification is successful, user is authenticated.
+--- [3] if verification fails, user is ready to send new inputs.
+
+  rl [enter-password-for-verification]:
+    < UI : User | authenticator : AI , waiting : false ,
+                  inputs : userInput(ForVerification , PWD PWDL) UIL >
+    =>
+    < UI : User | waiting : true , inputs : UIL >
+    (msg tryVerification(PWD) from UI to AI)
+  .
+
+  rl [verification-success]:
+    (msg verificationSuccess from AI to UI)
+    < UI : User | authenticator : AI , waiting : true >
+    =>
+    < UI : User | authenticated : true , waiting : false >
+  .
+
+  rl [verification-fail]:
+    (msg verificationFail from AI to UI)
+    < UI : User | authenticator : AI , waiting : true >
+    =>
+    < UI : User | waiting : false >
+  .
+
+--- The following three rules define user behavior during password enrollment.
+--- [1] a user enters a password and a new/desired password for enrollment.
+--- [2],[3] when enrollment ends, user is ready to send new inputs.
+
+  rl [enter-password-for-enrollment]:
+    < UI : User | authenticator : AI , waiting : false ,
+                  inputs : userInput(ForEnrollment , PWD PWD' PWDL) UIL >
+    =>
+    < UI : User | waiting : true , inputs : UIL >
+    (msg tryEnrollment(PWD , PWD') from UI to AI)
+  .
+
+  rl [enrollment-success]:
+    (msg enrollmentSuccess from AI to UI)
+    < UI : User | authenticator : AI , waiting : true >
+    =>
+    < UI : User | waiting : false >
+  .
+
+  rl [enrollment-fail]:
+    (msg enrollmentFail from AI to UI)
+    < UI : User | authenticator : AI , waiting : true >
+    =>
+    < UI : User | waiting : false >
+  .
+
+endom

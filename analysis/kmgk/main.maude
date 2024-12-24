@@ -1,0 +1,21 @@
+load ../../spec/src/main
+load consts
+load user
+load authenticator
+load gatekeeper-ta
+load gatekeeper-ra
+load keymaster-ta
+load keymaster-ra
+
+mod KMGK is
+  pr KMGK-CONSTANTS .
+  pr GATEKEEPER-RA-PROGRAM .
+  pr GATEKEEPER-RA-BEHAVIOR .
+  pr GATEKEEPER-TA-PROGRAM .
+  pr KEYMASTER-RA-PROGRAM .
+  pr KEYMASTER-RA-BEHAVIOR .
+  pr KEYMASTER-TA-PROGRAM .
+  pr KMGK-USER-BEHAVIOR .
+  pr KMGK-AUTHENTICATOR-BEHAVIOR .
+  pr IMP-SEMANTICS .
+endm

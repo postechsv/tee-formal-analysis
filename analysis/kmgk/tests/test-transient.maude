@@ -1,0 +1,70 @@
+mod TEST-TRANSIENT is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr GATEKEEPER-PROGRAM-DECL .
+  pr GATEKEEPER-DATA .
+
+  op testTransientTA : -> Program [ctor] .
+
+  op varDecls : -> Stmt [ctor] .
+  eq varDecls = 
+    var res ; var masterKey ;                     --- AllocateTransientObject
+    var secretData ; secretData := # randomData ; --- InitRefAttribute
+    var attrs
+  .
+
+  op allocateTransientObject : -> Stmt [ctor] .
+  eq allocateTransientObject = AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, masterKey) .
+
+  op initRefAttribute : -> Stmt [ctor] .
+  eq initRefAttribute = InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attrs) .
+
+  op populateTransientObject : -> Stmt [ctor] .
+  eq populateTransientObject = PopulateTransientObject(masterKey, attrs  ; res) .
+
+  --- Location: TA_CreatePasswordHandle
+  op testCase1 : -> Stmt [ctor] .
+  eq testCase1 = varDecls ; allocateTransientObject .
+
+  --- Location: TA_GetMasterKey
+  op testCase2 : -> Stmt [ctor] .
+  eq testCase2 = testCase1 ; initRefAttribute .
+
+  op testCase3 : -> Stmt [ctor] .
+  eq testCase3 = testCase2 ; populateTransientObject .
+
+  --- Location: TA_MintAuthToken
+  op testCase4 : -> Stmt [ctor] .
+  eq testCase4 = testCase1 ; FreeTransientObject(masterKey ; masterKey) .
+
+  eq testTransientTA = 
+    main () {
+      --- Location: TA_CreatePasswordHandle
+      --- Test Case 1
+      var res ; var masterKey ;
+      AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, masterKey) ;
+      --- return res
+
+      --- Location: TA_GetMasterKey
+      --- Test Case 2
+      var secretData ; secretData := # randomData ;
+      var attrs ;
+      InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attrs) ;
+      --- return attrs ;
+
+      --- Test Case 3
+      PopulateTransientObject(masterKey, attrs  ; res) ;
+      --- return res
+
+      --- Location: TA_MintAuthToken
+      --- Test Case 4
+      FreeTransientObject(masterKey ; masterKey) ;
+
+      --- Location: TA_Enroll
+      --- Test Case 5
+      var salt ;
+      GenerateRandom(nil ; salt) ;
+      return salt
+    }
+  .
+endm

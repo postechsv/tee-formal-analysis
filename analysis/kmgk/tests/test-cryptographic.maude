@@ -1,0 +1,34 @@
+mod TEST-CRYPTOGRAPHIC is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr GATEKEEPER-PROGRAM-DECL .
+  pr GATEKEEPER-DATA .
+
+  op testCryptographicTA : -> Program [ctor] .
+
+  eq testCryptographicTA = 
+    main () {
+      --- Location: TA_ComputeSignature
+      --- Test Case 1
+      var res ; var op ;
+      AllocateOperation(# TEE-ALG-HMAC-SHA256, # TEE-MODE-MAC, # HMAC-SHA256-KEY-SIZE-BIT  ; res, op) ;
+      --- return res
+
+      --- Test Case 2
+      var key ; var attrs ;
+      AllocateTransientObject(# TEE-TYPE-HMAC-SHA256, # HMAC-SHA256-KEY-SIZE-BIT  ; res, key) ;
+      InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attrs) ;
+      PopulateTransientObject(key, attrs  ; res) ;
+      SetOperationKey(op, key  ; res) ;
+      --- return res
+
+      --- Test Case 3
+      MACInit(op, # noData  ;   ) ;
+
+      --- Test Case 4
+      var message ; var buf ; message := # noData ;
+    	MACComputeFinal(op, message  ; res, buf) ;
+      return res
+    }
+  .
+endm

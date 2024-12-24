@@ -1,0 +1,33 @@
+load aux
+
+mod BASE-SCENARIO is
+  pr DEVICE .
+  pr SCENARIO-AUX .
+
+  var RAID : Oid .
+  var INSTID : TaInstId .
+  vars RAPROG P : Program .
+  var APPID : AppId .
+  var TAINFOL : List{TaInfo} .
+
+  --- TODO: Require more research on appropriate values for the enrolled password handles.
+  op initDevice : Oid Program List{TaInfo} -> Configuration .
+  eq initDevice(RAID, RAPROG, TAINFOL) = 
+  < at : Authenticator | execution-envs : {initRa(RAID , RAPROG)} | 
+                                          {initTas(TAINFOL) initTrustedOS(TAINFOL) keys} ,
+                         enrolled-passwords : (1 |-> pwd(natData(7))) ,
+                         enrolled-handles : (1 |-> pwdHandle(1 , 1 , 1 , 1 , macValue(natData(7), TEE-ALG-HMAC-SHA256, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) , 1)) ,
+                         is-running : false > 
+  .
+
+--- Scenario descrption: 
+--- A single user first enter the correct password to be verified and then, enters a new password to enroll.
+  op scenario : Oid Program List{TaInfo} -> Configuration .
+  eq scenario(RAID, RAPROG, TAINFOL) 
+   = initDevice(RAID, RAPROG, TAINFOL) 
+     initUser(ui(1), userInput(ForVerification, pwd(natData(7))) userInput(ForEnrollment, pwd(natData(10)) pwd(natData(7))))
+  .
+
+endm
+
+rew scenario(gkRa, gatekeeperRA, taInfo(gkTa, gatekeeperTA, GATEKEEPER) taInfo(kmTa, keymasterTA, KEYMASTER)) .

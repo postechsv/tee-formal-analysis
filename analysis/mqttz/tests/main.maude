@@ -1,0 +1,40 @@
+load ../main
+load ../../scenario/aux
+load ./cases/transient
+
+mod TEST-CASES is
+  pr TRANSIENT-CASES .
+endm
+
+mod TEST-SCENARIO is
+  pr SCENARIO-AUX .
+  pr TEST-CASES .
+
+  vars P TAPROG : Program .
+  var RAID : Oid .
+  var TAINSTID : TaInstId .
+  var APPID : AppId .
+
+  op testClients : -> List{SubId} .
+  eq testClients = {pub(1)} {sub(1)} .
+
+  op initTestTa : Program -> Configuration .
+  eq initTestTa(P) = < ta : TrustApp | proc : none , prog : P , running : false ,
+                                       app-status : normal , api-call : noCall , api-return : noReturn ,
+                                       current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
+                                       trust-app-id : REENCRYPT ,
+                                       task : task({sessionId(0) , main , nil} , ra) , task-counter : 0, state-changed : false > .
+
+  --- Testing transient & cryptographic operations API
+  op scenarioWithoutKeys : Program -> Configuration .
+  eq scenarioWithoutKeys(P) 
+   = initTestTa(P) initTrustedOS(testClients) .
+
+  --- Testing persistent & data stream API
+  op scenarioWithKeys : Program -> Configuration .
+  eq scenarioWithKeys(P) 
+   = initTestTa(P) initTrustedOS(testClients) shareKeys(testClients) .
+
+endm
+
+rew scenarioWithoutKeys(testTransient) .

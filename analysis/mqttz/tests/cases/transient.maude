@@ -1,0 +1,28 @@
+mod TRANSIENT-CASES is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr MQTTZ-PROGRAM-DECL .
+  pr MQTTZ-DATA .
+
+  op testTransient : -> Program [ctor] .
+
+  eq testTransient = 
+    struct {
+      var algo ;
+      var mode ;
+      var keySize ;
+      var opHandle ;
+      var keyHandle 
+    } AesCipher ;
+
+    main () {
+      struct AesCipher sess ;
+      var res ;
+
+      --- Location: alloc_resources
+      --- Test Case 1
+      AllocateTransientObject(# TEE-TYPE-AES, # TA-AES-KEY-SIZE  ; res, sess . keyHandle) ;
+      return res
+    }
+  .
+endm

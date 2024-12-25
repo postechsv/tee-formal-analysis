@@ -1,9 +1,11 @@
 load ../main
 load ../../scenario/aux
 load ./cases/transient
+load ./cases/persistent
 
 mod TEST-CASES is
   pr TRANSIENT-CASES .
+  pr PERSISTENT-CASES .
 endm
 
 mod TEST-SCENARIO is
@@ -16,7 +18,8 @@ mod TEST-SCENARIO is
   var APPID : AppId .
 
   op testClients : -> List{SubId} .
-  eq testClients = {pub(1)} {sub(1)} .
+  --- eq testClients = {pub(1)} {sub(1)} .
+  eq testClients = {pub(1)} .
 
   op initTestTa : Program -> Configuration .
   eq initTestTa(P) = < ta : TrustApp | proc : none , prog : P , running : false ,
@@ -37,4 +40,6 @@ mod TEST-SCENARIO is
 
 endm
 
-rew scenarioWithoutKeys(testTransient) .
+--- rew scenarioWithoutKeys(testTransient) .
+--- rew scenarioWithoutKeys(testPersistent) .
+rew scenarioWithKeys(testPersistent) .

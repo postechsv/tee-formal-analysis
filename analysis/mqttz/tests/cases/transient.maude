@@ -6,6 +6,19 @@ mod TRANSIENT-CASES is
 
   op testTransient : -> Program [ctor] .
 
+  op varDecls : -> Stmt [ctor] .
+  eq varDecls = 
+      struct AesCipher sess ;
+      var res ; var attr
+  .
+
+
+  op populatedTransientObjExists : -> Stmt [ctor] .
+  eq populatedTransientObjExists = 
+    AllocateTransientObject(# TEE-TYPE-AES, # TA-AES-KEY-SIZE  ; res, sess . keyHandle) ;
+    InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attr) ;
+    PopulateTransientObject(sess . keyHandle, attr  ; res) .
+
   eq testTransient = 
     struct {
       var algo ;
@@ -16,12 +29,38 @@ mod TRANSIENT-CASES is
     } AesCipher ;
 
     main () {
-      struct AesCipher sess ;
-      var res ;
+      varDecls ;
 
       --- Location: alloc_resources
-      --- Test Case 1
-      AllocateTransientObject(# TEE-TYPE-AES, # TA-AES-KEY-SIZE  ; res, sess . keyHandle) ;
+      --- Test Case 1 (For TEE_AllocateTransientObject)
+      --- AllocateTransientObject(# TEE-TYPE-AES, # TA-AES-KEY-SIZE  ; res, sess . keyHandle) ;
+      --- return res
+
+      --- Test Case 2 (For TEE_InitRefAttribute)
+      --- InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attr) ;
+      --- return attr
+
+      --- Test Case 3 (For TEE_PopulateTransientObject)
+      --- AllocateTransientObject(# TEE-TYPE-AES, # TA-AES-KEY-SIZE  ; res, sess . keyHandle) ;
+      --- InitRefAttribute(# TEE-ATTR-SECRET-VALUE, # randomAttrVal  ; attr) ;
+      --- PopulateTransientObject(sess . keyHandle, attr  ; res) ;
+      --- return res
+
+      --- Test Case 4 (For TEE_FreeTransientObject)
+      --- populatedTransientObjExists ;
+      --- FreeTransientObject(sess . keyHandle ;  sess . keyHandle) ;
+      --- return res
+
+      --- Location: set_aes_key
+      --- Test Case 5 (For TEE_ResetTransientObject)
+      --- populatedTransientObjExists ;
+      --- ResetTransientObject(sess . keyHandle  ;   ) ; 
+      --- return res
+
+      --- Test Case 6 (For TEE_PopulateTransientObject after TEE_ResetTransientObject)
+      populatedTransientObjExists ;
+      ResetTransientObject(sess . keyHandle  ;   ) ; 
+      PopulateTransientObject(sess . keyHandle, attr  ; res) ;
       return res
     }
   .

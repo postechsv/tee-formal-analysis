@@ -1,0 +1,45 @@
+mod PERSISTENT-CASES is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr MQTTZ-PROGRAM-DECL .
+  pr MQTTZ-DATA .
+  pr MQTTZ-CONSTANTS .
+  pr MQTTZ-RA-BEHAVIOR .
+
+  op testPersistent : -> Program [ctor] .
+
+  op createdPersistentObj : -> Stmt [ctor] .
+  eq createdPersistentObj = 
+      objDataFlag := # (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-ACCESS-WRITE, 
+                        TEE-DATA-FLAG-ACCESS-WRITE-META, TEE-DATA-FLAG-OVERWRITE) ;
+      object  := # handleId(0, ta) ; 
+      CreatePersistentObject(# TEE-STORAGE-PRIVATE, # fileName(pub(2)), objDataFlag, 
+                             # TEE-HANDLE-NULL, # noData, # dataSize(0), object  ; res , object) .
+
+  eq testPersistent = 
+    main () {
+      var res ; var object ;
+      var objDataFlag ;
+
+      --- Location: save_key
+      --- Test Case 1 (For TEE_CreatePersistentObject, creating a new persistent obj)
+      --- objDataFlag := # (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-ACCESS-WRITE, 
+      ---                   TEE-DATA-FLAG-ACCESS-WRITE-META, TEE-DATA-FLAG-OVERWRITE) ;
+      --- object  := # handleId(0, ta) ; 
+      --- CreatePersistentObject(# TEE-STORAGE-PRIVATE, # fileName(pub(2)), objDataFlag, 
+      ---                        # TEE-HANDLE-NULL, # noData, # dataSize(0), object  ; res , object) ;
+      --- return res
+
+      --- Test Case 2 (For TEE_CloseAndDeletePersistentObject1)
+      --- createdPersistentObj ;
+      --- CloseAndDeletePersistentObject1(object ; res, object) ;
+      --- return res
+
+      --- Location : read_raw_object
+      --- Test Case 3 (For TEE_OpenPersistentObject) (require scenario with keys)
+      OpenPersistentObject(# TEE-STORAGE-PRIVATE, # fileName(pub(1)), 
+                           # (TEE-DATA-FLAG-ACCESS-READ, TEE-DATA-FLAG-SHARE-READ) ; res, object) ;
+      return object
+    }
+  .
+endm

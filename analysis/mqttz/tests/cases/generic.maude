@@ -1,0 +1,28 @@
+mod GENERIC-CASES is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr MQTTZ-PROGRAM-DECL .
+  pr PERSISTENT-CASES .
+  pr DATA-STREAM-CASES .
+
+  op testGeneric : -> Program [ctor] .
+
+  eq testGeneric = 
+    main () {
+      var res ; var object ;
+      var objDataFlag ;
+
+      --- Location: read_raw_object
+      --- Test Case 1 (For TEE_CloseObject, closing an opened handle) (require a scenario with keys)
+      --- openedHandleToPersistentObj ;
+      --- CloseObject(object  ; object) ;
+      --- return res
+
+      --- Location: save_key
+      --- Test Case 2 (TEE_CloseObject, closing a newly created persistent obj's handle)
+      createdPersistentObj ;
+      CloseObject(object  ; object) ;
+      return res
+    }
+  .
+endm

@@ -1,0 +1,132 @@
+mod CRYPTOGRAPHIC-CASES is
+  pr TEE-BEHAVIOR .
+  pr TEE-IMP-BEHAVIOR .
+  pr MQTTZ-PROGRAM-DECL .
+  pr MQTTZ-DATA .
+  pr MQTTZ-CONSTANTS .
+  pr TRANSIENT-CASES .
+
+  ops testCryptoGeneric testCryptoCipher : -> Program [ctor] .
+
+--- For Decryption
+  op constructDecryptCipherSess : -> Stmt [ctor] .
+  eq constructDecryptCipherSess = 
+    struct AesCipher sess ;
+    sess . algo := # TEE-ALG-AES-CBC-NOPAD ;
+    sess . mode := # TEE-MODE-DECRYPT ;
+    sess . keySize := # TA-AES-KEY-SIZE ;
+    sess . opHandle := # TEE-HANDLE-NULL ;
+    sess . keyHandle := # TEE-HANDLE-NULL .
+
+  op allocatedOperationForDecryptionExists : -> Stmt [ctor] .
+  eq allocatedOperationForDecryptionExists = 
+    constructDecryptCipherSess ; 
+    AllocateOperation(sess . algo, sess . mode, sess . keySize ; res, sess . opHandle) .
+
+  op keySetOperationForDecryptionExists : -> Stmt [ctor] .
+  eq keySetOperationForDecryptionExists = 
+    allocatedOperationForDecryptionExists ;
+    populatedTransientObjExists ;
+    SetOperationKey(sess . opHandle, sess . keyHandle  ; res) ;
+    FreeTransientObject(sess . keyHandle ;  sess . keyHandle) . --- to see result easier, assume FreeTransient is already tested
+
+--- For Encryption
+  op keySetOperationForEncryptionExists : -> Stmt [ctor] .
+  eq keySetOperationForEncryptionExists = 
+    allocatedOperationForEncryptionExists ;
+    populatedTransientObjExists ;
+    SetOperationKey(sess . opHandle, sess . keyHandle  ; res) ;
+    FreeTransientObject(sess . keyHandle ;  sess . keyHandle) . --- to see result easier, assume FreeTransient is already tested
+
+  op constructEncryptCipherSess : -> Stmt [ctor] .
+  eq constructEncryptCipherSess = 
+    struct AesCipher sess ;
+    sess . algo := # TEE-ALG-AES-CBC-NOPAD ;
+    sess . mode := # TEE-MODE-ENCRYPT ;
+    sess . keySize := # TA-AES-KEY-SIZE ;
+    sess . opHandle := # TEE-HANDLE-NULL ;
+    sess . keyHandle := # TEE-HANDLE-NULL .
+
+  op allocatedOperationForEncryptionExists : -> Stmt [ctor] .
+  eq allocatedOperationForEncryptionExists = 
+    constructEncryptCipherSess ; 
+    AllocateOperation(sess . algo, sess . mode, sess . keySize ; res, sess . opHandle) .
+
+--- Test Cases
+  eq testCryptoGeneric = 
+    struct {
+      var algo ;
+      var mode ;
+      var keySize ;
+      var opHandle ;
+      var keyHandle 
+    } AesCipher ;
+
+    main () {
+      var attr ; var res ;
+      var iv ; iv := # noData ;
+
+      --- Location: alloc_resources
+      --- Test Case 1 (For TEE_AllocateOperation)
+      --- constructEncryptCipherSess ;
+      --- AllocateOperation(sess . algo, sess . mode, sess . keySize ; res, sess . opHandle) ;
+      --- return sess . opHandle
+
+      --- Test Case 2 (For TEE_SetOperationKey)
+      --- allocatedOperationForEncryptionExists ;
+      --- populatedTransientObjExists ;
+      --- SetOperationKey(sess . opHandle, sess . keyHandle  ; res) ;
+      --- return res
+
+      --- Test Case 3 (For TEE_FreeOperation)
+      --- allocatedOperationForEncryptionExists ;
+      --- FreeOperation(sess . opHandle ;  sess . opHandle) ;
+      --- return res
+
+      --- Location: set_aes_key
+      --- Test Case 4 (For TEE_ResetOperation)
+      keySetOperationForEncryptionExists ;
+      CipherInit(sess . opHandle, iv ;) ; --- Tested below
+      ResetOperation(sess . opHandle ;) ;
+      return res
+    }
+  .
+  
+  eq testCryptoCipher = 
+    struct {
+      var algo ;
+      var mode ;
+      var keySize ;
+      var opHandle ;
+      var keyHandle 
+    } AesCipher ;
+
+    main () {
+      var attr ; var res ;
+      var iv ; iv := # noData ;
+      var encData ; var decData ;
+
+      --- Location: set_aes_iv
+      --- Test Case 1 (For TEE_CipherInit)
+      --- keySetOperationForEncryptionExists ;
+      --- CipherInit(sess . opHandle, iv ;) ;
+      --- return res
+
+      --- Location: cipher_buffer
+      --- Test Case 2 (For TEE_CipherUpdate, decryption)
+      --- encData := # encrypted(data(7), TEE-ALG-AES-CBC-NOPAD, key(teeAttribute(TEE-ATTR-SECRET-VALUE, randomAttrVal))) ;
+      --- decData := # noData ;
+      --- keySetOperationForDecryptionExists ;
+      --- CipherInit(sess . opHandle, iv ;) ;
+      --- CipherUpdate(sess . opHandle , encData ; res, decData) ;
+      --- return decData
+
+      --- Test Case 3 (For TEE_CipherUpdate, encryption)
+      encData := # data(7) ; decData := # noData ;
+      keySetOperationForEncryptionExists ;
+      CipherInit(sess . opHandle, iv ;) ;
+      CipherUpdate(sess . opHandle , encData ; res, decData) ;
+      return decData
+    }
+  .
+endm

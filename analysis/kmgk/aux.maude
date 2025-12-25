@@ -13,6 +13,8 @@ view TaInfo from TRIV to TA-INFO is
   sort Elt to TaInfo .
 endv
 
+--- This module defines the initialization functions used to construct KMGK scenarios.
+
 omod SCENARIO-AUX is
   pr KMGK .
   pr RICH-APP .
@@ -26,10 +28,6 @@ omod SCENARIO-AUX is
   var TAINFO : TaInfo .
   var TAINFOL : List{TaInfo} .
   var UIL : List{UserInput} .
-
-------------------------------------------------------------
---- Initialization Functions
-------------------------------------------------------------
 
   op initStorage : List{TaInfo} -> Map{AppId,Set{FileId}} .
   eq initStorage(taInfo(gkTa, P, GATEKEEPER) TAINFOL) = (GATEKEEPER |-> secretID), initStorage(TAINFOL) .

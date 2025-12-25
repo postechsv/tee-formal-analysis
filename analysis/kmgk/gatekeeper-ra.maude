@@ -1,3 +1,5 @@
+--- This file defines the gatekeeper RA program and its behaviors.
+
 mod GATEKEEPER-RA-PROGRAM is
   pr TEE-BEHAVIOR .
   pr TEE-IMP-BEHAVIOR .
@@ -5,6 +7,8 @@ mod GATEKEEPER-RA-PROGRAM is
   pr GATEKEEPER-DATA .
 
   op randomData : -> Data [ctor] .
+
+  --- The gatekeeper RA program.
 
   op gatekeeperRA : -> Program [ctor] .
   eq gatekeeperRA =
@@ -43,6 +47,8 @@ mod GATEKEEPER-RA-PROGRAM is
     }
   .
 endm
+
+--- This module defines the behaviors of the gatekeeper RA.
 
 omod GATEKEEPER-RA-BEHAVIOR is
   pr KMGK-CONSTANTS .

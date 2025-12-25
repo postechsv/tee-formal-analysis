@@ -1,3 +1,7 @@
+--- This file defines the keymaster TA program.
+
+--- This module defines the constants used in the keymaster TA program.
+
 fmod KEYMASTER-DATA is
 	pr NAT .
   pr FILE-ID .
@@ -17,6 +21,8 @@ mod KEYMASTER-TA-PROGRAM-DECL is
   pr KEYMASTER-PROGRAM-DECL .
   pr KEYMASTER-DATA .
 endm
+
+--- This module defines the keymaster TA program.
 
 mod KEYMASTER-TA-PROGRAM is
   pr KEYMASTER-TA-PROGRAM-DECL .

@@ -1,3 +1,7 @@
+------------------------------------------------------------
+--- Password
+------------------------------------------------------------
+
 fmod PASSWORD is  
   pr DATA .
   
@@ -43,6 +47,10 @@ omod KMGK-MSG is
   msg msg_from_to_ : AuthenticatorArg Oid Oid -> Msg .
 endom
 
+------------------------------------------------------------
+--- KMGK Auxiliary Constants
+------------------------------------------------------------
+
 mod KMGK-CONSTANTS is
   pr NAT .
   pr APP-ID .
@@ -61,6 +69,10 @@ mod KMGK-CONSTANTS is
   op GATEKEEPER : -> AppId [ctor] .
   op KEYMASTER : -> AppId [ctor] .
 endm
+
+------------------------------------------------------------
+--- KMGK Program Variables & Function Ids
+------------------------------------------------------------
 
 mod KMGK-PROGRAM-DECL is
   pr IMP-PROGRAM .

@@ -217,23 +217,24 @@ Below are brief descriptions of each file in each subdirectory.
 
 - Formal model of MQT-TZ (files in 'mqttz')
 
+  - base.maude    	  : Data structures for MQT-TZ.
   - broker-ra.maude 	: MQT-TZ RA program.
   - broker-ta.maude 	: MQT-TZ TA programs (with/without patch and optimization).
-  - broker.maude    	: MQT-TZ broker object and its behavior.
-  - client.maude    	: MQT-TZ publisher & subscriber client objects and their behaviors.
-  - consts.maude    	: Data structures for MQT-TZ.
+  - broker.maude    	: MQT-TZ broker behavior.
+  - client.maude    	: MQT-TZ publisher & subscriber client behaviors.
+  - entity.maude      : MQT-TZ broker, publisher & subscriber client objects.
 
 - MQT-TZ scenarios (files in 'scenario')
 
   - aux.maude   	: Functions used to initialize scenarios.
   - base.maude  	: Our base MQT-TZ scenario explained in the paper Section 6.2.
 
-- LTL properties (files in 'properties')
+- LTL properties (files in 'LTL')
 
   - properties.maude    	: LTL properties as shown in paper's Table 1.
   - propositions.maude  	: Propositions used to define LTL properties.
 
-- Threat models (files in threats)
+- Threat models (files in 'threats')
 
   - msg.maude  	    : Message modification threat model.
   - oom.maude   	  : Out-of-memory threat model.

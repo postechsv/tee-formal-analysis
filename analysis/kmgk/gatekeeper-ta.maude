@@ -1,3 +1,7 @@
+--- This file defines the gatekeeper TA program.
+
+--- This module defines the constants used in the gatekeeper TA program.
+
 fmod GATEKEEPER-DATA is
   pr CRYPTO-KEY-SIZE .
   pr RETURN-CODE .
@@ -54,6 +58,8 @@ mod GATEKEEPER-TA-PROGRAM-DECL is
 
   ops serializeResponse exit freeKey closeObj freeOp closeSess : -> Label [ctor] .
 endm
+
+--- This module defines the gatekeeper TA program.
 
 mod GATEKEEPER-TA-PROGRAM is
   pr GATEKEEPER-TA-PROGRAM-DECL .

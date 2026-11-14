@@ -23,6 +23,203 @@ true-after  = ["handle-invoke-ta", "handle-invoke-ta-finish",
                "handle-session-req", "handle-session-req-finish"]
 false-after = ["tee-api-call-accept", "tee-api-call-return", "return-smc-request-panic"]
 
+# The invisible-transition reduction (make mqttz INVISIBLE=1, tools/gen-invisible.py): the rules
+# listed here become equations.  A rule may be listed only if it does not change the value of a
+# proposition of properties/propositions.maude, and it must not update a ghost attribute above.
+# The selection follows the G of the paper artifact; the basis is in docs/invisible-g/.
+[invisible]
+rules = [
+  # G2 (K rules)
+  "lookup-lv",
+  "if-true",
+  "if-false",
+  "while",
+  "fCall",
+  "fExec",
+  "bindV",  # the memory write is the following assign
+  "bindS",
+  "bindR",
+  "fRetn",
+  "fQuit",
+  "member-lvalue",
+  "op-plus",
+  "op-times",
+  "op-div",
+  "op-leq",
+  "op-eq",
+  "op-and-true",
+  "op-and-false",
+  "op-not",
+  "skip",
+  "seq",
+  "fdecl",
+  "fdecl-lib",  # a TEE API stub is a function declaration
+  "sdecl",
+  "assign-list",
+  "assign-list-end",
+  # not invisible:
+  #   lookup -- memory read stays visible
+  #   assign -- memory write stays visible
+  #   alloc -- allocation stays visible
+  #   allocObj
+  #   allocA
+  #   op-minus -- new operator, not added to G
+  #   op-or-true -- not in the artifact G
+  #   op-or-false -- not in the artifact G
+  # G3
+  "tee-api-call",
+  "tee-api-call-accept",
+  "tee-api-call-return",
+  # CreatePersistentObject
+  "create-persistent-determine-case",
+  "create-persist-success",
+  "create-persist-fail",
+  "create-persist-mem-err",
+  "create-persist-mem-err-final",
+  "create-persistent-abnormal-storage-panic",  # panic rule; counterpart in G
+  "create-persist-overwrite-check",
+  "create-persist-pure-new",
+  "create-persist-persist-new",
+  "create-persist-pure",
+  "create-persist-persist",
+  # not invisible:
+  #   create-persist-transform-new
+  #   create-persist-transform
+  # SetOperationKey
+  "set-operation-key-subroutine",
+  "set-operation-key-req-attribute",  # the start step split: the TA moves to final, the handle requests the key attributes
+  "set-operation-key-subroutine-1",
+  "set-operation-key-subroutine-2",
+  "set-operation-key-storage-err",
+  "set-operation-key-storage-err-return",  # the handle reports the code, the TA returns it
+  "set-operation-key-success",
+  "set-operation-key-panic",  # panic rule in artifact G
+  "set-operation-key-top-level-handle-success",
+  "set-operation-key-top-level-handle-fail",
+  "install-operation-key-top-level-handle",
+  "reject-operation-key-top-level-handle",
+  "req-attribute-transient",
+  # not invisible:
+  #   set-operation-key-clear -- new behavior
+  #   set-operation-key-uninitialized-key-panic -- new behavior
+  # OpenPersistentObject
+  "open-persistent-subroutine",
+  "open-persistent-status-normal",
+  "open-persistent-success",
+  "open-persistent-fail",
+  "open-persistent-file-err",
+  "open-persistent-storage-err",
+  "open-persistent-memory-err",
+  "open-persistent-memory-err-exec",
+  "open-persistent-memory-err-final",
+  "open-persistent-top-level-handle",
+  "open-persistent-top-level-conflict",
+  # not invisible:
+  #   open-persistent-default-private-storage -- new behavior: storage id
+  #   open-persistent-storage-id-not-found -- new behavior: storage id
+  # GetObjectInfo1
+  "get-obj-info-subroutine",
+  "get-obj-info-transient-success",
+  "get-obj-info-persistent-subroutine",
+  "get-obj-info-persistent-success",
+  "get-obj-info-abnormal-storage-err",
+  "get-obj-info-transient-top-level-handle",
+  "get-obj-info-persistent-top-level-handle",
+  # CloseAndDeletePersistentObject1
+  "close-and-delete-persistent-subroutine",
+  "close-and-delete-persistent-null-success",
+  "close-and-delete-persistent-top-level-start-ok",
+  "close-and-delete-persistent-subroutine-notify",
+  "close-and-delete-persistent-success",
+  "close-and-delete-persistent-panic",  # panic rule in artifact G
+  "close-and-delete-persistent-storage-err",
+  "close-and-delete-persistent-top-level-start",
+  "close-and-delete-persistent-top-level-fail",
+  # not invisible:
+  #   close-and-delete-persistent-corrupt-subroutine -- new behavior: corrupted storage
+  #   delete-access-panic -- new behavior: init-stage access check
+  # CopyObjectAttributes1
+  "copy-object-attrs-get-attrs",
+  "copy-object-attrs-req-set-attrs",
+  "copy-object-attrs-success",
+  "copy-object-attrs-try-ret-attrs",
+  "copy-object-attrs-try-ret-attrs-persistent",
+  "copy-object-attrs-copy-attrs",
+  # not invisible:
+  #   copy-object-attrs-copy-attrs-fail -- new behavior
+  #   copy-object-attrs-set-attrs-panic -- new behavior
+  #   copy-object-attrs-panic -- new behavior
+  # ReadObjectData
+  "read-object-data-get-storage-status",
+  "read-object-data-storage-status-check",
+  "read-object-data-success",
+  "read-object-data-from-persist",
+  # not invisible:
+  #   read-access-panic -- new behavior: init-stage access check
+  # WriteObjectData
+  "write-object-data-subroutine",
+  "write-object-data-success",
+  "write-object-data-storage-err",
+  "write-object-data-top-level-handle",
+  # not invisible:
+  #   write-object-data-top-level-overflow -- new behavior
+  #   write-access-panic -- new behavior: init-stage access check
+  # AllocateOperation, FreeOperation
+  "alloc-oper-success",
+  "alloc-oper-params-err",
+  "alloc-oper-mem-err",
+  "free-operation-not-null-subroutine",
+  "free-operation-not-null-success",
+  "free-operation-null-success",
+  "free-operation-top-level-handle",
+  # CipherInit, CipherUpdate
+  "cipher-init-req-cipher-init",
+  "cipher-init-success",
+  "cipher-init-initialize-success",
+  "cipher-init-initialize-fail",
+  "cipher-update-req-cipher",
+  "cipher-update-success",
+  "cipher-update-panic",  # panic rule in artifact G
+  "cipher-update-try-cipher-success",
+  "cipher-update-try-cipher-fail",
+  # not invisible:
+  #   cipher-init-panic -- new behavior
+  # CloseObject
+  "close-object-not-null-subroutine",
+  "close-object-not-null-success",
+  "close-object-null-success",
+  "close-persistent-top-level-handle",
+  "close-transient-top-level-handle",
+  # AllocateTransientObject, PopulateTransientObject, InitRefAttribute
+  "allocate-transient-success",
+  "allocate-transient-out-of-memory-err",
+  "allocate-transient-not-supported-err",
+  "populate-transient-subroutine",
+  "populate-transient-success",
+  "populate-transient-top-level-handle",
+  "init-ref-attribute",
+  # not invisible:
+  #   populate-transient-invalid-attributes-panic -- new behavior
+  #   populate-transient-initialized-object-panic -- new behavior
+  # ResetOperation
+  "reset-oper-req-reset",
+  "reset-oper-success",
+  "reset-oper-try-reset-success",
+  # not invisible:
+  #   reset-oper-try-reset-fail -- new behavior
+  #   reset-oper-fail -- new behavior
+  # FreeTransientObject, ResetTransientObject
+  "free-transient-not-null-subroutine",
+  "free-transient-not-null-success",
+  "free-transient-top-level-handle",
+  "reset-transient-not-null-subroutine",
+  "reset-transient-not-null-success",
+  "reset-transient-null-success",
+  "reset-transient-top-level-handle",
+  # not invisible:
+  #   free-transient-null-success
+]
+
 # The broker TA, translated from the upstream C source by tools/ta2imp.py (see its docstring).
 [ta.broker]
 source    = "ta/hot_cache_ta.c"        # MQT-TZ, as published

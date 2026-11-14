@@ -8,6 +8,7 @@ case-studies/NAME/NAME.toml says what the analyzed system is:
     [spec] features   the API feature groups of the spec that the model uses (mk/features.mk, in
                       lower case with hyphens); every other group is dropped
     [ghost...]        ghost attributes of spec objects (tools/ghost.py)
+    [invisible]       the rules turned into equations with --invisible (tools/gen-invisible.py)
     [ta.KEY]          a trusted application translated from C (tools/ta2imp.py)
 How it is analyzed is chosen here: --mode (plain build, DM-Check build, maude2lean build) and
 --invisible (the invisible-transition reduction of the paper).
@@ -66,7 +67,10 @@ def main(argv):
     make += ['%s=%s' % kv for kv in sorted(flags.items())]
     make += ['DMC=%d' % (args.mode != 'plain'), 'M2L=%d' % (args.mode == 'm2l'),
              'INVISIBLE=%d' % args.invisible,
-             'GHOST=' + (os.path.relpath(manifest, ROOT) if 'ghost' in data else '')]
+             'GHOST=' + (os.path.relpath(manifest, ROOT) if 'ghost' in data else ''),
+             'INVISIBLE_G=' + (os.path.relpath(manifest, ROOT) if args.invisible else '')]
+    if args.invisible and 'invisible' not in data:
+        sys.exit('%s: --invisible needs an [invisible] table' % manifest)
     if args.spec:
         make.append('SPEC=' + args.spec)
     make.append('src')

@@ -1,27 +1,33 @@
-"""Generate the invisible-transition reduction (src/invisible-reduction.maude of the spec) from
-docs/invisible-g/decisions.tsv.
+"""Generate the invisible-transition reduction (invisible-reduction.maude) of a case-study build from
+the [invisible] table of its manifest.
 
-Usage: python3 tools/gen-invisible.py [--src spec/src] [--decisions docs/invisible-g/decisions.tsv] [OUT]
+Usage: python3 tools/gen-invisible.py --src SRC_DIR MANIFEST.toml [OUT]
 
-Each rule whose label is marked G becomes an equation with the same text (rl -> eq, crl -> ceq,
+    [invisible]
+    rules = ["if-true", "fCall", "tee-api-call*", ...]   # rule labels; globs allowed
+
+Each rule whose label matches is turned into an equation with the same text (rl -> eq, crl -> ceq,
 top-level => -> =), in a module <MOD>-INVISIBLE that imports the rule's module and copies its
-variable declarations.  OUT defaults to SRC/invisible-reduction.maude.  The hand-written header of
-OUT (everything before its first module annotation) is kept; a new file gets HEAD."""
-import argparse, os, re, sys, collections
+variable declarations.  OUT defaults to SRC_DIR/invisible-reduction.maude.
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+Only rules that change no proposition of the case study may be listed; that is the author's
+judgment (docs/invisible-g/).  Checked here: every label or glob matches a rule, and no listed rule
+updates a ghost attribute of the manifest's [ghost] tables (true-after, false-after, set.after), as
+the propositions read the ghost state."""
+import argparse, fnmatch, os, re, sys, collections, tomllib
+
 ap = argparse.ArgumentParser()
-ap.add_argument('--src', default=os.path.join(HERE, '..', 'spec', 'src'))
-ap.add_argument('--decisions', default=os.path.join(HERE, '..', 'docs', 'invisible-g', 'decisions.tsv'))
+ap.add_argument('--src', required=True)
+ap.add_argument('manifest')
 ap.add_argument('out', nargs='?')
 args = ap.parse_args()
 SRC = args.src
 OUT = args.out or os.path.join(SRC, 'invisible-reduction.maude')
-D = {}
-for ln in open(args.decisions):
-    if ln.startswith('#') or not ln.strip(): continue
-    f = ln.rstrip('\n').split('\t'); D[f[0]] = f[1]
-G = {l for l, v in D.items() if v == 'G'}
+with open(args.manifest, 'rb') as fh:
+    MANIFEST = tomllib.load(fh)
+if 'invisible' not in MANIFEST or 'rules' not in MANIFEST['invisible']:
+    sys.exit('%s: no [invisible] rules' % args.manifest)
+PATTERNS = MANIFEST['invisible']['rules']
 
 def strip_comments(s):
     return '\n'.join(re.sub(r'---.*$', '', ln) for ln in s.split('\n'))
@@ -38,6 +44,7 @@ def depth_cut(body, tok):
 FILES = ['imp.maude', 'tee-app.maude', 'generic.maude', 'transient.maude', 'persistent.maude',
          'data-stream.maude', 'cryptographic.maude', 'persistent-panic.maude']
 mods = collections.OrderedDict()      # mod -> (kind, vars, eqs)
+LABELS = set()
 for fn in FILES:
     s = strip_comments(open(f'{SRC}/{fn}').read())
     for mm in re.finditer(r'\b(omod|mod|fmod)\s+([\w-]+)\s+is\b(.*?)\bend(om|m|fm)\b', s, re.S):
@@ -45,7 +52,8 @@ for fn in FILES:
         eqs = []
         for r in re.finditer(r'\b(c?rl)\s*\[([^\]]*)\]\s*:(.*?)\s\.(?=[ \t]*(?:\n|$))', body, re.S):
             lab = r.group(2).strip()
-            if lab not in G: continue
+            LABELS.add(lab)
+            if not any(fnmatch.fnmatchcase(lab, p) for p in PATTERNS): continue
             text = r.group(3)
             i = depth_cut(text, '=>')
             assert i >= 0, lab
@@ -57,37 +65,27 @@ for fn in FILES:
             vs = [' '.join(v.split()) + ' .' for v in re.findall(r'(?:^|\n)\s*(vars?\s[^\n]*?)\s\.(?=[ \t]*(?:\n|$))', body)]
             mods[mod] = (kind, vs, eqs)
 
-found = {lab for _, (_, _, eqs) in mods.items() for lab, _, _ in eqs}
-missing = sorted(G - found)
-if missing: sys.exit('labels not found: ' + ', '.join(missing))
+unmatched = [p for p in PATTERNS if not any(fnmatch.fnmatchcase(l, p) for l in LABELS)]
+if unmatched: sys.exit('%s: [invisible] rules: no rule label matches %s' % (args.manifest, ', '.join(unmatched)))
+G = {lab for _, (_, _, eqs) in mods.items() for lab, _, _ in eqs}
+clash = []
+for cls, table in MANIFEST.get('ghost', {}).items():
+    for attr, spec in table.items():
+        pats = spec.get('true-after', []) + spec.get('false-after', []) + \
+            [p for e in spec.get('set', []) for p in e['after']]
+        for lab in sorted(l for l in G if any(fnmatch.fnmatchcase(l, p) for p in pats)):
+            clash.append('%s (updates ghost %s.%s)' % (lab, cls, attr))
+if clash:
+    sys.exit('%s: [invisible] rules update ghost state read by the propositions: %s'
+             % (args.manifest, ', '.join(clash)))
 
 HEAD = """--- This file defines the invisible-transition reduction of Section 8 of the paper: rewrite rules
 --- are turned into equations.  Each *-INVISIBLE module imports a behavior module and restates
 --- part of its rules as equations, so importing it has an effect only through the wrapper
---- modules at the end of this file; nothing in the spec imports them.
+--- modules at the end of this file.
 ---
---- The set of rules follows the G of the paper artifact (tee-formal-analysis, spec/src
---- *-INVISIBLE modules), rule by rule:
----   K rules: those whose artifact counterpart is in the artifact G.  Not in G: the memory
----      read (lookup) and write (assign) and the allocations (alloc, allocObj, allocA), as the
----      artifact keeps leval(loc(L)), loc(L) := V and var X as rules; op-or-true and
----      op-or-false (the artifact G has no || rule); op-minus (the artifact has no -).
----   TEE API call rules: tee-api-call, tee-api-call-accept, tee-api-call-return.
----   TEE API rules: for the API functions that have rules in the artifact G (the functions
----      MQT-TZ uses), the rules of each step that the artifact G contains, on the TA and on the
----      object side; a step that the spec splits into several rules has all of them.  Rules of
----      behavior that the artifact does not have, and the API functions without artifact G
----      rules, stay rules.
---- The mapping is recorded in docs/invisible-g/decisions.tsv of tee-formal-analysis.
----
---- The feature INVISIBLE (mk/features.mk, off by default) keeps this file out of a build.
---- The equations are generated copies of the rules: when a rule changes, regenerate them.
-"""
-if os.path.exists(OUT):
-    old = open(OUT).read()
-    i = old.find('--- @kind')
-    if i > 0:
-        HEAD = old[:i].rstrip('\n') + '\n'
+--- Generated by tools/gen-invisible.py from the [invisible] rules of %s.
+""" % os.path.relpath(args.manifest)
 out = [HEAD]
 api_mods, imp_mods, call_mods = [], [], []
 for mod, (kind, vs, eqs) in mods.items():

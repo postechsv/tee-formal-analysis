@@ -7,6 +7,29 @@ tools/gen-invisible.py; spec/src/invisible-reduction.maude is the spec's own cop
 Each equation is an exact copy of its rule (118 when this note was written, 136 at spec cf579b8).  side-by-side.txt lists, per API function, the artifact rules
 (A, G = in artifact G) next to the current rules (C, G = in the old G).
 
+
+## 0. G of Section 8.1 (2026-11-14)
+
+The [invisible] rules of case-studies/mqttz/mqttz.toml are now the G of Section 8.1 of the paper,
+not the artifact's G (the rest of this note compares the artifact's G):
+G1 the start (api-call init) and finish (api-call final) rules of the TEE API functions on the
+TA object alone that do not panic it, 115; G2 the K rules except while and the call rules (fCall,
+fExec, bindV, bindR, bindS, fRetn, fQuit), 27; G3 tee-api-call, -accept, -return.  Not in G: the
+TEE Client API rules (tee-client.maude), as the paper argues termination and confluence for TAs.
+To make this possible, the spec (be0cebd, 07faf9f, f6e1a1c, 20b636b) checks access rights at the
+handle, starts a call only on a handle that is not null, and gives the start rules own labels,
+so no rule outside G is enabled with a G rule of the same call.
+
+Reachable states, scenario(mqttzHost, mqttzTA, none), spec 20b636b:
+
+| G | states |
+|---|---|
+| none | 133,771 |
+| artifact G (134 equations on this spec) | 42,156 |
+| G2 | 34,564 |
+| G2 + G3 | 27,118 |
+| G1 + G2 + G3 | 22,884 |
+
 ## 1. G: old, new, artifact
 
 | kind (current spec) | old G | new G |

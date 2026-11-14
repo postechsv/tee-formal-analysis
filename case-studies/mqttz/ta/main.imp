@@ -1,4 +1,4 @@
-    void main (int command, TEE-Algorithm sessAlgo, TEE-OperationMode sessMode, int sessKeySize, TEE-Handle sessOpHandle, TEE-Handle sessKeyHandle, TEE-ObjectId oriCliId, TEE-Buffer oriCliIv, TEE-Buffer oriCliData, TEE-ObjectId destCliId, TEE-Result & ret, TEE-Buffer & destCliData) {
+    void main (int command, int sessAlgo, int sessMode, int sessKeySize, TEE-OperationHandle sessOpHandle, TEE-ObjectHandle sessKeyHandle, TEE-ObjectId oriCliId, TEE-Buffer oriCliIv, TEE-Buffer oriCliData, TEE-ObjectId destCliId, TEE-Result & ret, TEE-Buffer & destCliData) {
       struct AesCipher session ;
       session . algo := sessAlgo ;
       session . mode := sessMode ;

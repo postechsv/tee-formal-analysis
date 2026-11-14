@@ -5078,7 +5078,7 @@ AUX_LIST_CHECKS = [
     ('# 1', '# 1', 'true'),
     ('(int mkVar(1))', '(int mkVar(1))', 'true'),
     ('(int mkVar(1))', '(int mkVar(2))', 'false'),
-    ('(int mkVar(1))', '(TEE-Handle * mkVar(1))', 'false'),
+    ('(int mkVar(1))', '(bool mkVar(1))', 'false'),
     ('(int mkVar(1), int mkVar(2))', '(int mkVar(1), int mkVar(2))', 'true'),
     ('(int mkVar(1), int mkVar(2))', '(int mkVar(1), int mkVar(3))', 'false'),
     ('(mkFuncId(0)(# 1))', '(mkFuncId(0)(# 1))', 'true'),

@@ -22,15 +22,15 @@ mod MQTTZ-RA-PROGRAM is
   op mqttzHost : -> Program [ctor] .
   eq mqttzHost =
     struct AesCipher {
-      TEE-Algorithm algo ;
-      TEE-OperationMode mode ;
+      int algo ;
+      int mode ;
       int keySize ;
-      TEE-Handle opHandle ;
-      TEE-Handle keyHandle ;
+      TEE-OperationHandle opHandle ;
+      TEE-ObjectHandle keyHandle ;
     } ;
 
     void main(TEE-ObjectId oriCliId , TEE-Buffer oriCliData , TEE-ObjectId destCliId , TEE-Result & ret , TEE-Buffer & destCliData) {
-      TEE-SessionId sess ;
+      TEEC-Session sess ;
       --- TeecOpenSession(# taInst(1) , 'ret , 'sess) ;
       sess := # sessionId(0) ;
 
@@ -58,15 +58,15 @@ mod MQTTZ-RA-PROGRAM is
   op mqttzHostPatched : -> Program [ctor] .
   eq mqttzHostPatched =
     struct AesCipher {
-      TEE-Algorithm algo ;
-      TEE-OperationMode mode ;
+      int algo ;
+      int mode ;
       int keySize ;
-      TEE-Handle opHandle ;
-      TEE-Handle keyHandle ;
+      TEE-OperationHandle opHandle ;
+      TEE-ObjectHandle keyHandle ;
     } ;
 
     void main(TEE-ObjectId oriCliId , TEE-Buffer oriCliData , TEE-ObjectId destCliId , TEE-Result & ret , TEE-Buffer & destCliData) {
-      TEE-SessionId sess ;
+      TEEC-Session sess ;
       --- TeecOpenSession(# taInst(1) , 'ret , 'sess) ;
       sess := # sessionId(0) ;
 

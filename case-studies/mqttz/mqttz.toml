@@ -208,13 +208,10 @@ mqttzTA        = []
 mqttzTaPatched = ["ta/fix.patch"]      # code-level patch: a failed alloc_resources is out of memory
 
 [ta.broker.types]
-"aes_cipher.algo"                = "TEE-Algorithm"
-"aes_cipher.mode"                = "TEE-OperationMode"
 "cipher_buffer.dec_data"         = "TEE-Buffer &"
 "read_raw_object.cli_id"         = "TEE-ObjectId"
 "read_raw_object.data"           = "TEE-Buffer &"
 "save_key.cli_id"                = "TEE-ObjectId"
-"save_key.obj_data_flag"         = "TEE-DataFlags"
 "get_key.cli_id"                 = "TEE-ObjectId"
 "get_key.cli_key"                = "TEE-Buffer &"
 

@@ -75,9 +75,9 @@ import tree_sitter_c
 # C type -> TEE-IMP type.  Struct types of `structs` are added at run time.
 C_TYPES = {
     'TEE_Result': 'TEE-Result',
-    'TEE_Attribute': 'TEE-Attributes',
-    'TEE_ObjectHandle': 'TEE-Handle',
-    'TEE_OperationHandle': 'TEE-Handle',
+    'TEE_Attribute': 'TEE-Attribute',
+    'TEE_ObjectHandle': 'TEE-ObjectHandle',
+    'TEE_OperationHandle': 'TEE-OperationHandle',
     'TEE_ObjectInfo': 'struct TeeObjectInfo',
     'char': 'TEE-Buffer',          # only as char *
     'uint32_t': 'int',

@@ -26,7 +26,6 @@ false-after = ["tee-api-call-accept", "tee-api-call-return", "return-smc-request
 # The broker TA, translated from the upstream C source by tools/ta2imp.py (see its docstring).
 [ta.broker]
 source    = "ta/hot_cache_ta.c"        # MQT-TZ, as published
-origin    = "upstream"
 patches   = ["ta/model.patch"]         # modeling changes of the C code (get_key, FIXMEs, read count)
 functions = ["payload_reencryption"]   # and the functions it calls
 structs   = ["aes_cipher"]

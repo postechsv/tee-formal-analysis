@@ -7,7 +7,7 @@ Usage
 The [ta.KEY] table of the case-study manifest says what to translate and how (paths are relative to
 the manifest):
 
-    source     the C source, kept as published (origin = "upstream") or written for the model
+    source     the C source (as published, or written for the model)
     patches    unified diffs applied to the source first: the modeling changes of the C code
     programs   {PROGRAM = [patch, ...]}: one TEE-IMP program per entry, from the source with
                `patches` and then the listed patches applied (a code-level fix is a patch here)

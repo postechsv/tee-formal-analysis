@@ -179,13 +179,14 @@ def main(argv):
     gen = load_gen()
     src = argv[0]
     paths = []
+    tmp = tempfile.TemporaryDirectory(prefix='ghost-')
     try:
         for p in argv[1:]:
             if p.endswith('.toml'):
                 name, text = compile_toml(gen, src, p)
                 stage = os.path.dirname(os.path.abspath(src))
                 out_dir = (os.path.join(os.path.dirname(stage), 'ghost') if os.path.basename(stage) == '.stage'
-                           else tempfile.mkdtemp(prefix='ghost-'))
+                           else tmp.name)
                 os.makedirs(out_dir, exist_ok=True)
                 out = os.path.join(out_dir, name + '.maude')
                 with open(out, 'w', encoding='utf-8') as fh:
@@ -198,6 +199,8 @@ def main(argv):
     except gen.GenError as ex:
         sys.stderr.write('ghost: error: %s\n' % ex)
         return 1
+    finally:
+        tmp.cleanup()
     for line in report:
         print('  ghost: %s' % line)
     return 0

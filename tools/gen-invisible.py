@@ -15,6 +15,8 @@ judgment (docs/invisible-g/).  Checked here: every label or glob matches a rule,
 updates a ghost attribute of the manifest's [ghost] tables (true-after, false-after, set.after), as
 the propositions read the ghost state."""
 import argparse, fnmatch, os, re, sys, collections, tomllib
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ghost  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--src', required=True)
@@ -69,12 +71,15 @@ unmatched = [p for p in PATTERNS if not any(fnmatch.fnmatchcase(l, p) for l in L
 if unmatched: sys.exit('%s: [invisible] rules: no rule label matches %s' % (args.manifest, ', '.join(unmatched)))
 G = {lab for _, (_, _, eqs) in mods.items() for lab, _, _ in eqs}
 clash = []
-for cls, table in MANIFEST.get('ghost', {}).items():
-    for attr, spec in table.items():
-        pats = spec.get('true-after', []) + spec.get('false-after', []) + \
-            [p for e in spec.get('set', []) for p in e['after']]
-        for lab in sorted(l for l in G if any(fnmatch.fnmatchcase(l, p) for p in pats)):
-            clash.append('%s (updates ghost %s.%s)' % (lab, cls, attr))
+try:
+    GHOSTS = ghost.ghost_entries(MANIFEST, args.manifest)
+except ValueError as ex:
+    sys.exit(str(ex))
+for cls, attr, spec in GHOSTS:
+    pats = spec.get('true-after', []) + spec.get('false-after', []) + \
+        [p for e in spec.get('set', []) for p in e['after']]
+    for lab in sorted(l for l in G if any(fnmatch.fnmatchcase(l, p) for p in pats)):
+        clash.append('%s (updates ghost %s.%s)' % (lab, cls, attr))
 if clash:
     sys.exit('%s: [invisible] rules update ghost state read by the propositions: %s'
              % (args.manifest, ', '.join(clash)))

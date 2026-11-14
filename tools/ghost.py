@@ -6,22 +6,32 @@ Usage
 
 A GHOST_FILE is either a ghost module (.maude), whose format and composition are described in
 tools/gen-dmc.py (section "ghost composition"), or a case-study file (.toml) whose [ghost] tables
-declare ghost attributes of spec objects:
+declare ghost attributes of spec objects, one table per attribute:
 
-    [ghost.TrustedApp.running]
-    init        = false                         # value when an object of the class is created
-    true-after  = ["handle-invoke-ta", ...]     # rule labels (globs allowed) that set it to true
-    false-after = ["handle-invoke-ta-finish", ...]
+    [ghost]
+    var           = "running"                     # the attribute
+    class         = "TrustedApp"                  # the spec class that gets it
+    initial-value = false                         # value when an object of the class is created
+    true-after    = ["handle-invoke-ta", ...]     # rule labels (globs allowed) that set it to true
+    false-after   = ["handle-invoke-ta-finish", ...]
 
-    [[ghost.TrustedApp.counter.set]]            # general form: any value term, any sort
+Several attributes are written as [[ghost]] (an array of tables), one per attribute.  General form:
+
+    [[ghost]]
+    var           = "counter"
+    class         = "TrustedApp"
+    initial-value = "0"
+    sort          = "Nat"
+    [[ghost.set]]                                 # any value term, any sort
     after = ["tee-api-call-accept"]
-    value = "s(C)"                              # may use the old value of the attribute as OLD
+    value = "s(OLD)"                              # may use the old value of the attribute as OLD
 
 `true-after`/`false-after` are short for `set` entries with the values true/false; the sort is
-`sort = "..."`, else Bool when init is a boolean.  A label must name a rule of SRC_DIR; a glob must
-match at least one.  A rule gets the ghost attribute updates of all patterns that match its label;
-its left-hand side must have exactly one object of the class.  A rule whose right-hand side has an
-object of the class that its left-hand side does not have creates it, and gets the init values.
+`sort = "..."`, else Bool when initial-value is a boolean.  A label must name a rule of SRC_DIR; a
+glob must match at least one.  A rule gets the ghost attribute updates of all patterns that match its
+label; its left-hand side must have exactly one object of the class.  A rule whose right-hand side
+has an object of the class that its left-hand side does not have creates it, and gets the initial
+values.
 
 The .toml file is compiled to a ghost module (written to <SRC_DIR>/../../ghost/<name>.maude when that
 is a build stage, for inspection; else to a temporary directory) and composed like a .maude ghost file.
@@ -80,11 +90,42 @@ def toml_value(v):
     return str(v)
 
 
+GHOST_KEYS = {'var', 'class', 'initial-value', 'sort', 'true-after', 'false-after', 'set'}
+
+
+def ghost_entries(data, path):
+    """The ghost attributes of a case-study manifest (its [ghost] table or [[ghost]] tables), as
+    [(class, attr, entry)].  Raises ValueError on a malformed entry."""
+    ghost = data.get('ghost', [])
+    entries = [ghost] if isinstance(ghost, dict) else ghost
+    out, seen = [], set()
+    for i, e in enumerate(entries):
+        where = '%s: [ghost] #%d' % (path, i + 1)
+        if not isinstance(e, dict):
+            raise ValueError('%s: not a table' % where)
+        unknown = sorted(set(e) - GHOST_KEYS)
+        if unknown:
+            raise ValueError('%s: unknown key %s (keys: %s)' % (where, ', '.join(unknown),
+                             ', '.join(sorted(GHOST_KEYS))))
+        for k in ('var', 'class', 'initial-value'):
+            if k not in e:
+                raise ValueError('%s: no %s' % (where, k))
+        key = (e['class'], e['var'])
+        if key in seen:
+            raise ValueError('%s: ghost %s.%s declared twice' % (where, *key))
+        seen.add(key)
+        out.append((e['class'], e['var'], e))
+    return out
+
+
 def compile_toml(gen, src, path):
     """The ghost module text for the [ghost] tables of path, and its file name stem."""
     with open(path, 'rb') as fh:
         data = tomllib.load(fh)
-    ghost = data.get('ghost')
+    try:
+        ghost = ghost_entries(data, path)
+    except ValueError as ex:
+        raise gen.GenError(str(ex))
     if not ghost:
         raise gen.GenError('%s: no [ghost] table' % path)
     rules, classes = scan_rules(gen, src)
@@ -94,31 +135,28 @@ def compile_toml(gen, src, path):
 
     attrs = {}        # (class, attr) -> (sort, init)
     updates = {}      # label -> {(class, attr): value}
-    for cls, table in ghost.items():
+    for cls, attr, spec in ghost:
         if cls not in classes:
             raise gen.GenError('%s: class %s is not declared in %s' % (path, cls, src))
-        for attr, spec in table.items():
-            if 'init' not in spec:
-                raise gen.GenError('%s: ghost.%s.%s has no init' % (path, cls, attr))
-            init = spec['init']
-            sort = spec.get('sort') or ('Bool' if isinstance(init, bool) else None)
-            if sort is None:
-                raise gen.GenError('%s: ghost.%s.%s needs a sort' % (path, cls, attr))
-            attrs[(cls, attr)] = (sort, toml_value(init))
-            sets = [(p, 'true') for p in spec.get('true-after', [])] + \
-                   [(p, 'false') for p in spec.get('false-after', [])]
-            for entry in spec.get('set', []):
-                sets += [(p, str(entry['value'])) for p in entry['after']]
-            for pat, val in sets:
-                hit = [lab for lab in labels if fnmatch.fnmatchcase(lab, pat)]
-                if not hit:
-                    raise gen.GenError('%s: ghost.%s.%s: no rule label matches %s' % (path, cls, attr, pat))
-                for lab in hit:
-                    old = updates.setdefault(lab, {}).get((cls, attr))
-                    if old is not None and old != val:
-                        raise gen.GenError('%s: rule [%s] would set %s.%s to both %s and %s'
-                                           % (path, lab, cls, attr, old, val))
-                    updates[lab][(cls, attr)] = val
+        init = spec['initial-value']
+        sort = spec.get('sort') or ('Bool' if isinstance(init, bool) else None)
+        if sort is None:
+            raise gen.GenError('%s: ghost %s.%s needs a sort' % (path, cls, attr))
+        attrs[(cls, attr)] = (sort, toml_value(init))
+        sets = [(p, 'true') for p in spec.get('true-after', [])] + \
+               [(p, 'false') for p in spec.get('false-after', [])]
+        for entry in spec.get('set', []):
+            sets += [(p, str(entry['value'])) for p in entry['after']]
+        for pat, val in sets:
+            hit = [lab for lab in labels if fnmatch.fnmatchcase(lab, pat)]
+            if not hit:
+                raise gen.GenError('%s: ghost %s.%s: no rule label matches %s' % (path, cls, attr, pat))
+            for lab in hit:
+                old = updates.setdefault(lab, {}).get((cls, attr))
+                if old is not None and old != val:
+                    raise gen.GenError('%s: rule [%s] would set %s.%s to both %s and %s'
+                                       % (path, lab, cls, attr, old, val))
+                updates[lab][(cls, attr)] = val
 
     # creation sites: an object of a ghost class on the right-hand side whose identifier is not an
     # object of the left-hand side

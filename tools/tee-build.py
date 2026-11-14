@@ -5,11 +5,10 @@ Usage
     python3 tools/tee-build.py case-studies/NAME [--mode plain|dmc|m2l] [--invisible] [--spec DIR]
 
 case-studies/NAME/NAME.toml says what the analyzed system is:
-    [spec] features   the API feature groups of the spec that the model uses (mk/features.mk, in
-                      lower case with hyphens); every other group is dropped
-    [ghost...]        ghost attributes of spec objects (tools/ghost.py)
+    [ghost]           ghost attributes of spec objects (tools/ghost.py)
     [invisible]       the rules turned into equations with --invisible (tools/gen-invisible.py)
     [ta.KEY]          a trusted application translated from C (tools/ta2imp.py)
+Every API feature group of the spec (mk/features.mk) is on.
 How it is analyzed is chosen here: --mode (plain build, DM-Check build, maude2lean build) and
 --invisible (the invisible-transition reduction of the paper).
 
@@ -52,15 +51,8 @@ def main(argv):
     with open(manifest, 'rb') as fh:
         data = tomllib.load(fh)
 
-    known = api_features()
-    wanted = data.get('spec', {}).get('features', [])
-    flags = {f: '0' for f in known}
-    for f in wanted:
-        var = f.upper().replace('-', '_')
-        if var not in flags:
-            sys.exit('%s: unknown feature %s (known: %s)' % (manifest, f,
-                     ', '.join(k.lower().replace('_', '-') for k in known)))
-        flags[var] = '1'
+    # every feature on, passed explicitly so that a cached setting of the build is overridden
+    flags = {f: '1' for f in api_features()}
 
     build = name + ('' if args.mode == 'plain' else '-' + args.mode) + ('-inv' if args.invisible else '')
     make = ['make', '--no-print-directory', '-C', ROOT, 'NAME=' + build, 'WITHOUT=']

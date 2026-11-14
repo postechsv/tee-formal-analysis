@@ -62,13 +62,14 @@ mod LTL-PROPERTIES is
        /\ (reEncReq(3) -> [] ~ reEncSucc(3))
        /\ (reEncReq(4) -> [] ~ reEncSucc(4)))) .
     
---- P4: When the broker TA starts running, it should eventually terminate.
+--- P4: Once the TA starts running, it should eventually terminate (paper Table 8).
 
   eq p4 =
-    [] (start.TA -> <> term.TA) .
+    [] (running.TA -> <> ~ running.TA) .
 
+  --- P4N (paper Table 12): without a panic, every run of the TA eventually terminates.
   eq p4n =
-    ([] ~ panic.TA) -> p4 .
+    ([] ~ panic.TA) -> [] (running.TA -> <> ~ running.TA) .
 
 --- P5: If subscribers receive messages from publishers, messages sent from each publisher are in order.
 

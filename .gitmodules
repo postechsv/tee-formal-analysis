@@ -1,4 +1,3 @@
-[submodule "formal-model"]
+[submodule "spec"]
 	path = spec
-	url = git@github.com:postechsv/tee-formal-spec.git
-	branch = main
+	url = git@github.com:kkw423/tee-formal-spec.git

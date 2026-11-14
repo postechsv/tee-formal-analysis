@@ -12,7 +12,6 @@ that specification.
 | `case-studies/mqttz/` | The MQT-TZ broker: `mqttz.toml` (the manifest), `ta/` (the upstream C TA, its modeling patch, the fix patch, the TEE-IMP dispatcher and the template), `ra/`, `env/` (broker, clients, entities, TA constants), `system.maude`, `scenarios/`, `properties/` (LTL), `threats/`, `tests/`, `cmd/` (entry modules of the analyses). |
 | `case-studies/kmgk/` | The KMGK benchmark. Not yet ported to the current specification. |
 | `tools/` | Build and transformation tools: `gen-dmc.py` (DM-Check build), `gen-maude2lean.py`, `ghost.py`, `ta2imp.py` (C TA to TEE-IMP), `tee-build.py` (case-study build), `gen-docs.py`, the spec test runners. |
-| `ghost/` | Ghost files composed with the spec rules (`make GHOST=...`). |
 | `mk/features.mk` | Feature groups of the specification that a build can drop. |
 | `experiments/` | Scripts that run the experiments of the paper tables and summarize their logs. |
 | `results/paper/` | Raw logs of the paper experiments. Other output under `results/` is not tracked. |
@@ -39,7 +38,7 @@ make test                    # build the spec into build/default and run its tes
 make help                    # features, settings and targets
 make NAME=t CRYPTO=0 test    # a build without the cryptographic operation API
 make NAME=t DMC=1            # the DM-Check build
-make NAME=t GHOST=ghost/overwrite.maude DMC=1
+make NAME=t GHOST=FILE.maude DMC=1  # compose a ghost module with the spec rules
 make docs                    # documentation site of the spec in build/docs
 ```
 

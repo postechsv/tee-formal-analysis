@@ -5,7 +5,7 @@
 #   make NAME=t CRYPTO=0    build without the crypto modules
 #   make NAME=t WITHOUT=M   build without module M (must be a pr line in main.maude)
 #   make NAME=t DMC=1       build the DM-Check version (tools/gen-dmc.py) instead of a plain copy
-#   make NAME=t GHOST=ghost/x.maude   compose the ghost file(s) with the spec rules (tools/ghost.py)
+#   make NAME=t GHOST=x.maude   compose the ghost file(s) with the spec rules (tools/ghost.py)
 #                           before the copy or gen-dmc; a space-separated list is allowed, and a
 #                           case-study .toml gives its [ghost] tables. Cached like DMC; GHOST= turns it off.
 #   make mqttz [MODE=dmc] [INVISIBLE=1]  build the case study case-studies/mqttz (tools/tee-build.py):

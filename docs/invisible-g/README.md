@@ -39,8 +39,10 @@ Each equation is an exact copy of its rule (118 when this note was written, 136 
    (set-operation-key-panic, cipher-update-panic, close-and-delete-persistent-panic,
    create-persistent-abnormal-storage-panic: panic.TA is not invisible); object-side rules on
    two objects; while and fCall as equations (termination relies on the program).
-5. Coherence: read-, write- and delete-access-panic (init stage, not in G) are enabled in the
-   same state as a G start rule, so under G they never fire.  The artifact has no such rules.
+5. Coherence: read-, write- and delete-access-panic (init stage, not in G) were enabled in the
+   same state as a G start rule, so under G they never fired.  Since spec be0cebd (2026-11-14) the
+   handle checks the access rights and a refusal panics the TA, as in the artifact (whose read and
+   write got stuck instead of panicking).
 
 ## 3. Remaining state difference (NON, unpatched, G on): 28,870 vs 36,024
 

@@ -134,7 +134,7 @@
 
 <p>Errors defined by the API are return codes: a failing call returns <code>F[# RC]</code>, for example <code>errorOutOfMemory</code>, <code>errorNotSupported</code>, or <code>errorItemNotFound</code>. Storage failures are mapped to return codes by <code>storageErrCode</code> in [[mod:TEE-OS-BEHAVIOR]].</p>
 
-<p>Programmer errors are panics, which set the TA status to <code>panic</code>. [[mod:GENERAL-PANIC]] covers null handles: [[op:nullHandlePanics]] lists the APIs for which the null handle is an error, and [[rule:null-handle-panic]] applies it. Access rules live in the feature group files, for example [[rule:delete-access-panic]] in [[mod:PERSISTENT-PANIC]] and [[rule:read-access-panic]] in [[mod:DATA-STREAM-PANIC]].</p>
+<p>Programmer errors are panics, which set the TA status to <code>panic</code>. [[mod:GENERAL-PANIC]] covers null handles: [[op:nullHandlePanics]] lists the APIs for which the null handle is an error, and [[rule:null-handle-panic]] applies it. Access rights are checked by the handle when it gets the request: a handle without the right answers with a failure, for example [[rule:read-object-data-access-fail]] in [[mod:DATA-STREAM-PANIC]], and the TA panics on it ([[rule:read-access-panic]]).</p>
 
 <h2>Feature groups</h2>
 

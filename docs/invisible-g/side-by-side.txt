@@ -1,0 +1,291 @@
+################ CreatePersistentObject
+A G start  create-persistent-subroutine               | < TK : TaKernel | app-status : normal , api-call : noCall , api-return : noReturn , api-state : started , current-api : CreatePersistentObject , current-params : fileId(F
+A G mid    create-persistent-subroutine               | retTrustedOS(storageStatus(storageNormal) EXISTENCE , TK) < TK : TaKernel | app-status : normal , api-state : waitStorageCheck , current-api : CreatePersistentObject , cu
+A G mid    create-persistent-subroutine-2             | < TK : TaKernel | app-status : normal , api-state : transformTransient , current-api : CreatePersistentObject , current-params : handle(HANDLE) , PARAMS >
+A G finish create-persistent-sucess                   | retAttributeAndDelete(ATTRS, OBJTYPE, OBJUSAGES, TK) < TK : TaKernel | app-status : normal , api-state : waitReqAttributeAndDelete , current-api : CreatePersistentObject 
+A G finish create-persistent-success                  | retTrustedOS(acceptNotification, TK) < TK : TaKernel | app-status : normal , api-state : waitNotifyFileCreation , current-api : CreatePersistentObject , current-params : 
+A G finish create-persistent-err                      | < TK : TaKernel | api-state : accessRightConflict , current-api : CreatePersistentObject >
+A G finish create-persistent-memory-err               | < TK : TaKernel | app-status : outOfMemory , api-call : noCall , api-return : noReturn , current-api : CreatePersistentObject >
+A G mid    create-persistent-subroutine               | < TK : TaKernel | app-status : normal , api-state : creationNotReady , current-api : CreatePersistentObject , current-params : fileId(FILE) , PARAMS , trust-app-id : TN >
+A G mid    create-persistent-subroutine               | finishDeleteOldPersistent(TK) < TK : TaKernel | app-status : normal , api-state : waitDeleteOldPersistent , current-api : CreatePersistentObject >
+A G mid    create-persistent-subroutine               | < TK : TaKernel | app-status : normal , api-state : creationReady , current-api : CreatePersistentObject , current-params : handle(HANDLE) , opt(OPTHANDLE) , PARAMS >
+A G mid    create-persistent-subroutine               | < TK : TaKernel | app-status : normal , api-state : createPureData , current-api : CreatePersistentObject , current-params : (fileId(FILE) , data(DATALIST) , size(DATASIZ
+A G mid    create-persistent-subroutine-3             | < TK : TaKernel | app-status : normal , api-state : createPersistent , current-api : CreatePersistentObject , current-params : handle(HANDLE) , PARAMS >
+A G mid    create-persistent-subroutine-3             | retAttributeTr(ATTRS, OBJTYPE, OBJUSAGES, TK) < TK : TaKernel | app-status : normal , api-state : waitReqAttribute , current-api : CreatePersistentObject , current-params
+A G mid    create-persistent-subroutine-3             | retAttributePr(ATTRS, OBJTYPE, OBJUSAGES, TK) < TK : TaKernel | app-status : normal , api-state : waitReqAttribute , current-api : CreatePersistentObject , current-params
+A G mid    create-persistent-subroutine-3             | < TK : TaKernel | app-status : normal , api-state : createPersistentUsingAttrs , current-api : CreatePersistentObject , current-params : (fileId(FILE) , handle(HANDLE) , 
+A G finish create-persistent-abnormal-storage-err     | retTrustedOS(storageStatus(STATUS) EXISTENCE, TK) < TK : TaKernel | app-status : normal , api-state : waitStorageCheck , current-api : CreatePersistentObject >
+A . no-TA  service-receive                            | reqTrustedOS(SIL , TK , TN) < KI : TeeOSKernel | service-in : nil , service-out : nil , service-request-ta : noAppId , service-request-ta-inst : noInstId >
+A . no-TA  create-persistent-subroutine-2             | reqAttributeAndDelete(HANDLE, TK) < OI : TransientObject | handle-set : < HANDLE : ObjectHandle | is-initialized : true >, object-type : OBJTYPE, attribute-set : ATTRS, o
+A G no-TA  create-persistent-subroutine               | deleteOldPersistent(FILE , TK , TN) < OI : PersistentObject | file-id : FILE , data-stream-id : DI , trust-app-id : TN > < DI : DataStreamObject | persistent-owner-id : O
+A G no-TA  copy-object-attributes-subroutine          | reqAttribute(HANDLE , TK) < OI : PersistentObject | handle-set : (< HANDLE : ObjectHandle | > HS), object-type : OBJTYPE , attribute-set : ATTRS , object-usage-set : OBJU
+A G no-TA  copy-object-attributes-subroutine          | reqAttribute(HANDLE , TK) < OI : TransientObject | handle-set : < HANDLE : ObjectHandle | is-initialized : true > , object-type : OBJTYPE , attribute-set : ATTRS , object
+C G persistent create-persistent-determine-case                 | < TK : TAKernel | api-call : init(createPersistent[ZsCreatePersistentObject0 # FILE # FLAGS # HI # DATA ZsCreatePersistentObject5 # OPTHANDLE ZrCreatePersistentObject]) ,
+C G persistent create-persist-success                           | (msg createSuccess[# HI] from PI to TK) < TK : TAKernel | api-call : final(createPersistent[PARAMS]), status : (normal).AppStatus >
+C G persistent create-persist-fail                              | (msg createFail[] from SI to TK) < TK : TAKernel | api-call : final(createPersistent[PARAMS]), status : (normal).AppStatus >
+C G persistent create-persist-mem-err                           | < TK : TAKernel | status : outOfMemory , api-call : init(createPersistent[PARAMS]) >
+C G persistent create-persist-mem-err-final                     | < TK : TAKernel | status : outOfMemory , api-call : final(createPersistent[PARAMS]) >
+C . persistent create-persistent-abnormal-storage-panic         | (msg create[ARGS] from TK to SI) < TK : TAKernel | status : (normal).AppStatus > < SI : Storage | status : STATUS >
+C . persistent create-persist-overwrite-check                   | (msg create[# METHOD # FILE # FLAGS # HI # DATA] from TK to SI) < PI : PersistObj | file-name : FILE > < SI : Storage | status : (normal).StorageStatus , files : FILES , 
+C . persistent create-persist-pure-new                          | (msg create[# pure # FILE # FLAGS # HI # DATA] from TK to SI) < SI : Storage | status : (normal).StorageStatus , files : FILES , counter : N >
+C . persistent create-persist-transform-new                     | (msg create[# transform # FILE # FLAGS # HI # DATA] from TK to SI) < HI : ObjHandle | oid : OI > < OI : TransObj | type : TYPE , usages : USAGES , max-size : M , attribut
+C . persistent create-persist-persist-new                       | (msg create[# persist # FILE # FLAGS # HI # DATA] from TK to SI) < HI : ObjHandle | oid : OI > < OI : CryptoObj | type : TYPE , usages : USAGES , max-size : M , attribute
+C . persistent create-persist-pure                              | (msg create[# pure # FILE # FLAGS # HI # DATA # N # TK] from SI to PI) < PI : PersistObj | file-name : FILE >
+C . persistent create-persist-transform                         | (msg create[# transform # FILE # FLAGS # HI # DATA # N # TK] from SI to PI) < PI : PersistObj | file-name : FILE > < HI : ObjHandle | oid : OI > < OI : TransObj | type : 
+C . persistent create-persist-persist                           | (msg create[# persist # FILE # FLAGS # HI # DATA # N # TK] from SI to PI) < PI : PersistObj | file-name : FILE > < HI : ObjHandle | oid : OI > < OI : CryptoObj | type : T
+################ SetOperationKey
+A G start  set-operation-key-subroutine               | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : SetOperationKey , current-params : keyHandle(KEY) , PARAMS >
+A G mid    set-operation-key-subroutine-1             | retAttributeTr(ATTRS, OBJTYPE, OBJUSAGES, TK) < TK : TaKernel | api-state : waitReqAttribute , current-api : SetOperationKey , current-params : handle(HANDLE) , PARAMS >
+A G finish set-operation-key-success                  | finishSetOperationKey(TK) < TK : TaKernel | api-state : waitSetOperationKey , current-api : SetOperationKey >
+A G panic  set-operation-key-panic                    | failSetOperationKey(TK) < TK : TaKernel | api-state : waitSetOperationKey , current-api : SetOperationKey >
+A G mid    set-operation-key-subroutine-2             | retAttributePr(ATTRS, OBJTYPE, OBJUSAGES, TK) < TK : TaKernel | api-state : waitReqAttribute , current-api : SetOperationKey , current-params : (handle(HANDLE) , PARAMS ,
+A G mid    set-operation-key-subroutine-2             | retTrustedOS(storageStatus(storageNormal) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : SetOperationKey , current-params : handle(HANDLE) , PARAMS 
+A G finish set-operation-key-storage-err              | retTrustedOS(storageStatus(STATUS), TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : SetOperationKey >
+A G no-TA  set-operation-key-success                  | reqSetOperationKey(HANDLE , OBJTYPE , ATTRS , TK) < CI : CryptoOperation | handle-set : < HANDLE : OperationHandle | is-initialized : false > , operation-mode : MODE >
+A G no-TA  set-operation-key-fail                     | reqSetOperationKey(HANDLE , OBJTYPE , ATTRS , TK) < CI : CryptoOperation | handle-set : < HANDLE : OperationHandle | is-initialized : false > , operation-mode : MODE >
+A . no-TA  service-receive                            | reqTrustedOS(SIL , TK , TN) < KI : TeeOSKernel | service-in : nil , service-out : nil , service-request-ta : noAppId , service-request-ta-inst : noInstId >
+A G no-TA  copy-object-attributes-subroutine          | reqAttribute(HANDLE , TK) < OI : PersistentObject | handle-set : (< HANDLE : ObjectHandle | > HS), object-type : OBJTYPE , attribute-set : ATTRS , object-usage-set : OBJU
+A G no-TA  copy-object-attributes-subroutine          | reqAttribute(HANDLE , TK) < OI : TransientObject | handle-set : < HANDLE : ObjectHandle | is-initialized : true > , object-type : OBJTYPE , attribute-set : ATTRS , object
+C . crypto-pan set-operation-key2-initialized-panic             | < TK : TAKernel | api-call : init(setOperationKey2[# HANDLE PARAMS]) > < HANDLE : OpHandle | state : handleState((init, HSF)) >
+C G cryptograp set-operation-key-subroutine                     | < TK : TAKernel | api-call : init(setOperationKey[ZsSetOperationKey0 # KEY ZrSetOperationKey]) >
+C . cryptograp set-operation-key-clear                          | < TK : TAKernel | api-call : init(setOperationKey[# HANDLE # null ZrSetOperationKey]) > < CI : CryptoOp | > < HANDLE : OpHandle | oid : CI , state : HS >
+C . cryptograp set-operation-key-subroutine-1                   | (msg retAttributeTr[# ATTRS # OBJTYPE # OBJUSAGES] from KEY to TK) < TK : TAKernel | api-call : exec(setOperationKey[# HANDLE # KEY ZrSetOperationKey] , 0) >
+C . cryptograp set-operation-key-uninitialized-key-panic        | (msg reqAttribute[] from TK to KEY) < TK : TAKernel | api-call : exec(setOperationKey[PARAMS] , 0) > < OI : TransObj | initialized : false > < KEY : ObjHandle | oid : OI 
+C G cryptograp set-operation-key-success                        | (msg finishSetOperationKey[] from HANDLE to TK) < TK : TAKernel | api-call : final(setOperationKey[PARAMS]) >
+C . cryptograp set-operation-key-panic                          | (msg failSetOperationKey[] from HANDLE to TK) < TK : TAKernel | api-call : final(setOperationKey[PARAMS]) >
+C . cryptograp set-operation-key-subroutine-2                   | (msg retAttributePr[# ATTRS # OBJTYPE # OBJUSAGES] from KEY to TK) < TK : TAKernel | api-call : exec(setOperationKey[# HANDLE # KEY ZrSetOperationKey] , 0) , storage : SI
+C . cryptograp set-operation-key-subroutine-2                   | (msg retStatus[# (normal).StorageStatus] from SI to TK) < TK : TAKernel | api-call : exec(setOperationKey[# HANDLE # KEY # ATTRS # OBJTYPE # OBJUSAGES ZrSetOperationKey] 
+C . cryptograp set-operation-key-storage-err                    | (msg retStatus[# STATUS] from SI to TK) < TK : TAKernel | api-call : exec(setOperationKey[PARAMS] , 1) >
+C . cryptograp set-operation-key2-subroutine                    | < TK : TAKernel | api-call : init(setOperationKey2[# HANDLE # KEY1 # KEY2]) > < HANDLE : OpHandle | state : HS , oid : CI > < CI : CryptoOp | algorithm : ALGO >
+C . cryptograp set-operation-key2-wrong-algorithm-panic         | < TK : TAKernel | api-call : init(setOperationKey2[# HANDLE ZsSetOperationKey21 ZsSetOperationKey22 ZrSetOperationKey2]) > < HANDLE : OpHandle | oid : CI, state : HS > < 
+C . cryptograp set-operation-key2-clear                         | < TK : TAKernel | api-call : init(setOperationKey2[# HANDLE # null # null]) > < CI : CryptoOp | algorithm : ALGO > < HANDLE : OpHandle | oid : CI , state : HS >
+C . cryptograp set-operation-key2-mixed-null-panic              | < TK : TAKernel | api-call : init(setOperationKey2[# HANDLE # KEY1 # KEY2]) >
+C . cryptograp set-operation-key2-same-key-security-error       | < TK : TAKernel | api-call : init(setOperationKey2[# HANDLE # KEY1 # KEY1]) > < HANDLE : OpHandle | oid : CI, state : HS > < CI : CryptoOp | algorithm : ALGO >
+C . cryptograp set-operation-key2-subroutine                    | (msg retAttributeTr[# ATTRS # OBJTYPE # OBJUSAGES] from KEY1 to TK) < TK : TAKernel | api-call : exec(setOperationKey2[# HANDLE # KEY1 # KEY2] , 0) >
+C . cryptograp set-operation-key2-first-persistent-key          | (msg retAttributePr[# ATTRS # OBJTYPE # OBJUSAGES] from KEY1 to TK) < TK : TAKernel | api-call : exec(setOperationKey2[# HANDLE # KEY1 # KEY2] , 0) , storage : SI >
+C . cryptograp set-operation-key2-first-persistent-key-ready    | (msg retStatus[# (normal).StorageStatus] from SI to TK) (msg resumeSetOperationKey2[# KEY2 # OBJTYPE # OBJUSAGES # ATTRS] from TK to TK) < TK : TAKernel | api-call : exec
+C . cryptograp set-operation-key2-first-persistent-storage-error | (msg retStatus[# STATUS] from SI to TK) (msg resumeSetOperationKey2[# KEY2 # OBJTYPE # OBJUSAGES # ATTRS] from TK to TK) < TK : TAKernel | api-call : exec(setOperationKey
+C . cryptograp set-operation-key2-subroutine                    | (msg retAttributeTr[# ATTRS2 # OBJTYPE2 # OBJUSAGES2] from KEY2 to TK) < TK : TAKernel | api-call : exec(setOperationKey2[# HANDLE # KEY1 # KEY2 # ATTRS # OBJTYPE # OBJUS
+C . cryptograp set-operation-key2-second-persistent-key         | (msg retAttributePr[# ATTRS2 # OBJTYPE2 # OBJUSAGES2] from KEY2 to TK) < TK : TAKernel | api-call : exec(setOperationKey2[# HANDLE # KEY1 # KEY2 # ATTRS # OBJTYPE # OBJUS
+C . cryptograp set-operation-key2-second-persistent-key-ready   | (msg retStatus[# (normal).StorageStatus] from SI to TK) (msg installStoredOperationKeys[# HANDLE # OBJTYPE # OBJUSAGES # ATTRS # OBJTYPE2 # OBJUSAGES2 # ATTRS2] from TK t
+C . cryptograp set-operation-key2-second-persistent-storage-error | (msg retStatus[# STATUS] from SI to TK) (msg installStoredOperationKeys[# HANDLE # OBJTYPE # OBJUSAGES # ATTRS # OBJTYPE2 # OBJUSAGES2 # ATTRS2] from TK to TK) < TK : TAK
+C . cryptograp set-operation-key2-uninitialized-key-panic       | (msg reqAttribute[] from TK to KEY) < TK : TAKernel | api-call : exec(setOperationKey2[PARAMS] , N) > < OI : TransObj | initialized : false > < KEY : ObjHandle | oid : OI
+C G cryptograp set-operation-key2-success                       | (msg finishSetOperationKey2[] from HANDLE to TK) < TK : TAKernel | api-call : final(setOperationKey2[PARAMS]) >
+C . cryptograp set-operation-key2-panic                         | (msg failSetOperationKey2[] from TK to HANDLE) < TK : TAKernel | api-call : final(setOperationKey2[PARAMS]) >
+C . cryptograp set-operation-key-top-level-handle-success       | (msg reqSetOperationKey[# OBJTYPE # ATTRS # OBJUSAGES] from TK to HANDLE) < HANDLE : OpHandle | oid : CI > < CI : CryptoOp | algorithm : ALGO , mode : MODE, max-size : KE
+C . cryptograp set-operation-key-top-level-handle-fail          | (msg reqSetOperationKey[# OBJTYPE # ATTRS # OBJUSAGES] from TK to HANDLE) < HANDLE : OpHandle | oid : CI , HSA:AttributeSet > < CI : CryptoOp | algorithm : ALGO, mode : M
+C . cryptograp set-operation-key2-top-level-handle              | (msg installOperationKeys[# OBJTYPE # OBJUSAGES # ATTRS # OBJTYPE2 # OBJUSAGES2 # ATTRS2] from TK to HANDLE) < HANDLE : OpHandle | oid : CI , HSA:AttributeSet > < CI : Cr
+C . cryptograp set-operation-key2-incompatible-key-panic        | (msg installOperationKeys[# OBJTYPE # OBJUSAGES # ATTRS # OBJTYPE2 # OBJUSAGES2 # ATTRS2] from TK to HANDLE) < HANDLE : OpHandle | oid : CI , HSA:AttributeSet > < CI : Cr
+C . os-service return-storage-status                            | < SI : Storage | status : STATUS > (msg getStatus[] from TK to SI)
+C . transient. req-attribute-transient                          | (msg reqAttribute[] from TK to HANDLE) < HANDLE : ObjHandle | oid : OI > < OI : TransObj | initialized : true , type : OBJTYPE , attributes : ATTRS , usages : OBJUSAGES >
+################ OpenPersistentObject
+A G start  open-persistent-subroutine                 | < TK : TaKernel | app-status : normal , api-call : noCall , api-return : noReturn , api-state : started , current-api : OpenPersistentObject , current-params : (fileId(FI
+A G mid    open-persistent-subroutine                 | retTrustedOS(storageStatus(storageNormal) fileExist , TK) < TK : TaKernel | app-status : normal , api-state : waitStorageCheck , current-api : OpenPersistentObject , curr
+A G finish open-persistent-success                    | finishOpenPersistentHandle(HANDLE , TK) < TK : TaKernel | app-status : normal , api-state : waitOpenPersistent , current-api : OpenPersistentObject >
+A G finish open-persistent-fail                       | failOpenPersistentHandle(TK) < TK : TaKernel | app-status : normal , api-state : waitOpenPersistent , current-api : OpenPersistentObject >
+A G finish open-persistent-file-err                   | retTrustedOS(storageStatus(storageNormal) noFileExist , TK) < TK : TaKernel | app-status : normal , api-state : waitStorageCheck , current-api : OpenPersistentObject >
+A G finish open-persistent-memory-err                 | < TK : TaKernel | app-status : outOfMemory , api-call : noCall , api-return : noReturn , current-api : OpenPersistentObject >
+A G finish open-persistent-storage-err                | retTrustedOS(storageStatus(STATUS) noFileExist , TK) < TK : TaKernel | app-status : normal , api-state : waitStorageCheck , current-api : OpenPersistentObject >
+A . no-TA  service-receive                            | reqTrustedOS(SIL , TK , TN) < KI : TeeOSKernel | service-in : nil , service-out : nil , service-request-ta : noAppId , service-request-ta-inst : noInstId >
+A G no-TA  open-persistent-subroutine                 | openPersistentHandle(FILE , DATAFLAGS , N , TK) < OI : PersistentObject | handle-set : HS , file-id : FILE >
+A G no-TA  open-persistent-subroutine                 | openPersistentHandle(FILE , DATAFLAGS , N , TK) < OI : PersistentObject | handle-set : HS , file-id : FILE >
+C . persistent open-persistent-default-private-storage          | < TK : TAKernel | api-call : init(openPersistentObject[# FILE # DATAFLAGS]) >
+C G persistent open-persistent-subroutine                       | < TK : TAKernel | status : (normal).AppStatus , api-call : init(openPersistentObject[# STORID # FILE ZsOpenPersistentObject2 ZrOpenPersistentObject]) , storage : SI >
+C . persistent open-persistent-status-normal                    | (msg retStatus[# (normal).StorageStatus] from SI to TK) < TK : TAKernel | status : (normal).AppStatus , api-call : exec(openPersistentObject[# STORID # FILE ZsOpenPersist
+C G persistent open-persistent-storage-id-not-found             | < TK : TAKernel | status : (normal).AppStatus , api-call : init(openPersistentObject[# STORID ZsOpenPersistentObject1 ZsOpenPersistentObject2 ZrOpenPersistentObject]) >
+C . persistent open-persistent-subroutine                       | (msg retFileExist[# true] from SI to TK) < TK : TAKernel | status : (normal).AppStatus , api-call : exec(openPersistentObject[# STORID # FILE # DATAFLAGS] , 1) , storage 
+C G persistent open-persistent-success                          | (msg finishOpenPersistentHandle[# HANDLE] from SI to TK) < TK : TAKernel | status : (normal).AppStatus , api-call : final(openPersistentObject[PARAMS]) >
+C G persistent open-persistent-fail                             | (msg failOpenPersistentHandle[] from SI to TK) < TK : TAKernel | status : (normal).AppStatus , api-call : final(openPersistentObject[PARAMS]) >
+C . persistent open-persistent-file-err                         | (msg retFileExist[# false] from SI to TK) < TK : TAKernel | status : (normal).AppStatus , api-call : exec(openPersistentObject[PARAMS] , 1) >
+C G persistent open-persistent-memory-err                       | < TK : TAKernel | status : outOfMemory , api-call : init(openPersistentObject[PARAMS]) >
+C G persistent open-persistent-memory-err-exec                  | < TK : TAKernel | status : outOfMemory , api-call : exec(openPersistentObject[PARAMS], N) >
+C G persistent open-persistent-memory-err-final                 | < TK : TAKernel | status : outOfMemory , api-call : final(openPersistentObject[PARAMS]) >
+C . persistent open-persistent-storage-err                      | (msg retStatus[# STATUS] from SI to TK) < TK : TAKernel | status : (normal).AppStatus , api-call : exec(openPersistentObject[PARAMS] , 0) >
+C . os-service return-storage-status                            | < SI : Storage | status : STATUS > (msg getStatus[] from TK to SI)
+C . os-service return-file-exist                                | < SI : Storage | files : FL > (msg checkFileExist[# FILE] from TK to SI)
+C . persistent open-persistent-top-level-handle                 | (msg openPersistentHandle[# FILE # DATAFLAGS # N] from TK to SI) < oid(M, SI) : PersistObj | file-name : FILE , open-handles : OHS >
+C . persistent open-persistent-top-level-conflict               | (msg openPersistentHandle[# FILE # DATAFLAGS # N] from TK to SI) < oid(M, SI) : PersistObj | file-name : FILE , open-handles : OHS >
+################ GetObjectInfo1
+A G start  get-obj-info-subroutine                    | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : GetObjectInfo1 , current-params : handle(HANDLE) , trust-app-id : TN >
+A G finish get-obj-info-transient-success             | retObjectInfoTr(OBJTYPE , KEYSIZE , MAXOBJSIZE , OBJUSAGES , TK) < TK : TaKernel | api-state : waitObjectInfo , current-api : GetObjectInfo1 >
+A G mid    get-obj-info-persistent-subroutine         | retObjectInfoPr(OBJTYPE , KEYSIZE , MAXOBJSIZE , OBJUSAGES , DATASIZE , DATAPOS , DATAFLAGS , TK) < TK : TaKernel | api-state : waitObjectInfo , current-api : GetObjectIn
+A G finish get-obj-info-persistent-success            | retTrustedOS(storageStatus(storageNormal) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : GetObjectInfo1 , current-params : PARAMS , info(INFO) >
+A G finish get-obj-info-abnormal-storage-err          | retTrustedOS(storageStatus(STATUS) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : GetObjectInfo1 >
+A G no-TA  get-obj-info-transient-subroutine          | reqObjectInfo(HANDLE , TK , TN) < OI : TransientObject | handle-set : < HANDLE : ObjectHandle | > , object-type : OBJTYPE , max-object-size : MAXOBJSIZE , attribute-set :
+A G no-TA  get-obj-info-persistent-subroutine         | reqObjectInfo(HANDLE , TK , TN) < OI : PersistentObject | handle-set : (< HANDLE : ObjectHandle | data-access-flag-set : DATAFLAGS , data-position : DATAPOS > HS) , objec
+A . no-TA  service-receive                            | reqTrustedOS(SIL , TK , TN) < KI : TeeOSKernel | service-in : nil , service-out : nil , service-request-ta : noAppId , service-request-ta-inst : noInstId >
+C G generic.ma get-obj-info-subroutine                          | < TK : TAKernel | api-call : init(getObjectInfo1[# HANDLE]) , storage : SI >
+C . generic.ma get-obj-info-transient-success                   | (msg retObjectInfoTr[# OBJTYPE # KEYSIZE # MAXOBJSIZE # OBJUSAGES] from HANDLE to TK) < TK : TAKernel | api-call : exec(getObjectInfo1[PARAMS] , 0) >
+C . generic.ma get-obj-info-persistent-subroutine               | (msg retObjectInfoPr[# OBJTYPE # KEYSIZE # MAXOBJSIZE # OBJUSAGES # DATASIZE # DATAPOS # DATAFLAGS] from HANDLE to TK) < TK : TAKernel | api-call : exec(getObjectInfo1[PA
+C . generic.ma get-obj-info-persistent-success                  | (msg retStatus[# (normal).StorageStatus] from SI to TK) < TK : TAKernel | api-call : exec(getObjectInfo1[PARAMS # INFO] , 1) >
+C . generic.ma get-obj-info-abnormal-storage-err                | (msg retStatus[# STATUS] from SI to TK) < TK : TAKernel | api-call : exec(getObjectInfo1[PARAMS] , 1) >
+C . generic.ma get-obj-info-transient-top-level-handle          | (msg reqObjectInfo[# SI] from TK to HANDLE) < oid(N , TK) : TransObj | type : OBJTYPE , max-size : MAXOBJSIZE , attributes : ATTRS , usages : OBJUSAGES > < HANDLE : ObjHa
+C . generic.ma get-obj-info-persistent-top-level-handle         | (msg reqObjectInfo[# SI] from TK to HANDLE) < oid(M, SI) : PersistObj | type : OBJTYPE, max-size : MAXOBJSIZE, attributes : ATTRS, usages : OBJUSAGES, data-stream : STREA
+C . os-service return-storage-status                            | < SI : Storage | status : STATUS > (msg getStatus[] from TK to SI)
+################ CloseAndDeletePersistentObject1
+A G start  close-and-delete-persistent-subroutine     | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : CloseAndDeletePersistentObject1 , current-params : handle(HANDLE) , trus
+A . mid    close-and-delete-persistent-subroutine     | retTrustedOS(storageStatus(storageNormal) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : CloseAndDeletePersistentObject1 , current-params : handle(H
+A G finish close-and-delete-persistent-success        | retTrustedOS(acceptNotification , TK) < TK : TaKernel | api-state : waitNotifyFileDeletion , current-api : CloseAndDeletePersistentObject1 >
+A G panic  close-and-delete-persistent-panic          | failDeletePersistent(TK) < TK : TaKernel | api-state : waitDeletePersistent , current-api : CloseAndDeletePersistentObject1 >
+A G start  close-and-delete-persistent-success        | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : CloseAndDeletePersistentObject1 , current-params : handle(HANDLE) , trus
+A G finish close-and-delete-persistent-storage-err    | retTrustedOS(storageStatus(storageInAccessible) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : CloseAndDeletePersistentObject1 >
+A . no-TA  service-receive                            | reqTrustedOS(SIL , TK , TN) < KI : TeeOSKernel | service-in : nil , service-out : nil , service-request-ta : noAppId , service-request-ta-inst : noInstId >
+A G no-TA  close-and-delete-persistent-subroutine     | deletePersistent(HANDLE , TK , TN) < OI : PersistentObject | handle-set : (< HANDLE : ObjectHandle | data-access-flag-set : DATAFLAGS > HS) , data-stream-id : DI , file-i
+A G no-TA  close-and-delete-persistent-subroutine     | deletePersistent(HANDLE , TK , TN) < OI : PersistentObject | handle-set : (< HANDLE : ObjectHandle | data-access-flag-set : DATAFLAGS > HS) , data-stream-id : DI , file-i
+C . persistent delete-access-panic                              | < TK : TAKernel | api-call : init(closeAndDeletePersistentObject1[# HANDLE ZrCloseAndDeletePersistentObject1]) > < HANDLE : ObjHandle | flags : DATAFLAGS >
+C G persistent close-and-delete-persistent-subroutine           | < TK : TAKernel | api-call : init(closeAndDeletePersistentObject1[# HANDLE]) , storage : SI >
+C . persistent close-and-delete-persistent-top-level-start-ok   | (msg retStatus[# (normal).StorageStatus] from SI to TK) < TK : TAKernel | api-call : exec(closeAndDeletePersistentObject1[# HANDLE] , 0) , storage : SI >
+C . persistent close-and-delete-persistent-corrupt-subroutine   | (msg retStatus[# (corrupted).StorageStatus] from SI to TK) < TK : TAKernel | api-call : exec(closeAndDeletePersistentObject1[# HANDLE] , 0) , storage : SI >
+C . persistent close-and-delete-persistent-subroutine-notify    | (msg finishDeletePersistent[# FILE] from HANDLE to TK) < TK : TAKernel | api-call : exec(closeAndDeletePersistentObject1[PARAMS] , 1) , storage : SI >
+C G persistent close-and-delete-persistent-success              | (msg acceptNotification[] from SI to TK) < TK : TAKernel | api-call : final(closeAndDeletePersistentObject1[PARAMS]) >
+C . persistent close-and-delete-persistent-panic                | (msg failDeletePersistent[] from HANDLE to TK) < TK : TAKernel | api-call : exec(closeAndDeletePersistentObject1[PARAMS] , 1) >
+C G persistent close-and-delete-persistent-null-success         | < TK : TAKernel | api-call : init(closeAndDeletePersistentObject1[# HANDLE]) >
+C . persistent close-and-delete-persistent-storage-err          | (msg retStatus[# (notAvailable).StorageStatus] from SI to TK) < TK : TAKernel | api-call : exec(closeAndDeletePersistentObject1[PARAMS] , 0) >
+C . os-service return-storage-status                            | < SI : Storage | status : STATUS > (msg getStatus[] from TK to SI)
+C . os-service notify-file-deletion                             | < SI : Storage | files : (FILE , FL) > (msg notifyFileDeletion[# FILE] from TK to SI)
+C . os-service notify-file-deletion-absent                      | < SI : Storage | files : FL > (msg notifyFileDeletion[# FILE] from TK to SI)
+C . persistent close-and-delete-persistent-top-level-start      | (msg deletePersistent[# SI] from TK to HANDLE) < oid(M, SI) : PersistObj | file-name : FILE , open-handles : oh(HANDLE, DATAFLAGS2) > < HANDLE : ObjHandle | oid : oid(M, 
+C . persistent close-and-delete-persistent-top-level-fail       | (msg deletePersistent[# SI] from TK to HANDLE) < oid(M, SI) : PersistObj | > < HANDLE : ObjHandle | oid : oid(M, SI), flags : DATAFLAGS >
+################ CopyObjectAttributes1
+A G mid    copy-object-attributes-subroutine          | retAttributePr(ATTRS , OBJTYPE , OBJUSAGES , TK) < TK : TaKernel | api-state : waitReqAttribute , current-api : CopyObjectAttributes1 , current-params : PARAMS , trust-ap
+A G mid    copy-object-attributes-subroutine          | retTrustedOS(storageStatus(storageNormal) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : CopyObjectAttributes1 , current-params : trgHandle(HANDLE) 
+A . finish copy-object-attributes-storage-err         | retTrustedOS(storageStatus(STATUS) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : CopyObjectAttributes1 >
+A G start  copy-object-attributes-subroutine          | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : CopyObjectAttributes1 , current-params : srcHandle(HANDLE2) , trgHandle(
+A G mid    copy-object-attributes-subroutine          | retAttributeTr(ATTRS , OBJTYPE , OBJUSAGES , TK) < TK : TaKernel | api-state : waitReqAttribute , current-api : CopyObjectAttributes1 , current-params : srcHandle(HANDLE2
+A G finish copy-object-attributes-success             | finishCopyAttribute(TK) < TK : TaKernel | api-state : waitCopyAttribute , current-api : CopyObjectAttributes1 >
+A . no-TA  service-receive                            | reqTrustedOS(SIL , TK , TN) < KI : TeeOSKernel | service-in : nil , service-out : nil , service-request-ta : noAppId , service-request-ta-inst : noInstId >
+A G no-TA  copy-object-attributes-subroutine          | reqAttribute(HANDLE , TK) < OI : PersistentObject | handle-set : (< HANDLE : ObjectHandle | > HS), object-type : OBJTYPE , attribute-set : ATTRS , object-usage-set : OBJU
+A G no-TA  copy-object-attributes-subroutine          | reqAttribute(HANDLE , TK) < OI : TransientObject | handle-set : < HANDLE : ObjectHandle | is-initialized : true > , object-type : OBJTYPE , attribute-set : ATTRS , object
+A G no-TA  copy-object-attributes-subroutine          | reqCopyAttribute(HANDLE , ATTRS , OBJTYPE , OBJUSAGES , TK) < OI : TransientObject | handle-set : < HANDLE : ObjectHandle | is-initialized : false > , object-type : OBJTY
+C G transient. copy-object-attrs-get-attrs                      | < TK : TAKernel | api-call : init(copyObjAttrs1[# HANDLE1 # HANDLE2]) >
+C . transient. copy-object-attrs-req-set-attrs                  | (msg retAttrs[ARGS] from HANDLE to TK) < TK : TAKernel | api-call : exec(copyObjAttrs1[# HI # HANDLE] , 0) >
+C . transient. copy-object-attrs-set-attrs-panic                | (msg getAttrsFail[] from HANDLE to TK) < TK : TAKernel | api-call : exec(copyObjAttrs1[# HI # HANDLE] , 0) >
+C G transient. copy-object-attrs-success                        | (msg setAttrsSuccess[] from HI to O) < O : TAKernel | api-call : final(copyObjAttrs1[PARAMS]) >
+C . transient. copy-object-attrs-panic                          | (msg setAttrsFail[] from HI to O) < O : TAKernel | api-call : final(copyObjAttrs1[PARAMS]) >
+C . persistent copy-object-attrs-try-ret-attrs-persistent       | (msg getAttrs[] from TK to HANDLE) < HANDLE : ObjHandle | oid : OI > < OI : PersistObj | type : TYPE , attributes : ATTRS , usages : USAGES >
+C . transient. copy-object-attrs-try-ret-attrs                  | (msg getAttrs[] from TK to HANDLE) < HANDLE : ObjHandle | oid : OI > < OI : TransObj | type : TYPE , attributes : ATTRS , usages : USAGES , initialized : B >
+C . transient. copy-object-attrs-copy-attrs                     | (msg setAttrs[# TYPE' # ATTRS # USAGES'] from O to HI) < OI : TransObj | type : TYPE , usages : USAGES , initialized : false > < HI : ObjHandle | oid : OI >
+C . transient. copy-object-attrs-copy-attrs-fail                | (msg setAttrs[ARGS] from O to HI) < HI : ObjHandle | oid : OI > < OI : TransObj | initialized : true >
+################ ReadObjectData
+A G start  read-object-data-subroutine                | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : ReadObjectData , trust-app-id : TN >
+A G mid    read-object-data-subroutine                | retTrustedOS(storageStatus(storageNormal) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : ReadObjectData , current-params : handle(HANDLE) , size(DAT
+A G finish read-object-data-storage-err               | retTrustedOS(storageStatus(STATUS) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : ReadObjectData >
+A G finish read-object-data-success                   | finishReadData(DATA , TK) < TK : TaKernel | api-state : waitReadObjectData , current-api : ReadObjectData >
+A G no-TA  read-object-data-subroutine                | readObjectData(HANDLE , DATASIZE , TK , TN) < OI : PersistentObject | handle-set : (< HANDLE : ObjectHandle | data-access-flag-set : DATAFLAGS , data-position : DATAPOS >
+A . no-TA  service-receive                            | reqTrustedOS(SIL , TK , TN) < KI : TeeOSKernel | service-in : nil , service-out : nil , service-request-ta : noAppId , service-request-ta-inst : noInstId >
+C . data-strea read-access-panic                                | < TK : TAKernel | api-call : init(readObjData[# HANDLE ZsReadObjectData1 ZrReadObjectData]) > < HANDLE : ObjHandle | flags : DATAFLAGS >
+C G data-strea read-object-data-get-storage-status              | < TK : TAKernel | api-call : init(readObjData[# HI ZsReadObjectData1 ZrReadObjectData]) , storage : SI >
+C . data-strea read-object-data-storage-status-check            | (msg retStatus[# STATUS] from SI to TK) < TK : TAKernel | api-call : exec(readObjData[# HI ZsReadObjectData1 ZrReadObjectData] , 0) >
+C G data-strea read-object-data-success                         | (msg retData[# DATA] from HANDLE to TK) < TK : TAKernel | api-call : final(readObjData[PARAMS]) >
+C . data-strea read-object-data-from-persist                    | (msg read[# DATASIZE] from TK to HANDLE) < oid(M, SI) : PersistObj | data-stream : STREAM > < HANDLE : ObjHandle | oid : oid(M, SI), flags : DATAFLAGS, pos : DATAPOS >
+C . os-service return-storage-status                            | < SI : Storage | status : STATUS > (msg getStatus[] from TK to SI)
+################ WriteObjectData
+A G start  write-object-data-subroutine               | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : WriteObjectData , trust-app-id : TN >
+A G mid    write-object-data-subroutine               | retTrustedOS(storageStatus(storageNormal) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : WriteObjectData , current-params : handle(HANDLE) , data(DA
+A G finish write-object-data-success                  | finishWriteData(TK) < TK : TaKernel | api-state : waitWriteObjectData , current-api : WriteObjectData >
+A G finish write-object-data-storage-err              | retTrustedOS(storageStatus(STATUS) , TK) < TK : TaKernel | api-state : waitStorageCheck , current-api : WriteObjectData >
+A . no-TA  write-object-data-subroutine               | writeObjectData(HANDLE , DATA , TK , TN) < OI : PersistentObject | handle-set : (< HANDLE : ObjectHandle | data-access-flag-set : DATAFLAGS , data-position : DATAPOS > HS
+A . no-TA  service-receive                            | reqTrustedOS(SIL , TK , TN) < KI : TeeOSKernel | service-in : nil , service-out : nil , service-request-ta : noAppId , service-request-ta-inst : noInstId >
+C . data-strea write-access-panic                               | < TK : TAKernel | api-call : init(writeObjectData[# HANDLE ZsWriteObjectData1 ZrWriteObjectData]) > < HANDLE : ObjHandle | flags : DATAFLAGS >
+C G data-strea write-object-data-subroutine                     | < TK : TAKernel | api-call : init(writeObjectData[PARAMS]) , storage : SI >
+C . data-strea write-object-data-subroutine                     | (msg retStatus[# (normal).StorageStatus] from SI to TK) < TK : TAKernel | api-call : exec(writeObjectData[# HI # DATA] , 0) , storage : SI >
+C . data-strea write-object-data-top-level-overflow             | (msg reqWriteObjectData[# DATA # SI] from TK to HANDLE) < TK : TAKernel | api-call : final(writeObjectData[PARAMS]) > < oid(M, SI) : PersistObj | > < HANDLE : ObjHandle |
+C G data-strea write-object-data-success                        | (msg finishWriteData[] from HANDLE to TK) < TK : TAKernel | api-call : final(writeObjectData[PARAMS]) >
+C . data-strea write-object-data-storage-err                    | (msg retStatus[# STATUS] from SI to TK) < TK : TAKernel | api-call : exec(writeObjectData[PARAMS] , 0) >
+C . data-strea write-object-data-top-level-handle               | (msg reqWriteObjectData[# DATA # SI] from TK to HANDLE) < oid(M, SI) : PersistObj | data-stream : STREAM > < HANDLE : ObjHandle | oid : oid(M, SI), flags : DATAFLAGS, pos
+C . os-service return-storage-status                            | < SI : Storage | status : STATUS > (msg getStatus[] from TK to SI)
+################ AllocateOperation
+A G start  allocate-operation-success                 | < TK : TaKernel | app-status : normal , api-call : noCall , api-return : noReturn , api-state : started , current-api : AllocateOperation , current-params : (alg(ALGO) , 
+A G start  allocate-operation-not-supported           | < TK : TaKernel | app-status : normal , api-call : noCall , api-return : noReturn , api-state : started , current-api : AllocateOperation , current-params : alg(ALGO) , m
+A G finish allocate-operation-memory-err              | < TK : TaKernel | app-status : outOfMemory , api-call : noCall , api-return : noReturn , current-api : AllocateOperation >
+C G cryptograp alloc-oper-success                               | < TK : TAKernel | status : (normal).AppStatus , api-call : init(allocOperation[# ALGO # MODE # KEYSIZE]) , counter : N >
+C G cryptograp alloc-oper-params-err                            | < TK : TAKernel | status : (normal).AppStatus , api-call : init(allocOperation[# ALGO # MODE # KEYSIZE]) >
+C G cryptograp alloc-oper-mem-err                               | < TK : TAKernel | status : outOfMemory , api-call : init(allocOperation[PARAMS]) >
+################ FreeOperation
+A G start  free-operation-not-null-subroutine         | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : FreeOperation , current-params : handle(HANDLE) >
+A G finish free-operation-not-null-success            | finishDeleteOperationObject(TK) < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : waitDeleteOperationObject , current-api : FreeOperation >
+A G start  free-operation-null-success                | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : FreeOperation , current-params : handle(HANDLE) >
+A G no-TA  free-operation-not-null-subroutine         | deleteOperationObject(HANDLE, TK) < CI : CryptoOperation | handle-set : < HANDLE : OperationHandle | > >
+C G cryptograp free-operation-not-null-subroutine               | < TK : TAKernel | api-call : init(freeOperation[# HANDLE]) >
+C G cryptograp free-operation-not-null-success                  | (msg finishDeleteOperationObject[] from HANDLE to TK) < TK : TAKernel | api-call : final(freeOperation[PARAMS]) >
+C G cryptograp free-operation-null-success                      | < TK : TAKernel | api-call : init(freeOperation[# HANDLE]) >
+C . cryptograp free-operation-top-level-handle                  | (msg deleteOperationObject[] from TK to HANDLE) < CI : CryptoOp | > < HANDLE : OpHandle | oid : CI >
+################ CipherUpdate
+A G start  cipher-update-subroutine                   | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : CipherUpdate , current-params : handle(HANDLE) , data(DATA) >
+A G finish cipher-update-success                      | finishCipherUpdate(DATA, TK) < TK : TaKernel | api-state : waitCipherUpdate , current-api : CipherUpdate >
+A G panic  cipher-update-fail                         | failCipherUpdate(TK) < TK : TaKernel | api-state : waitCipherUpdate , current-api : CipherUpdate >
+A G no-TA  cipher-update-subroutine                   | cipherUpdate(HANDLE , DATA , TK) < CI : CryptoOperation | handle-set : < HANDLE : OperationHandle | is-initialized : true > , crypto-keys : KEYS , algorithm : ALGO , oper
+A G no-TA  cipher-update-subroutine                   | cipherUpdate(HANDLE , DATA , TK) < CI : CryptoOperation | handle-set : < HANDLE : OperationHandle | is-initialized : true > , crypto-keys : KEYS , algorithm : ALGO , oper
+C G cryptograp cipher-update-req-cipher                         | < TK : TAKernel | api-call : init(cipherUpdate[# HANDLE # DATA]) >
+C G cryptograp cipher-update-success                            | (msg finishCipher[# OPRESULT] from HANDLE to TK) < TK : TAKernel | api-call : final(cipherUpdate[PARAMS]) >
+C . cryptograp cipher-update-panic                              | (msg failCipher[] from HANDLE to TK) < TK : TAKernel | api-call : final(cipherUpdate[PARAMS]) >
+C . cryptograp cipher-update-try-cipher-success                 | < CI : CryptoOp | state : active , attributes : ATTRS , algorithm : ALGO , mode : MODE > < HANDLE : OpHandle | oid : CI , opclass : clsCipher , state : handleState((init 
+C . cryptograp cipher-update-try-cipher-fail                    | < CI : CryptoOp | state : CSTATE , attributes : ATTRS , algorithm : ALGO , mode : MODE > < HANDLE : OpHandle | oid : CI , opclass : OC , state : handleState(HSF) > (msg r
+################ CloseObject
+A G start  close-object-not-null-subroutine           | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : CloseObject , current-params : handle(HANDLE) >
+A G finish close-object-not-null-success              | finishCloseObject(TK) < TK : TaKernel | api-state : waitCloseObject , current-api : CloseObject , api-return : noReturn >
+A G start  close-object-null-success                  | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : CloseObject , current-params : handle(HANDLE) >
+A G no-TA  close-object-not-null-subroutine           | closeObject(HANDLE , TK) < OI : TransientObject | handle-set : < HANDLE : ObjectHandle | > >
+A G no-TA  close-object-not-null-subroutine           | closeObject(HANDLE , TK) < OI : PersistentObject | handle-set : (< HANDLE : ObjectHandle | > HS) >
+C G generic.ma close-object-not-null-subroutine                 | < TK : TAKernel | api-call : init(closeObject[# HANDLE]) >
+C G generic.ma close-object-not-null-success                    | (msg finishCloseObject[] from OI to TK) < TK : TAKernel | api-call : final(closeObject[PARAMS]) >
+C G generic.ma close-object-null-success                        | < TK : TAKernel | api-call : init(closeObject[# HANDLE]) >
+C . generic.ma close-persistent-top-level-handle                | (msg reqCloseObject[] from TK to HANDLE) < OI : PersistObj | open-handles : (oh(HANDLE, DATAFLAGS) OHS) > < HANDLE : ObjHandle | oid : OI >
+C . generic.ma close-transient-top-level-handle                 | (msg reqCloseObject[] from TK to HANDLE) < OI : TransObj | > < HANDLE : ObjHandle | oid : OI >
+################ AllocateTransientObject
+A G start  allocate-transient-success                 | < TK : TaKernel | app-status : normal , api-call : noCall , api-return : noReturn , api-state : started , current-api : AllocateTransientObject , current-params : type(OB
+A G finish allocate-transient-out-of-memory-err       | < TK : TaKernel | app-status : outOfMemory , api-call : noCall , api-return : noReturn , current-api : AllocateTransientObject >
+A G start  allocate-transient-not-supported-err       | < TK : TaKernel | app-status : normal , api-call : noCall , api-return : noReturn , api-state : started , current-api : AllocateTransientObject , current-params : type(OB
+C G transient. allocate-transient-success                       | < TK : TAKernel | status : (normal).AppStatus , api-call : init(allocateTransientObject[# OBJTYPE # MAXOBJSIZE]) , counter : N >
+C G transient. allocate-transient-out-of-memory-err             | < TK : TAKernel | status : outOfMemory , api-call : init(allocateTransientObject[PARAMS]) >
+C G transient. allocate-transient-not-supported-err             | < TK : TAKernel | status : (normal).AppStatus , api-call : init(allocateTransientObject[# OBJTYPE # MAXOBJSIZE]) >
+################ CipherInit
+A G start  cipher-init-subroutine                     | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : CipherInit , current-params : handle(HANDLE) , iv(IV) >
+A G finish cipher-init-success                        | finishInitOperation(TK) < TK : TaKernel | api-state : waitInitOperation , current-api : CipherInit >
+A G no-TA  init-operation-subroutine                  | initOperation(HANDLE , IV , TK) < CI : CryptoOperation | handle-set : < HANDLE : OperationHandle | is-key-set : true > , algorithm : ALGO , operation-class : OC , operati
+A G no-TA  init-operation-subroutine                  | initOperation(HANDLE , IV , TK) < CI : CryptoOperation | handle-set : < HANDLE : OperationHandle | is-key-set : true > , algorithm : ALGO , operation-class : OC , operati
+C G cryptograp cipher-init-req-cipher-init                      | < TK : TAKernel | api-call : init(cipherInit[# HANDLE # IV]) >
+C G cryptograp cipher-init-success                              | (msg finishCipherInit[] from HANDLE to TK) < TK : TAKernel | api-call : final(cipherInit[PARAMS]) >
+C . cryptograp cipher-init-panic                                | (msg failCipherInit[] from HANDLE to TK) < TK : TAKernel | api-call : final(cipherInit[PARAMS]) >
+C . cryptograp cipher-init-initialize-success                   | < HANDLE : OpHandle | oid : CI , state : handleState((keySet , HSF)) , opclass : clsCipher > < CI : CryptoOp | state : CSTATE > (msg reqCipherInit[# IV] from TK to HANDLE
+C . cryptograp cipher-init-initialize-fail                      | < HANDLE : OpHandle | oid : CI , state : handleState(HSF) , opclass : OC > < CI : CryptoOp | > (msg reqCipherInit[# IV] from TK to HANDLE)
+################ PopulateTransientObject
+A G start  populate-transient-subroutine              | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : PopulateTransientObject , current-params : handle(HANDLE) , attrs(ATTRS)
+A G finish populate-transient-success                 | retPopulateTransient(TK) < TK : TaKernel | api-state : waitPopulateTransient , current-api : PopulateTransientObject , api-return : noReturn >
+A G no-TA  populate-transient-subroutine              | reqPopulateTransient(HANDLE , ATTRS , TK) < OI : TransientObject | handle-set : < HANDLE : ObjectHandle | is-initialized : false > , object-type : OBJTYPE >
+C G transient. populate-transient-subroutine                    | < TK : TAKernel | api-call : init(populateTransientObject[# HANDLE # ATTRS]) >
+C . transient. populate-transient-invalid-attributes-panic      | (msg reqPopulateTransient[# ATTRS] from TK to HANDLE) < TK : TAKernel | api-call : final(populateTransientObject[PARAMS]) > < OI : TransObj | initialized : false, type : 
+C . transient. populate-transient-initialized-object-panic      | (msg reqPopulateTransient[# ATTRS] from TK to HANDLE) < TK : TAKernel | api-call : final(populateTransientObject[PARAMS]) > < OI : TransObj | initialized : true > < HANDL
+C G transient. populate-transient-success                       | (msg retPopulateTransient[] from HANDLE to TK) < TK : TAKernel | api-call : final(populateTransientObject[PARAMS]) >
+C . transient. populate-transient-top-level-handle              | (msg reqPopulateTransient[# ATTRS] from TK to HANDLE) < OI : TransObj | initialized : false, type : OBJTYPE > < HANDLE : ObjHandle | oid : OI >
+################ ResetOperation
+A G start  reset-operation-subroutine                 | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : ResetOperation , current-params : handle(HANDLE) >
+A . finish reset-operation-success                    | finishResetOperation(TK) < TK : TaKernel | current-api : ResetOperation , api-state : waitResetOperation >
+A G no-TA  reset-operation-subroutine                 | resetOperation(HANDLE, TK) < CI : CryptoOperation | handle-set : < HANDLE : OperationHandle | is-extracting : true > >
+A G no-TA  reset-operation-subroutine                 | resetOperation(HANDLE, TK) < CI : CryptoOperation | handle-set : < HANDLE : OperationHandle | is-key-set : true > >
+C G cryptograp reset-oper-req-reset                             | < TK : TAKernel | api-call : init(resetOperation[# HANDLE]) >
+C G cryptograp reset-oper-success                               | (msg finishResetOp[] from HANDLE to TK) < TK : TAKernel | api-call : final(resetOperation[PARAMS]) >
+C . cryptograp reset-oper-fail                                  | (msg failResetOp[] from HANDLE to TK) < TK : TAKernel | api-call : final(resetOperation[PARAMS]) >
+C . cryptograp reset-oper-try-reset-success                     | < CI : CryptoOp | state : CSTATE > < HANDLE : OpHandle | oid : CI , state : handleState((keySet, HSF)) > (msg resetOp[# HANDLE] from TK to HANDLE)
+C . cryptograp reset-oper-try-reset-fail                        | < CI : CryptoOp | > < HANDLE : OpHandle | oid : CI , state : handleState(HSF) > (msg resetOp[# HANDLE] from TK to HANDLE)
+################ FreeTransientObject
+A G start  free-transient-not-null-subroutine         | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : FreeTransientObject , current-params : handle(HANDLE) >
+A . finish free-transient-not-null-success            | finishDeleteTransient(TK) < TK : TaKernel | api-state : waitDeleteTransient , current-api : FreeTransientObject >
+A . start  free-transient-null-success                | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : FreeTransientObject , current-params : handle(HANDLE) >
+A G no-TA  free-transient-not-null-subroutine         | deleteTransient(HANDLE , TK) < OI : TransientObject | handle-set : < HANDLE : ObjectHandle | > >
+C G transient. free-transient-not-null-subroutine               | < TK : TAKernel | api-call : init(freeTransientObject[# HANDLE]) >
+C G transient. free-transient-not-null-success                  | (msg finishDeleteTransient[] from HANDLE to TK) < TK : TAKernel | api-call : final(freeTransientObject[PARAMS]) >
+C G transient. free-transient-null-success                      | < TK : TAKernel | api-call : init(freeTransientObject[# HANDLE]) >
+C . transient. free-transient-top-level-handle                  | (msg deleteTransient[] from TK to HANDLE) < OI : TransObj | > < HANDLE : ObjHandle | oid : OI >
+################ ResetTransientObject
+A G start  reset-transient-not-null-subroutine        | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : ResetTransientObject , current-params : handle(HANDLE) >
+A . finish reset-transient-not-null-success           | retResetTransient(TK) < TK : TaKernel | api-state : waitResetTransient , current-api : ResetTransientObject >
+A . start  reset-transient-null-success               | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : ResetTransientObject , current-params : handle(HANDLE) >
+A G no-TA  reset-transient-not-null-subroutine        | reqResetTransient(HANDLE , TK) < OI : TransientObject | handle-set : < HANDLE : ObjectHandle | > >
+C G transient. reset-transient-not-null-subroutine              | < TK : TAKernel | api-call : init(resetTransientObject[# HANDLE]) >
+C G transient. reset-transient-not-null-success                 | (msg retResetTransient[] from HANDLE to TK) < TK : TAKernel | api-call : final(resetTransientObject[PARAMS]) >
+C G transient. reset-transient-null-success                     | < TK : TAKernel | api-call : init(resetTransientObject[# HANDLE]) >
+C . transient. reset-transient-top-level-handle                 | (msg reqResetTransient[] from TK to HANDLE) < OI : TransObj | > < HANDLE : ObjHandle | oid : OI >
+################ InitRefAttribute
+A G start  init-ref-attribute                         | < TK : TaKernel | api-call : noCall , api-return : noReturn , api-state : started , current-api : InitRefAttribute , current-params : constId(REF) , constVal(V) >
+C G transient. init-ref-attribute                               | < TK : TAKernel | api-call : init(initRefAttribute[# REF # V]) >

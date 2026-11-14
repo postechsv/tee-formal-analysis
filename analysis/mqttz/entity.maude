@@ -46,7 +46,7 @@ omod BROKER is
   pr MAP{Topic,List{SubId}} .
   pr EXECUTION-ENV .
 
-  class Broker | infra : Env, re-enc-queue : List{ReEncReq}, 
+  class Broker | infra : Envs, re-enc-queue : List{ReEncReq}, 
                  subscriptions : Map{Topic,List{SubId}},
                  is-running : Bool, counter : Nat .
 

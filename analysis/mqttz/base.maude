@@ -3,7 +3,7 @@ mod MQTTZ-CRYPTO-KEY-VALUE is
   pr CONFIGURATION .
   pr TEE-ATTRIBUTE .
 
-  op keyAttrValue : Oid -> AttrContent [ctor] .
+  op keyAttrValue : Oid -> AttrValue [ctor] .
 endm
 
 ------------------------------------------------------------
@@ -62,7 +62,7 @@ endfm
 
 omod INFRA-MSG is
   pr INFRA-MSG-REQ .
-  msg msg_from_to_ : Req Oid Oid -> Msg .
+  op msg_from_to_ : Req Oid Oid -> Msg [ctor] .
 endom
 
 fmod MQTTZ-MSG is
@@ -157,13 +157,12 @@ mod MQTTZ-CONSTANTS is
   pr NAT .
   pr APP-ID .
   pr DATA .
-  pr TA-INSTANCE-ID .
   pr CONFIGURATION .
-
+ 
   op bk : Nat -> Oid [ctor] .
   ops pub sub : Nat -> Oid [ctor] .
   op ra : -> Oid [ctor] .
-  op ta : -> TaInstId [ctor] .
+  op ta : -> Oid [ctor] .
   op data : Nat -> Data [ctor] .
 
   op REENCRYPT : -> AppId [ctor] .
@@ -183,13 +182,14 @@ mod MQTTZ-PROGRAM-DECL is
   op keySize : -> Var [ctor] .
   op opHandle : -> Var [ctor] .
   op keyHandle : -> Var [ctor] .
-  op AesCipher : -> Var [ctor] .
 
   op allocResources : -> FuncId [ctor] .
   op session : -> Var [ctor] .
   op sess : -> Var [ctor] .
   op attr : -> Var [ctor] .
   op res : -> Var [ctor] .
+  op saveKeyRes : -> Var [ctor] .
+  op getKeyRes : -> Var [ctor] .
 
   op setAesKey : -> FuncId [ctor] .
   op key : -> Var [ctor] .

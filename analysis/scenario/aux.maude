@@ -16,44 +16,50 @@ omod SCENARIO-AUX is
   var P : Program .
   var BI : Oid .
 
-  ops keyObj streamId : Oid -> TaObjectId [ctor] . 
+  ops keyObj streamId : Oid -> Oid [ctor] . 
 
-  op keyIds : List{SubId} -> Set{FileId} .
+  op keyIds : List{SubId} -> Set{FileName} .
   eq keyIds({ID} IL) = (fileName(ID) , keyIds(IL)) .
   eq keyIds(nil) = empty .
 
   op osId : -> Oid .
+  
   op initTrustedOS : List{SubId} -> Configuration .
   eq initTrustedOS(IL) 
-  = < osId : TeeOSKernel | opened-session : (sessionId(0) |-> ta) , session-counter : 1 ,
-                           storage : REENCRYPT |-> keyIds(IL) , storage-status : (REENCRYPT |-> storageNormal) ,
-                           service-request-ta : noAppId , service-request-ta-inst : noInstId ,
-                           service-in : nil , service-out : nil ,
-                           temporary-objects : empty > .
+  = < osId : TrustedOS | sess : (sessionId(0) |-> ta) , session-counter : 1 ,                         
+                         service-request-ta-inst : noOid ,
+                         service-in : nil , service-out : nil ,
+                         temporary-objects : empty > . 
+
+  op initStorage : List{SubId} -> Configuration .
+  eq initStorage(IL) 
+  = < oid(0, ta) : Storage | status : (normal).StorageStatus, files : keyIds(IL), counter : 0 > .
 
   op initRa : Program -> Configuration .
-  eq initRa(P) = < ra : RichApp | proc : none , prog : P , running : false , 
-                                  invoke-req-queue : nil , invoke-ret-queue : nil > .
+  eq initRa(P) = < ra : RichApp | proc : none , prog : P > .
 
   op initTa : Program -> Configuration .
-  eq initTa(P) = < ta : TrustApp | proc : none , prog : P , running : false ,
-                                   app-status : normal , api-call : noCall , api-return : noReturn ,
-                                   current-api : noApi , api-state : noState , current-params : empty , id-counter : 0 ,
-                                   trust-app-id : REENCRYPT ,
-                                   task : noTask , task-counter : 0, state-changed : false > .
+  eq initTa(P) = < ta : TrustedApp | proc : none , prog : P ,
+                                     status : (normal).AppStatus , api-call : noCall ,
+                                     counter : 0 , storage : oid(0, ta) , os-kernel : osId ,
+                                     client-service : none , state-changed : false ,
+                                     running : false > .
 
 --- Clients (publishers and subscribers) share symmetric keys with brokers.
 
+  --- The key of each client is a persistent object of the storage oid(0, ta), numbered from 1.
   op shareKeys : List{SubId} -> Configuration .
-  eq shareKeys({ID} IL) = sharedKey(ID) shareKeys(IL) .
-  eq shareKeys(nil) = none .
+  eq shareKeys(IL) = shareKeysFrom(1, IL) .
 
-  op sharedKey : Oid -> Configuration .
-  eq sharedKey(ID) = 
-    < keyObj(ID) : PersistentObject | handle-set : none , object-type : TEE-TYPE-DATA , max-object-size : 0 Bits  , 
-                                      file-id : fileName(ID) , trust-app-id : REENCRYPT ,
-                                      attribute-set : empty , object-usage-set : empty , data-stream-id : streamId(ID) >
-    < streamId(ID) : DataStreamObject | data-size : dataSize(1) , content : newContent(attrContentData(keyAttrValue(ID))) >
+  op shareKeysFrom : Nat List{SubId} -> Configuration .
+  eq shareKeysFrom(N, {ID} IL) = sharedKey(N, ID) shareKeysFrom(N + 1, IL) .
+  eq shareKeysFrom(N, nil) = none .
+
+  op sharedKey : Nat Oid -> Configuration .
+  eq sharedKey(N, ID) =
+    < oid(N, oid(0, ta)) : PersistObj | type : pureData , usages : empty , max-size : 0 , attributes : empty ,
+                                file-name : fileName(ID) , data-stream : attrContentData(keyAttrValue(ID)) ,
+                                open-handles : noHandles >
   .
 
   --- op initTa : List{ClientId} -> Configuration .

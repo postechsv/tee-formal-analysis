@@ -16,6 +16,7 @@ omod PROPOSITION is
   pr MQTTZ-CONSTANTS .
   pr MQTTZ-MSG-AUX .
   pr INTRUDER .
+  pr ALGORITHM-IDENTIFIER .
 
   --- vars N M : Nat .
   --- var BI KI : Oid .
@@ -32,7 +33,8 @@ omod PROPOSITION is
   --- var STATUS : StorageStatus .
   --- var TN : AppId .
   --- var SMAP : Map{AppId,StorageStatus} .
-  var ALGO : AlgorithmIdentifier .
+  var ALGO : Algorithm .
+  var KS : KConfig .
   var KEYS : List{CryptoKey} .
   --- var SESI : SessionId .
   --- var FUNC : FuncId .
@@ -61,18 +63,18 @@ omod PROPOSITION is
 
 --- True if TA has panicked.
   op panic.TA : -> Prop .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustApp | app-status : panic > TEE} > CF |= panic.TA = true .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= panic.TA = false [owise] .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | status : (panic).AppStatus > TEE} > CF |= panic.TA = true .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= panic.TA = false [owise] .
 
 --- True if TA is out of memory.
   op memErr.TA : -> Prop .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustApp | app-status : outOfMemory > TEE} > CF |= memErr.TA = true .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= memErr.TA = false [owise] .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | status : outOfMemory > TEE} > CF |= memErr.TA = true .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= memErr.TA = false [owise] .
 
 --- True if TA is executing a program.
   op running.TA : -> Prop .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustApp | running : true > TEE} > CF |= running.TA = true .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= running.TA = false [owise] .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | running : true > TEE} > CF |= running.TA = true .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= running.TA = false [owise] .
 
 --- True if publisher 'I' will send the 'K'th message.
   op send.P : Nat Nat -> Prop .
@@ -88,15 +90,14 @@ omod PROPOSITION is
 
 --- True if the MQT-TZ TA has started running/executing.
   op start.TA : -> Prop .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustApp | state-changed : true, 
-                                                        running : true > TEE} > CF |= start.TA = true .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= start.TA = false [owise] .
+  ceq < BI : Broker | infra : {REE} | {< TI : TrustedApp | state-changed : true, proc : KS > TEE} > CF |= start.TA = true
+   if KS =/= none .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= start.TA = false [owise] .
 
 --- True if the MQT-TZ TA has finished its execution.
   op term.TA : -> Prop .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustApp | state-changed : true,
-                                                        running : false > TEE} > CF |= term.TA = true .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustApp | > TEE} > CF |= term.TA = false [owise] .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | state-changed : true, proc : none > TEE} > CF |= term.TA = true .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= term.TA = false [owise] .
 
 --- True if publisher 'I' can send a message with a topic that subscriber 'J' is subscribed to.
   op topic.P : Nat Oid -> Prop .

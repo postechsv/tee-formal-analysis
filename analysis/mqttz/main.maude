@@ -1,4 +1,4 @@
-load ../../spec/src/main
+load ../../../tee-formal-spec/src/main
 load base
 load entity
 load client

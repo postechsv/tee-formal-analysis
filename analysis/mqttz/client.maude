@@ -32,8 +32,8 @@ omod PUBLISHER-BEHAVIOR is
 --- MQT-TZ only uses one algorithm (TEE_ALG_AES_CBC_NOPAD) to encrypt messages.
 
   op mkRandomEncData : Oid Nat -> Data .
-  eq mkRandomEncData(PUB, N) = encrypted(data(N), TEE-ALG-AES-CBC-NOPAD, 
-                                         key(teeAttribute(TEE-ATTR-SECRET-VALUE , keyAttrValue(PUB)))) .
+  eq mkRandomEncData(PUB, N) = encrypted(data(N), algAesCbcNopad, 
+                                         attr(secretValue , keyAttrValue(PUB))) .
 
   op mkPubMsg : Data Topic Nat Oid Oid -> Msg .
   eq mkPubMsg(RAND-DATA, TOPIC, N, PUB, BI)

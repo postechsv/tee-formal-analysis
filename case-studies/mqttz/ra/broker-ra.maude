@@ -29,7 +29,7 @@ mod MQTTZ-RA-PROGRAM is
       TEE-ObjectHandle keyHandle ;
     } ;
 
-    void main(TEE-ObjectId oriCliId , TEE-Buffer oriCliData , TEE-ObjectId destCliId , TEE-Result & ret , TEE-Buffer & destCliData) {
+    void main(char oriCliId , char oriCliData , char destCliId , TEE-Result & ret , char & destCliData) {
       TEEC-Session sess ;
       --- TeecOpenSession(# taInst(1) , 'ret , 'sess) ;
       sess := # sessionId(0) ;
@@ -40,13 +40,13 @@ mod MQTTZ-RA-PROGRAM is
       sessionContext . keySize := # anyKeySize ;
       sessionContext . opHandle := # null ;
       sessionContext . keyHandle := # null ;
-      TEE-Buffer oriCliIv ; oriCliIv := # randomData ;
+      char oriCliIv ; oriCliIv := # randomData ;
       int cmd ; cmd := # TA-REENCRYPT ;
 
       ret := # errorGeneric ; destCliData := # anyData ;
       teecInvokeCommand(sess, # main, (cmd, sessionContext . algo, sessionContext . mode,
                  sessionContext . keySize, sessionContext . opHandle, sessionContext . keyHandle,
-                 oriCliId, oriCliIv, oriCliData, destCliId, & ret, & destCliData)) ;
+                 oriCliId, oriCliIv, oriCliData, destCliId, addr(ret), addr(destCliData))) ;
 
       --- var 'ret2 ;
       --- TeecCloseSession('sess , 'ret2) ;
@@ -65,7 +65,7 @@ mod MQTTZ-RA-PROGRAM is
       TEE-ObjectHandle keyHandle ;
     } ;
 
-    void main(TEE-ObjectId oriCliId , TEE-Buffer oriCliData , TEE-ObjectId destCliId , TEE-Result & ret , TEE-Buffer & destCliData) {
+    void main(char oriCliId , char oriCliData , char destCliId , TEE-Result & ret , char & destCliData) {
       TEEC-Session sess ;
       --- TeecOpenSession(# taInst(1) , 'ret , 'sess) ;
       sess := # sessionId(0) ;
@@ -76,13 +76,13 @@ mod MQTTZ-RA-PROGRAM is
       sessionContext . keySize := # anyKeySize ;
       sessionContext . opHandle := # null ;
       sessionContext . keyHandle := # null ;
-      TEE-Buffer oriCliIv ; oriCliIv := # randomData ;
+      char oriCliIv ; oriCliIv := # randomData ;
       int cmd ; cmd := # TA-REENCRYPT ;
 
       ret := # errorGeneric ; destCliData := # anyData ;
       teecInvokeCommand(sess, # main, (cmd, sessionContext . algo, sessionContext . mode,
                  sessionContext . keySize, sessionContext . opHandle, sessionContext . keyHandle,
-                 oriCliId, oriCliIv, oriCliData, destCliId, & ret, & destCliData)) ;
+                 oriCliId, oriCliIv, oriCliData, destCliId, addr(ret), addr(destCliData))) ;
 
       if (ret == # errorOutOfMemory || ret == # errorTargetDead) {
         destCliData := # discarded ;

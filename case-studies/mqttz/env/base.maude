@@ -202,10 +202,12 @@ mod MQTTZ-PROGRAM-DECL is
   op data : -> Var [ctor] .
   op object : -> Var [ctor] .
   op objectInfo : -> Var [ctor] .
+  op readBytes : -> Var [ctor] .
 
   op cipherBuffer : -> FuncId [ctor] .
   op encData : -> Var [ctor] .
   op decData : -> Var [ctor] .
+  op decDataSize : -> Var [ctor] .
 
   op saveKey : -> FuncId [ctor] .
   op cliKey : -> Var [ctor] .

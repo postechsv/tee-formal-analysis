@@ -1,4 +1,4 @@
-    void main (int command, int sessAlgo, int sessMode, int sessKeySize, TEE-OperationHandle sessOpHandle, TEE-ObjectHandle sessKeyHandle, TEE-ObjectId oriCliId, TEE-Buffer oriCliIv, TEE-Buffer oriCliData, TEE-ObjectId destCliId, TEE-Result & ret, TEE-Buffer & destCliData) {
+    void main (int command, int sessAlgo, int sessMode, int sessKeySize, TEE-OperationHandle sessOpHandle, TEE-ObjectHandle sessKeyHandle, char oriCliId, char oriCliIv, char oriCliData, char destCliId, TEE-Result & ret, char & destCliData) {
       struct AesCipher session ;
       session . algo := sessAlgo ;
       session . mode := sessMode ;
@@ -7,7 +7,7 @@
       session . keyHandle := sessKeyHandle ;
 
       if (command == # TA-REENCRYPT) {
-        ret := payloadReencryption(addr(session), oriCliId, oriCliIv, oriCliData, destCliId, destCliData) ;
+        ret := payloadReencryption(addr(session), addr(oriCliId), addr(oriCliIv), addr(oriCliData), addr(destCliId), addr(destCliData)) ;
       } else {
         ret := # errorNotSupported ;
       }

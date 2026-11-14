@@ -11,7 +11,6 @@ mod MQTTZ-TA-PROGRAM-DECL is
   pr MQTTZ-PROGRAM-DECL .
 
   ops err exit : -> Label [ctor] .
-  op dummyIv : -> List{Data} [ctor] .
   op AesCipher : -> ImpType [ctor] .
 endm
 

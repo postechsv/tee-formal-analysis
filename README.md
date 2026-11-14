@@ -59,9 +59,9 @@ make mqttz MODE=dmc          # build/mqttz-dmc: the DM-Check build
 The TA programs are translated from `ta/hot_cache_ta.c`, the C source as published, by
 `tools/ta2imp.py` into `build/<name>/ta/broker-ta.maude`: `mqttzTA` from the source with
 `ta/model.patch` (the modeling changes of the C code), and `mqttzTaPatched` with `ta/fix.patch` on
-top (the code-level fix).  How C maps to the model (types, buffer sizes, TEE_Param memory
-references, dropped logging and timing calls, ...) is declared in the `[ta.broker]` table of the
-manifest.  `build/<name>/model.maude` loads the built spec, the model files and the TAs, and
+top (the code-level fix).  What the model leaves out or changes in the C code (logging, timing,
+buffer sizes, the split of the TEE_Param memory references, ...) is in `ta/model.patch`; the
+`[ta.broker]` table of the manifest only says what to translate.  `build/<name>/model.maude` loads the built spec, the model files and the TAs, and
 `build/<name>/main.maude` adds `case-studies/mqttz/cmd/main.maude` (the scenarios, the threats and
 the LTL properties).
 

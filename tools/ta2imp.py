@@ -21,7 +21,7 @@ the manifest):
     drop-calls          calls whose statements are left out (logging, timing, freeing memory)
     malloc-never-fails  `if (!x)` after `x = TEE_Malloc(...)` is left out
     [types]     "FUNCTION.VAR", "FUNCTION.PARAM" or "STRUCT.FIELD" -> TEE-IMP type, when the C
-                type does not tell (e.g. `char *` is TEE-Buffer, TEE-ObjectId or TEE-Buffer &)
+                type alone is not the one the model needs (none is needed for MQT-TZ)
     [drop-args] "FUNCTION" = [index, ...]: parameters left out of the definition and of every
                 call (buffer sizes: the model has no sizes)
     drop-vars   ["FUNCTION.NAME", ...]: variables or parameters the model does not have; their
@@ -30,7 +30,9 @@ the manifest):
                 && or || is an error (change the condition in a patch).  A statement that
                 mentions a parameter removed by [memref] or [drop-args] and not listed here is an
                 error.
-    [malloc]    "FUNCTION.VAR" = TEE-IMP value assigned by `VAR = TEE_Malloc(...)` (default # noData)
+    [malloc]    "FUNCTION.VAR" = the initial content of the buffer of `VAR = TEE_Malloc(...)`
+                (default # zeroData: the hint 0 is TEE_MALLOC_FILL_ZERO, the only one supported);
+                the statement becomes VAR := malloc(content) ;
     [inline]    "FUNCTION.VAR" = TEE-IMP value: VAR is replaced by the value; its declaration
                 and its assignments are left out
     [rewrite]   "C expression" = "C expression": replaced before translation (e.g. key sizes,
@@ -47,11 +49,15 @@ the manifest):
                 statements that use it are left out.  Pointer arithmetic on a mapped buffer that
                 has no entry of its own is an error.
 
-Pointers are translated as they are: a pointer to void, to a translated struct or to an int type
-is a TEE-IMP pointer type (void *, (struct S) *, int *), &x is addr(x), *p is deref(p), p->f is
-p -> f, and casts are left out (void * converts to and from any pointer type, as in C).  A
-`char *` is a buffer (TEE-Buffer) for now.  The arguments of a TEE API call are passed as the
-model's stubs take them: an output argument &x is the lvalue x.
+Pointers are translated as they are: a pointer to void, char, a translated struct or an int type
+is a TEE-IMP pointer type (void *, char *, (struct S) *, int *), &x is addr(x), *p is deref(p),
+p->f is p -> f, NULL is nullptr, and casts are left out (void * converts to and from any pointer
+type, as in C).  A buffer is one object of type char that holds its whole content: TEE_Malloc
+becomes malloc(content), an object in the frame of the calling function (see [malloc]).  So a
+TEE_Malloc pointer must not outlive that function: returning it, or storing it anywhere but in a
+local variable of the function, is an error.  The arguments of a TEE API call are passed as the
+model's stubs take them: an output argument &x of a handle, a struct or an int is the lvalue x,
+and a buffer is passed as the pointer it is.
 
 Canonical form of the translation (no manifest entry needed): switch becomes an if/else chain,
 a != b becomes ! (a == b), every if and else body is a block, and a call in an if condition or in
@@ -79,7 +85,7 @@ C_TYPES = {
     'TEE_ObjectHandle': 'TEE-ObjectHandle',
     'TEE_OperationHandle': 'TEE-OperationHandle',
     'TEE_ObjectInfo': 'struct TeeObjectInfo',
-    'char': 'TEE-Buffer',          # only as char *
+    'char': 'char',                # the content of a buffer (char * points to it)
     'uint32_t': 'int',
     'size_t': 'int',
     'int': 'int',
@@ -103,7 +109,6 @@ CONSTANTS = {
     'TEE_TYPE_AES': 'typeAes',
     'TEE_ATTR_SECRET_VALUE': 'secretValue',
     'TEE_STORAGE_PRIVATE': 'storagePrivate',
-    'NULL': 'noData',
 }
 
 # TEE_DATA_FLAG_* -> flag names of the model, written # (f1, f2, ...).
@@ -266,16 +271,16 @@ class Translator(object):
         t = self.cfg.get(self.cfg.types, key)
         if t is not None:
             return t
-        if ptr and ctype != 'char':     # char * is a buffer (C_TYPES)
-            if ctype == 'void':
-                return 'void *'
+        if ptr:
+            if ctype in ('void', 'char'):
+                return ctype + ' *'
             if ctype in self.struct_types:
                 return '(%s) *' % self.struct_types[ctype]
             if ctype in C_TYPES and C_TYPES[ctype] == 'int':
                 return 'int *'
         elif ctype in self.struct_types:
             return self.struct_types[ctype]
-        if ctype in C_TYPES and not (ptr and C_TYPES[ctype] != 'TEE-Buffer'):
+        if ctype in C_TYPES and not ptr:
             return C_TYPES[ctype]
         raise TransError('%s: no TEE-IMP type for C type %s%s; add it to [types]'
                          % (key, ctype, ' *' if ptr else ''))
@@ -455,6 +460,9 @@ class Translator(object):
             if not e:
                 return [pad + 'return ;']
             e = e[0]
+            if self.malloc_ptr(e) is not None:
+                raise TransError('%s: returns the TEE_Malloc pointer %s; the model allocates it in '
+                                 'the frame of the function' % (self.f.name, text(e)))
             if self.gone([self.expr(e)]):
                 return []
             if self.contains_call(e):
@@ -518,6 +526,8 @@ class Translator(object):
             out.append(IND * depth + '%s %s ;' % (self.imp_type('%s.%s' % (self.f.name, name), ct, ptr), camel(name)))
             if d.type == 'init_declarator':
                 v = d.child_by_field_name('value')
+                if self.malloc_ptr(v) is not None:
+                    self.mallocs.add(name)
                 init = self.assign_value(name, v, depth)
                 if self.gone(init):
                     raise TransError('%s: the initializer of %s mentions a dropped variable' % (self.f.name, name))
@@ -530,6 +540,12 @@ class Translator(object):
             raise TransError('%s: compound assignment %s' % (self.f.name, text(e)))
         if lhs.type == 'identifier' and text(lhs) in self.inlines:
             return []
+        src = self.malloc_ptr(rhs)
+        if src is not None:
+            if lhs.type != 'identifier':
+                raise TransError('%s: %s stores the TEE_Malloc pointer %s outside the function; the '
+                                 'model allocates it in the frame of the function' % (self.f.name, text(e), src))
+            self.mallocs.add(text(lhs))
         out = self.assign_value(lhs, rhs, depth)
         if self.gone(out):
             return []
@@ -539,11 +555,30 @@ class Translator(object):
         name = lhs if isinstance(lhs, str) else None
         target = camel(lhs) if name else self.expr(lhs)
         if self.call_name(rhs) == 'TEE_Malloc':
+            if not (name or lhs.type == 'identifier'):
+                raise TransError('%s: the TEE_Malloc pointer is stored in %s, outside the function'
+                                 % (self.f.name, text(lhs)))
             var = name or text(lhs)
             self.mallocs.add(var)
+            call = rhs
+            while call.type in ('cast_expression', 'parenthesized_expression'):
+                call = call.child_by_field_name('value') if call.type == 'cast_expression' else named(call)[0]
+            margs = named(call.child_by_field_name('arguments'))
+            if len(margs) != 2 or norm(text(margs[1])) not in ('0', 'TEE_MALLOC_FILL_ZERO'):
+                raise TransError('%s: TEE_Malloc with the hint %s; only TEE_MALLOC_FILL_ZERO (0) is '
+                                 'modeled' % (self.f.name, text(margs[1]) if len(margs) > 1 else '?'))
             v = self.cfg.get(self.cfg.malloc, '%s.%s' % (self.f.name, var))
-            return [IND * depth + '%s := %s ;' % (target, v or '# noData')]
+            return [IND * depth + '%s := malloc(%s) ;' % (target, v or '# zeroData')]
         return [IND * depth + '%s := %s ;' % (target, self.expr(rhs))]
+
+    def malloc_ptr(self, e):
+        """The TEE_Malloc pointer variable that the expression e is (through casts and
+        parentheses), or None."""
+        while e is not None and e.type in ('cast_expression', 'parenthesized_expression'):
+            e = e.child_by_field_name('value') if e.type == 'cast_expression' else named(e)[0]
+        if e is not None and e.type == 'identifier' and text(e) in self.mallocs:
+            return text(e)
+        return None
 
     def call_name(self, e):
         while e is not None and e.type in ('cast_expression', 'parenthesized_expression'):
@@ -644,6 +679,8 @@ class Translator(object):
             n = text(e)
             if n in self.inlines:
                 return self.inlines[n]
+            if n == 'NULL':
+                return 'nullptr'
             if n in CONSTANTS:
                 return '# %s' % CONSTANTS[n]
             if n in DATA_FLAGS:
@@ -654,7 +691,7 @@ class Translator(object):
                 return '# %s' % n.replace('_', '-')
             return camel(n)
         if t == 'null':
-            return '# %s' % CONSTANTS['NULL']
+            return 'nullptr'
         if t in ('true', 'false'):
             return '# %s' % t
         if t == 'number_literal':

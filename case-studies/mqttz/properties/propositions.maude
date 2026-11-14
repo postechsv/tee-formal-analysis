@@ -87,16 +87,6 @@ omod PROPOSITION is
    if sub(J) == getReceiver(MSG) /\ K == getMsgIndex(MSG) /\ pub(I) == getPublisher(MSG) .
   eq < sub(J) : Subscriber | > CF |= recv.S(J,K,pub(I)) = false [owise] .
 
---- True if the MQT-TZ TA has started running/executing.
-  op start.TA : -> Prop .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | state-changed : true, running : true > TEE} > CF |= start.TA = true .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= start.TA = false [owise] .
-
---- True if the MQT-TZ TA has finished its execution.
-  op term.TA : -> Prop .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | state-changed : true, running : false > TEE} > CF |= term.TA = true .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= term.TA = false [owise] .
-
 --- True if publisher 'I' can send a message with a topic that subscriber 'J' is subscribed to.
   op topic.P : Nat Oid -> Prop .
   ceq < pub(I) : Publisher | topic : TOPIC, broker : BI >

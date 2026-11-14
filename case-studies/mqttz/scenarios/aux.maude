@@ -42,8 +42,7 @@ omod SCENARIO-AUX is
   eq initTa(P) = < ta : TrustedApp | proc : none , prog : P ,
                                      status : (normal).AppStatus , api-call : noCall ,
                                      counter : 0 , storage : oid(0, ta) , os-kernel : osId ,
-                                     client-service : none , state-changed : false ,
-                                     running : false > .
+                                     client-service : none , running : false > .
 
 --- Clients (publishers and subscribers) share symmetric keys with brokers.
 

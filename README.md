@@ -47,7 +47,7 @@ make docs                    # documentation site of the spec in build/docs
 ## MQT-TZ
 
 `case-studies/mqttz/mqttz.toml` describes the system: the API feature groups of the spec it uses and
-the ghost state its LTL propositions read (`running`, `state-changed` of the TA), which the spec
+the ghost state its LTL propositions read (`running` of the TA), which the spec
 itself does not have.  How it is analyzed is chosen when it is built:
 
 ```bash

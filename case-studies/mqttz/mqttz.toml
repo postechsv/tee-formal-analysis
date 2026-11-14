@@ -15,14 +15,6 @@ true-after  = ["handle-invoke-ta", "handle-session-req"]
 false-after = ["handle-invoke-ta-finish", "handle-session-req-finish",
                "handle-session-req-panic", "return-smc-request-panic"]
 
-# state-changed: the TA has started or finished a request and made no TEE API call since
-# (start.TA, term.TA).
-[ghost.TrustedApp.state-changed]
-init        = false
-true-after  = ["handle-invoke-ta", "handle-invoke-ta-finish",
-               "handle-session-req", "handle-session-req-finish"]
-false-after = ["tee-api-call-accept", "tee-api-call-return", "return-smc-request-panic"]
-
 # The invisible-transition reduction (make mqttz INVISIBLE=1, tools/gen-invisible.py): the rules
 # listed here become equations.  A rule may be listed only if it does not change the value of a
 # proposition of properties/propositions.maude, and it must not update a ghost attribute above.

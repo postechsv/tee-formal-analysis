@@ -8,8 +8,8 @@
 #   make NAME=t GHOST=x.maude   compose the ghost file(s) with the spec rules (tools/build/ghost.py)
 #                           before the copy or gen-dmc; a space-separated list is allowed, and a
 #                           case-study .toml gives its [ghost] tables. Cached like DMC; GHOST= turns it off.
-#   make NAME=t WEAKEN=x.toml   weaken the rule conditions of the [weaken-rule-condition] tables of
-#                           a case-study .toml (tools/build/weaken.py) before the ghosts. Cached like GHOST.
+#   make NAME=t DROP_COND=x.toml   drop the rule conditions of the [drop-rule-condition] tables of
+#                           a case-study .toml (tools/build/drop-condition.py) before the ghosts. Cached like GHOST.
 #   make mqttz [MODE=dmc] [INVISIBLE=1]  build the case study case-studies/mqttz (tools/build/tee-build.py):
 #                           the spec with its features and ghosts, and build/mqttz/main.maude
 #   make NAME=t test        build, then run test-api and test-checks in build/t/tests
@@ -84,8 +84,8 @@ M2L_EQ ?= 1
 
 # Ghost files (tools/build/ghost.py) composed with the stage. Not a spec feature either.
 GHOST ?=
-# Case-study manifest whose [weaken-rule-condition] tables weaken rule conditions (tools/build/weaken.py).
-WEAKEN ?=
+# Case-study manifest whose [drop-rule-condition] tables drop rule conditions (tools/build/drop-condition.py).
+DROP_COND ?=
 # Case-study manifest whose [invisible] rules give the invisible-transition reduction (see below).
 INVISIBLE_G ?=
 
@@ -121,7 +121,7 @@ $(if $(filter-out 0 1,$(M2L)),$(error M2L must be 0 or 1, got '$(M2L)'))
 $(if $(filter 1,$(M2L)),$(if $(filter 0,$(DMC)),$(error M2L=1 requires DMC=1)))
 $(if $(filter-out 0 1,$(M2L_EQ)),$(error M2L_EQ must be 0 or 1, got '$(M2L_EQ)'))
 $(foreach G,$(GHOST),$(if $(wildcard $(G)),,$(error GHOST file '$(G)' not found)))
-$(if $(WEAKEN),$(if $(wildcard $(WEAKEN)),,$(error WEAKEN file '$(WEAKEN)' not found)))
+$(if $(DROP_COND),$(if $(wildcard $(DROP_COND)),,$(error DROP_COND file '$(DROP_COND)' not found)))
 $(if $(INVISIBLE_G),$(if $(wildcard $(INVISIBLE_G)),,$(error INVISIBLE_G file '$(INVISIBLE_G)' not found)))
 $(foreach F,$(FEATURES),\
   $(if $(filter-out 0 1,$($(F))),$(error $(F) must be 0 or 1, got '$($(F))'))\
@@ -168,7 +168,7 @@ FINAL_INPUTS := $(MAIN_SRC) $(SRC_FILES) $(TEST_SRCS) $(RUNNERS) tools/build/sel
 FINAL_INPUTS += $(if $(filter 1,$(DMC)),tools/dmc/gen-dmc.py $(wildcard tools/dmc/lib/*))
 FINAL_INPUTS += $(if $(filter 1,$(M2L)),tools/lean/gen-maude2lean.py)
 FINAL_INPUTS += $(if $(strip $(GHOST)),$(GHOST) tools/build/ghost.py tools/dmc/gen-dmc.py)
-FINAL_INPUTS += $(if $(strip $(WEAKEN)),$(WEAKEN) tools/build/weaken.py tools/dmc/gen-dmc.py)
+FINAL_INPUTS += $(if $(strip $(DROP_COND)),$(DROP_COND) tools/build/drop-condition.py tools/dmc/gen-dmc.py)
 # INVISIBLE_G=x.toml (set by tools/build/tee-build.py): with INVISIBLE=1, invisible-reduction.maude is
 # generated from the [invisible] rules of x.toml (tools/build/gen-invisible.py), after the ghosts are
 # composed, so that an invisible step updates the ghost state like its rule.  Without it, the
@@ -178,7 +178,7 @@ FINAL_INPUTS += $(if $(GEN_INVISIBLE),tools/build/gen-invisible.py $(INVISIBLE_G
 
 # The cache is updated last, so a failed build never leaves bad settings behind.
 src: $(FINAL_STAMP)
-	@echo "config: NAME=$(NAME) $(foreach F,$(FEATURES),$(F)=$($(F))) WITHOUT='$(WITHOUT)' DMC=$(DMC) M2L=$(M2L) M2L_EQ=$(M2L_EQ) WEAKEN='$(WEAKEN)' GHOST='$(GHOST)' INVISIBLE_G='$(INVISIBLE_G)'"
+	@echo "config: NAME=$(NAME) $(foreach F,$(FEATURES),$(F)=$($(F))) WITHOUT='$(WITHOUT)' DMC=$(DMC) M2L=$(M2L) M2L_EQ=$(M2L_EQ) DROP_COND='$(DROP_COND)' GHOST='$(GHOST)' INVISIBLE_G='$(INVISIBLE_G)'"
 	@cmp -s $(OUT)/config.want $(OUT)/config.mk || cp $(OUT)/config.want $(OUT)/config.mk
 
 # Stage, then the final tree, then the stage is removed. A failure before the touch
@@ -192,7 +192,7 @@ $(FINAL_STAMP): $(FINAL_INPUTS) | $(OUT)
 	$(Q)$(if $(SRC_FILES),cp $(SRC_FILES) $(STAGE)/src/)
 	$(Q)cp -R $(SPEC)/tests/. $(STAGE)/tests/
 	$(Q)cp $(RUNNERS) $(STAGE)/tests/
-	$(Q)$(if $(strip $(WEAKEN)),python3 tools/build/weaken.py $(STAGE)/src $(WEAKEN))
+	$(Q)$(if $(strip $(DROP_COND)),python3 tools/build/drop-condition.py $(STAGE)/src $(DROP_COND))
 	$(Q)$(if $(strip $(GHOST)),python3 tools/build/ghost.py $(STAGE)/src $(GHOST))
 	$(Q)$(if $(GEN_INVISIBLE),python3 tools/build/gen-invisible.py --src $(STAGE)/src $(INVISIBLE_G))
 	$(Q)if [ '$(DMC)' = 1 ]; then \
@@ -254,7 +254,7 @@ help config:
 	@$(foreach F,$(FEATURES),echo '  $(F)=$($(F))';) echo '  WITHOUT=$(WITHOUT)'
 	@echo "  DMC=$(DMC)"
 	@echo "  M2L=$(M2L)  M2L_EQ=$(M2L_EQ)  (MAUDE2LEAN=$(MAUDE2LEAN))"
-	@echo "  WEAKEN=$(WEAKEN)"
+	@echo "  DROP_COND=$(DROP_COND)"
 	@echo "  GHOST=$(GHOST)"
 	@echo "  INVISIBLE_G=$(INVISIBLE_G)"
 	@echo "  V=$(V)  (display only: not cached; V=1 streams test output)"
@@ -289,7 +289,7 @@ $(OUT):
 # Gated so help/clean never create build directories.
 ifeq (,$(filter help config clean distclean,$(MAKECMDGOALS)))
 $(OUT)/config.want: FORCE | $(OUT)
-	@printf '%s\n' '# Generated by Makefile. Do not edit.' $(foreach F,$(FEATURES),'$(F) := $($(F))') 'WITHOUT := $(WITHOUT)' 'DMC := $(DMC)' 'M2L := $(M2L)' 'M2L_EQ := $(M2L_EQ)' 'WEAKEN := $(WEAKEN)' 'GHOST := $(GHOST)' 'INVISIBLE_G := $(INVISIBLE_G)' > $@.tmp
+	@printf '%s\n' '# Generated by Makefile. Do not edit.' $(foreach F,$(FEATURES),'$(F) := $($(F))') 'WITHOUT := $(WITHOUT)' 'DMC := $(DMC)' 'M2L := $(M2L)' 'M2L_EQ := $(M2L_EQ)' 'DROP_COND := $(DROP_COND)' 'GHOST := $(GHOST)' 'INVISIBLE_G := $(INVISIBLE_G)' > $@.tmp
 	@if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 
 # Selected input files (sorted), rewritten only when the list changes. A deleted or added file

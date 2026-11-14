@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
-"""weaken: weaken rule conditions of a spec source tree (rewritten in place).
+"""drop-condition: drop rule conditions of a spec source tree (rewritten in place).
 
 Usage
-    python3 tools/build/weaken.py SRC_DIR CASE.toml
+    python3 tools/build/drop-condition.py SRC_DIR CASE.toml
 
-The [weaken-rule-condition] table of CASE.toml says which rules also fire on another attribute
-value; several weakenings are written as [[weaken-rule-condition]] (an array of tables), one per
-weakening:
+The [drop-rule-condition] table of CASE.toml says which rules no longer require an attribute value
+on the left-hand side; several are written as [[drop-rule-condition]] (an array of tables):
 
-    [[weaken-rule-condition]]
-    class      = "TAKernel"                # objects of this class or of a subclass
-    condition  = "status : normal"         # an attribute the left-hand side of the rule requires
-    allow-also = "status : outOfMemory"    # the rule also fires on this value
-    rules      = ["*"]                     # rule labels (globs)
-    except     = ["alloc-oper-*"]          # rule labels (globs) left as they are
+    [drop-rule-condition]
+    class     = "TAKernel"                 # objects of this class or of a subclass
+    condition = "status : normal"          # the attribute the left-hand side no longer requires
+    rules     = ["*"]                      # rule labels (globs)
+    except    = ["alloc-oper-*"]           # rule labels (globs) left as they are
 
-A rule is weakened when its label matches `rules` and no pattern of `except`, and its left-hand side
-has an object of the class (or a subclass) with the attribute value of `condition`; the value may
-be written with a sort qualification, (normal).AppStatus for normal.  The rule is kept, and a copy
-of it, with the same label and ---@dmc directives, is added after it with the value of
-`allow-also` in place of that of `condition`.  Every pattern of `rules` and `except` must match a
-rule label.
+The change is syntactic.  In a rule whose label matches `rules` and no pattern of `except`, and
+whose left-hand side has an object of the class (or a subclass) with the attribute value of
+`condition` (possibly sort-qualified: (normal).AppStatus for normal), that attribute is removed
+from the object, with its comma; the rule then fires whatever the value of the attribute is.  The
+label, the ---@dmc directives and the number of rules are unchanged.  Every pattern of `rules` and
+`except` must match a rule label.
 
-The Makefile runs this on the stage (make WEAKEN=CASE.toml) before the ghosts are composed, so a
-copy gets the ghost updates and the invisible-reduction equations of its label.
+The Makefile runs this on the stage (make DROP_COND=CASE.toml) before the ghosts are composed.
 """
 
 import fnmatch
@@ -33,7 +30,7 @@ import re
 import sys
 import tomllib
 
-KEYS = {'class', 'condition', 'allow-also', 'rules', 'except'}
+KEYS = {'class', 'condition', 'rules', 'except'}
 
 
 def load_gen():
@@ -44,7 +41,7 @@ def load_gen():
     return gen
 
 
-class WeakenError(Exception):
+class DropError(Exception):
     pass
 
 
@@ -52,7 +49,7 @@ def attr_value(text):
     """'status : normal' -> ('status', 'normal')."""
     m = re.match(r'^\s*([\w\-]+)\s*:\s*(\S.*?)\s*$', text)
     if not m:
-        raise WeakenError('not an attribute "name : value": %r' % text)
+        raise DropError('not an attribute "name : value": %r' % text)
     return m.group(1), m.group(2)
 
 
@@ -65,24 +62,20 @@ def same_value(written, value):
 def entries(path):
     with open(path, 'rb') as fh:
         data = tomllib.load(fh)
-    tables = data.get('weaken-rule-condition', [])
+    tables = data.get('drop-rule-condition', [])
     if isinstance(tables, dict):
         tables = [tables]
     out = []
     for i, t in enumerate(tables):
-        where = '%s: [[weaken-rule-condition]] #%d' % (path, i + 1)
+        where = '%s: [drop-rule-condition] #%d' % (path, i + 1)
         unknown = sorted(set(t) - KEYS)
         if unknown:
-            raise WeakenError('%s: unknown key %s' % (where, ', '.join(unknown)))
-        for k in ('class', 'condition', 'allow-also', 'rules'):
+            raise DropError('%s: unknown key %s' % (where, ', '.join(unknown)))
+        for k in ('class', 'condition', 'rules'):
             if k not in t:
-                raise WeakenError('%s: no %s' % (where, k))
+                raise DropError('%s: no %s' % (where, k))
         name, value = attr_value(t['condition'])
-        name2, value2 = attr_value(t['allow-also'])
-        if name2 != name:
-            raise WeakenError('%s: condition and allow-also name different attributes (%s, %s)'
-                              % (where, name, name2))
-        out.append(dict(where=where, cls=t['class'], attr=name, value=value, also=value2,
+        out.append(dict(where=where, cls=t['class'], attr=name, value=value,
                         rules=list(t['rules']), exc=list(t.get('except', []))))
     return out
 
@@ -119,13 +112,16 @@ def matches(label, pats):
     return any(fnmatch.fnmatchcase(label, p) for p in pats)
 
 
-def weaken(gen, src, e, files, subs):
+def drop(gen, src, e, files, subs):
     classes = closure(e['cls'], subs)
     labels, done = set(), []
-    value_re = re.compile(r'(?<![\w\-])%s(\s*:\s*)(\(\s*%s\s*\)\.[\w\-{},]+|%s)(?![\w\-.(])'
-                          % (re.escape(e['attr']), re.escape(e['value']), re.escape(e['value'])))
+    val = r'%s\s*:\s*(?:\(\s*%s\s*\)\.[\w\-{},]+|%s)(?![\w\-.(])' % (
+        re.escape(e['attr']), re.escape(e['value']), re.escape(e['value']))
+    attr = r'(?<![\w\-])' + val
+    # the attribute with the comma after it, else with the comma before it, else alone
+    forms = [re.compile(attr + r'\s*,\s*'), re.compile(r'\s*,\s*' + attr), re.compile(r'\s*' + attr)]
     for f, fi in files:
-        inserts = []    # (line index after which, lines)
+        edits = []      # (first line, last line, new lines)
         for u in fi.units:
             if u.kind != 'stmt' or u.text.split()[0] not in ('rl', 'crl'):
                 continue
@@ -150,33 +146,34 @@ def weaken(gen, src, e, files, subs):
             if hits == 0:
                 continue
             if others or hits > 1:
-                raise WeakenError('%s:%d: [%s]: %d objects of the left-hand side have %s : %s; '
-                                  'only one of class %s is supported'
-                                  % (f, u.line, lab, hits + others, e['attr'], e['value'], e['cls']))
+                raise DropError('%s:%d: [%s]: %d objects of the left-hand side have %s : %s; '
+                                'only one of class %s is supported'
+                                % (f, u.line, lab, hits + others, e['attr'], e['value'], e['cls']))
             raw = [fi.lines[k][0] for k in range(u.start, u.end + 1)]
             text = '\n'.join(raw)
             arrow = text.find('=>')
             lhs, rest = text[:arrow], text[arrow:]
-            new_lhs, n = value_re.subn(lambda m: e['attr'] + m.group(1) + e['also'], lhs)
-            if n != 1:
-                raise WeakenError('%s:%d: [%s]: cannot find %s : %s in the source text'
-                                  % (f, u.line, lab, e['attr'], e['value']))
-            dirs = [fi.lines[k][0] for k in range(u.start - len(u.dmc), u.start)]
-            ind = re.match(r'\s*', raw[0]).group(0)
-            note = '%s--- weaken-rule-condition: a copy of [%s] that also fires on %s : %s' % (
-                ind, lab, e['attr'], e['also'])
-            inserts.append((u.end, [''] + [note] + dirs + (new_lhs + rest).split('\n')))
+            if len(re.findall(attr, lhs)) != 1:
+                raise DropError('%s:%d: [%s]: cannot find %s : %s once in the source text'
+                                % (f, u.line, lab, e['attr'], e['value']))
+            for rx in forms:
+                new_lhs, n = rx.subn('', lhs, count=1)
+                if n:
+                    break
+            new_lhs = re.sub(r'\|\s+>', '| >', new_lhs)
+            edits.append((u.start, u.end, (new_lhs + rest).split('\n')))
             done.append('%s:%d [%s]' % (f, u.line, lab))
-        if inserts:
+        if edits:
             eol = fi.eol
             lines = [t + nl for t, nl in fi.lines]
-            for after, new in sorted(inserts, reverse=True):
-                lines[after + 1:after + 1] = [t + eol for t in new]
+            for first, last, new in sorted(edits, reverse=True):
+                nl = fi.lines[last][1] or eol
+                lines[first:last + 1] = [t + eol for t in new[:-1]] + [new[-1] + nl]
             with open(os.path.join(src, f), 'w', encoding='utf-8', newline='') as fh:
                 fh.write(''.join(lines))
     for p in e['rules'] + e['exc']:
         if not any(fnmatch.fnmatchcase(lab, p) for lab in labels):
-            raise WeakenError('%s: no rule label matches %s' % (e['where'], p))
+            raise DropError('%s: no rule label matches %s' % (e['where'], p))
     return done
 
 
@@ -189,11 +186,11 @@ def main(argv):
     try:
         for e in entries(path):
             files, subs = scan(gen, src)
-            done = weaken(gen, src, e, files, subs)
-            print('  weaken: %s : %s also allows %s : %s in %d rules (%s)'
-                  % (e['attr'], e['value'], e['attr'], e['also'], len(done), os.path.relpath(path)))
-    except (WeakenError, gen.GenError) as ex:
-        sys.stderr.write('weaken: error: %s\n' % ex)
+            done = drop(gen, src, e, files, subs)
+            print('  drop-condition: %s : %s dropped from %d rules (%s)'
+                  % (e['attr'], e['value'], len(done), os.path.relpath(path)))
+    except (DropError, gen.GenError) as ex:
+        sys.stderr.write('drop-condition: error: %s\n' % ex)
         return 1
     return 0
 

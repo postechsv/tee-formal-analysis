@@ -1,27 +1,24 @@
 # MQT-TZ case study: what the analyzed system is.  How it is analyzed (plain model checking, DMC,
 # maude2lean) is chosen when it is built, not here.
 
-# A TA whose memory is exhausted (the out-of-memory threat, threats/).  The spec follows the rules
-# printed in the paper: a TA-side rule fires only when the status of the TA is normal, so such a TA
-# stops at its next step.  The paper artifact checks the status only in the functions that allocate
-# memory, so its TA goes on after a memory error and only an allocation fails; the analysis follows
-# the artifact (tools/build/weaken.py).
-[weaken-rule-condition]
-class      = "TAKernel"                 # and its subclass TrustedApp
-condition  = "status : normal"
-allow-also = "status : outOfMemory"
-rules      = ["*"]
-except     = [                          # the functions that allocate memory still fail
+# Rule conditions dropped for the analysis (tools/build/drop-condition.py).  The spec follows the
+# rules printed in the paper: a TA-side rule fires only when the status of the TA is normal, so a TA
+# whose memory is exhausted (the out-of-memory threat, threats/) stops at its next step.  The paper
+# artifact checks the status only in the functions that allocate memory, so its TA goes on after a
+# memory error and only an allocation fails.  Here `status : normal` is removed from the left-hand
+# side of the TA-side rules (a syntactic change): they fire in any status, panic included, which
+# over-approximates the TA.
+[drop-rule-condition]
+class     = "TAKernel"                 # and its subclass TrustedApp
+condition = "status : normal"
+rules     = ["*"]
+except    = [                          # the functions that allocate memory keep the condition
   "allocate-transient-*",
   "alloc-oper-*",
   "alloc-enumerator-*",
   "open-persistent-*",
   "create-persist*",
 ]
-
-# 더 직관적으로 lhs에서 status : normal을 뺀다는 간단한 의미만 표현하도록
-# semantic이 아니라 syntactic 
-# panic일 때도 진행은 됨 - 해석은 overapproximation
 
 
 # Ghost state read by the LTL propositions (properties/propositions.maude).

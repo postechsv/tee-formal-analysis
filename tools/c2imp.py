@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Translate an annotated C TA program into the C-like TEE-IMP syntax of tee-formal-spec.
 
-Usage (defaults reproduce analysis/mqttz/broker-ta.maude):
+Usage (defaults reproduce case-studies/mqttz/ta/broker-ta.maude):
 
     python3 c2imp.py [--source C] [--template MAUDE] [--main TXT] [--target OUT]
 
@@ -624,11 +624,12 @@ def translate_source(path):
 
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
+    TA_DIR = os.path.join(here, '..', 'case-studies', 'mqttz', 'ta')
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--source', default=os.path.join(here, 'mqttz', 'preprocessed-ta.c'))
-    ap.add_argument('--template', default=os.path.join(here, 'mqttz', 'template.maude'))
-    ap.add_argument('--main', default=os.path.join(here, 'mqttz', 'custom_main.txt'))
-    ap.add_argument('--target', default=os.path.join(here, '..', 'mqttz', 'broker-ta.maude'))
+    ap.add_argument('--source', default=os.path.join(TA_DIR, 'preprocessed-ta.c'))
+    ap.add_argument('--template', default=os.path.join(TA_DIR, 'template.maude'))
+    ap.add_argument('--main', default=os.path.join(TA_DIR, 'custom_main.txt'))
+    ap.add_argument('--target', default=os.path.join(TA_DIR, 'broker-ta.maude'))
     args = ap.parse_args()
 
     try:

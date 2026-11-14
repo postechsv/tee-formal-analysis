@@ -1,5 +1,5 @@
 load ../main
-load ../../scenario/aux
+load ../scenarios/aux
 load ./cases/transient
 load ./cases/persistent
 load ./cases/data-stream

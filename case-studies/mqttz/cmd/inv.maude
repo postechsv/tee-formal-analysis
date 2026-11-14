@@ -1,0 +1,12 @@
+load ../main
+load ../scenarios/inv
+load ../properties/properties
+load ../threats/main
+--- load meta
+
+mod ANALYSIS-CMD is
+  pr MQTTZ .
+  pr BASE-SCENARIO .
+  pr LTL-PROPERTIES .
+  pr MODEL-CHECKER .
+endm

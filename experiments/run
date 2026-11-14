@@ -1,15 +1,8 @@
 #!/bin/bash
 
-exec_dir=$(pwd)/../3rd_party
-
-# OS detection
-OS_NAME=$(uname -s)
-
-if [ $OS_NAME == "Darwin" ]; then
-    maude_bin="$exec_dir/Darwin64/maude.darwin64" # add maude executable path
-else
-    maude_bin="$exec_dir/Linux64/maude.linux64" # add maude executable path
-fi
+# Repository root, and the Maude binary: MAUDE_BIN, else maude on PATH.
+root=$(cd "$(dirname "$0")/.." && pwd)
+maude_bin="${MAUDE_BIN:-maude}"
 
 run() {
     case $7 in
@@ -62,7 +55,7 @@ run() {
 
     if [ "$inv" = true ]
     then
-        main=$(<"../analysis/cmd/inv.maude")
+        main="load $root/case-studies/mqttz/cmd/inv.maude"
         analysis="mod ANALYSIS is pr ANALYSIS-CMD . $intRule $red endm"
         cmd="set verbose on .\n"
         for s in {1..4}
@@ -70,7 +63,7 @@ run() {
             cmd=$cmd"\nsearch scenario-$8($raProg, $taProg, $int, $( expr 1 '*' "$s" )) =>* none ."
         done
     else
-        main=$(<"../analysis/cmd/main.maude")
+        main="load $root/case-studies/mqttz/cmd/main.maude"
         analysis="mod ANALYSIS is pr ANALYSIS-CMD . $intRule $red endm"
         cmd="set verbose on .\nred modelCheck(scenario($raProg, $taProg, $int),$p) ."
     fi

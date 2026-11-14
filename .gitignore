@@ -2,3 +2,5 @@
 build/
 config.mk
 __pycache__/
+results/*
+!results/paper/

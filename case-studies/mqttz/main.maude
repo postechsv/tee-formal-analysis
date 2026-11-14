@@ -1,10 +1,10 @@
-load ../../../tee-formal-spec/src/main
-load base
-load entity
-load client
-load broker
-load broker-ta
-load broker-ra
+load ../../spec/src/main
+load env/base
+load env/entity
+load env/client
+load env/broker
+load ta/broker-ta
+load ra/broker-ra
 
 --- This module includes all defined behaviors of MQT-TZ entities and MQT-TZ RA and TA.
 

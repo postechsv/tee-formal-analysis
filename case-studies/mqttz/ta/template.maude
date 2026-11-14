@@ -38,8 +38,8 @@ mod MQTTZ-TA-PROGRAM is
   op mqttzTA : -> Program [ctor] .
 
 
---- This program is translated automatically from "script/mqttz/preprocessed-ta.c" by "script/c2imp.py";
---- the main function is taken from "script/mqttz/custom_main.txt".
+--- This program is translated automatically from "case-studies/mqttz/ta/preprocessed-ta.c" by "tools/c2imp.py";
+--- the main function is taken from "case-studies/mqttz/ta/custom_main.txt".
 
   eq mqttzTA =
 

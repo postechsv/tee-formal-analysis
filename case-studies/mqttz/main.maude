@@ -1,4 +1,3 @@
-load ../../spec/src/main
 load env/base
 load env/entity
 load env/client

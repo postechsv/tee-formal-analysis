@@ -3,6 +3,9 @@
 # Repository root, and the Maude binary: MAUDE_BIN, else maude on PATH.
 root=$(cd "$(dirname "$0")/.." && pwd)
 maude_bin="${MAUDE_BIN:-maude}"
+# The MQT-TZ build with the invisible-transition reduction (make mqttz INVISIBLE=1).
+build="$root/build/mqttz-inv/main.maude"
+[ -f "$build" ] || { echo "error: $build not found; run make mqttz INVISIBLE=1 first"; exit 66; }
 
 run() {
     case $7 in
@@ -55,7 +58,7 @@ run() {
 
     if [ "$inv" = true ]
     then
-        main="load $root/case-studies/mqttz/cmd/inv.maude"
+        main="load $root/build/mqttz-inv/src/main\nload $root/case-studies/mqttz/cmd/inv.maude"
         analysis="mod ANALYSIS is pr ANALYSIS-CMD . $intRule $red endm"
         cmd="set verbose on .\n"
         for s in {1..4}
@@ -63,7 +66,7 @@ run() {
             cmd=$cmd"\nsearch scenario-$8($raProg, $taProg, $int, $( expr 1 '*' "$s" )) =>* none ."
         done
     else
-        main="load $root/case-studies/mqttz/cmd/main.maude"
+        main="load $build"
         analysis="mod ANALYSIS is pr ANALYSIS-CMD . $intRule $red endm"
         cmd="set verbose on .\nred modelCheck(scenario($raProg, $taProg, $int),$p) ."
     fi

@@ -1,0 +1,24 @@
+# MQT-TZ case study: what the analyzed system is.  How it is analyzed (plain model checking, DMC,
+# maude2lean) is chosen when it is built, not here.
+
+[spec]
+# API feature groups of the spec that the model uses (mk/features.mk); the others are dropped.
+# shm: the RA passes memory references (& destCliData) to teecInvokeCommand.
+features = ["crypto", "transient", "persistent", "generic", "data-stream", "shm"]
+
+# Ghost state read by the LTL propositions (properties/propositions.maude).
+
+# running: the TA serves a request, from its start to its finish or to the answer of a panicked TA.
+[ghost.TrustedApp.running]
+init        = false
+true-after  = ["handle-invoke-ta", "handle-session-req"]
+false-after = ["handle-invoke-ta-finish", "handle-session-req-finish",
+               "handle-session-req-panic", "return-smc-request-panic"]
+
+# state-changed: the TA has started or finished a request and made no TEE API call since
+# (start.TA, term.TA).
+[ghost.TrustedApp.state-changed]
+init        = false
+true-after  = ["handle-invoke-ta", "handle-invoke-ta-finish",
+               "handle-session-req", "handle-session-req-finish"]
+false-after = ["tee-api-call-accept", "tee-api-call-return", "return-smc-request-panic"]

@@ -47,13 +47,19 @@ make docs                    # documentation site of the spec in build/docs
 
 ## MQT-TZ
 
-`case-studies/mqttz/cmd/main.maude` loads the specification, the MQT-TZ model, the scenarios, the
-threats and the LTL properties. The TA program `ta/broker-ta.maude` is generated from the C source:
+`case-studies/mqttz/mqttz.toml` describes the system: the API feature groups of the spec it uses and
+the ghost state its LTL propositions read (`running`, `state-changed` of the TA), which the spec
+itself does not have.  How it is analyzed is chosen when it is built:
 
 ```bash
-python3 tools/c2imp.py       # case-studies/mqttz/ta/preprocessed-ta.c -> ta/broker-ta.maude
+make mqttz                   # build/mqttz: the spec with those features and ghosts, and main.maude
+make mqttz INVISIBLE=1       # build/mqttz-inv: the same with the invisible-transition reduction
+make mqttz MODE=dmc          # build/mqttz-dmc: the DM-Check build
 ```
 
-`experiments/run PROP THREAT [-patch] RED` writes one model-checking run (Maude file and log), and
-`experiments/run-exp table2|table3` runs a whole table. These scripts predate the current
-specification and still name its old reduction modules.
+`build/<name>/main.maude` loads the built spec and `case-studies/mqttz/cmd/main.maude` (the model,
+the scenarios, the threats and the LTL properties). The TA program `ta/broker-ta.maude` is generated
+from the C source with `python3 tools/c2imp.py`.
+
+`experiments/run PROP THREAT [-patch] RED` writes one model-checking run (Maude file and log) on
+`build/mqttz-inv`, and `experiments/run-exp table2|table3` runs a whole table.

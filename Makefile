@@ -6,8 +6,10 @@
 #   make NAME=t WITHOUT=M   build without module M (must be a pr line in main.maude)
 #   make NAME=t DMC=1       build the DM-Check version (tools/gen-dmc.py) instead of a plain copy
 #   make NAME=t GHOST=ghost/x.maude   compose the ghost file(s) with the spec rules (tools/ghost.py)
-#                           before the copy or gen-dmc; a space-separated list is allowed. Cached
-#                           like DMC; GHOST= turns it off.
+#                           before the copy or gen-dmc; a space-separated list is allowed, and a
+#                           case-study .toml gives its [ghost] tables. Cached like DMC; GHOST= turns it off.
+#   make mqttz [MODE=dmc] [INVISIBLE=1]  build the case study case-studies/mqttz (tools/tee-build.py):
+#                           the spec with its features and ghosts, and build/mqttz/main.maude
 #   make NAME=t test        build, then run test-api and test-checks in build/t/tests
 #   make test-api           API-level black-box tests ($(SPEC)/tests/api/test-*.maude)
 #   make test-checks        search/red checks (completion/*.maude, gp-conformance/*.maude)
@@ -97,6 +99,14 @@ VFLAG = $(if $(filter 1,$(V)),-v)
 .PHONY: all src test test-api test-checks dmc check-dmc m2l check-m2l lean docs help config clean distclean FORCE
 
 all: src
+
+# Case studies: the directories case-studies/NAME with a NAME.toml.  make NAME_OF_CASE builds it with
+# tools/tee-build.py; MODE (plain, dmc, m2l), INVISIBLE and SPEC are taken from the command line only.
+CASES := $(foreach D,$(wildcard case-studies/*/),$(if $(wildcard $(D)$(notdir $(D:/=)).toml),$(notdir $(D:/=))))
+MODE ?= plain
+.PHONY: $(CASES)
+$(CASES):
+	@python3 tools/tee-build.py case-studies/$@ --mode $(MODE) $(if $(and $(filter command line,$(origin INVISIBLE)),$(filter 1,$(INVISIBLE))),--invisible) $(if $(filter command line,$(origin SPEC)),--spec $(SPEC))
 
 # Stop early on invalid values or unmet requirements.
 $(if $(filter-out 0 1,$(V)),$(error V must be 0 or 1, got '$(V)'))

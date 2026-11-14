@@ -10,8 +10,8 @@ match inside `reqCipherInit`, `finishCipherInit`, `cipher-init-x`, or `TEE_Ciphe
 Text is rewritten everywhere it occurs (code, comments, `---@dmc` annotations, docs),
 because doc comments that mention an old name should follow the rename.
 
-Scope: src/**/*.maude, tests/** (text files), README.md and README (if present),
-tools/gen-dmc.py and tools/dmc-lib/** .
+Scope: in the spec (--root, default the submodule spec/): src/**/*.maude, tests/** (text files),
+README.md and README (if present); in this repository: tools/gen-dmc.py and tools/dmc-lib/** .
 
 Idempotent: a second run finds no old tokens and changes nothing. Before any write,
 the script refuses (exit 2) when an old and a new name are both present as code
@@ -95,7 +95,9 @@ RENAMES = [
 
 IDCHAR = r"A-Za-z0-9_'\-"
 SCOPE_FILES = ["README.md", "README"]
-SCOPE_DIRS = [("src", (".maude",)), ("tests", None), ("tools/dmc-lib", (".maude",))]
+SCOPE_DIRS = [("src", (".maude",)), ("tests", None)]
+REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+TOOL_DIRS = [("tools/dmc-lib", (".maude",))]
 SCOPE_TOOLS = ["tools/gen-dmc.py"]
 SKIP_DIRS = {"__pycache__", ".git", "build"}
 
@@ -137,8 +139,9 @@ def in_scope(root):
         p = os.path.join(root, rel)
         if add(p):
             yield p
-    for rel, exts in SCOPE_DIRS:
-        base = os.path.join(root, rel)
+    for rel, exts in [(os.path.join(root, d), e) for d, e in SCOPE_DIRS] + \
+            [(os.path.join(REPO, d), e) for d, e in TOOL_DIRS]:
+        base = rel
         for dp, dn, fn in os.walk(base):
             dn[:] = [d for d in dn if d not in SKIP_DIRS]
             for f in sorted(fn):
@@ -148,7 +151,7 @@ def in_scope(root):
                 if add(p):
                     yield p
     for rel in SCOPE_TOOLS:
-        p = os.path.join(root, rel)
+        p = os.path.join(REPO, rel)
         if add(p):
             yield p
 
@@ -167,10 +170,10 @@ def read_text(path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry-run", action="store_true", help="print per-file counts, write nothing")
-    ap.add_argument("--root", default=None, help="repository root (default: parent of tools/)")
+    ap.add_argument("--root", default=None, help="spec root (default: the submodule spec/)")
     args = ap.parse_args()
 
-    root = os.path.abspath(args.root or os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+    root = os.path.abspath(args.root or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "spec"))
     self_path = os.path.abspath(__file__)
 
     files = {}

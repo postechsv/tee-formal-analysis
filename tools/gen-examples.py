@@ -90,11 +90,14 @@ import subprocess
 import sys
 
 
-ROOT = Path(__file__).resolve().parent.parent
+# REPO is tee-formal-analysis (config.mk, docs/); ROOT is the spec (src/, tests/), where Maude runs:
+# the submodule spec/, or the directory in the environment variable SPEC.
+REPO = Path(__file__).resolve().parent.parent
+ROOT = (REPO / os.environ.get("SPEC", "spec")).resolve()
 SRC = ROOT / "src"
 TEST_GLOBS = ("tests/api/test-*.maude", "tests/completion/*.maude",
               "tests/gp-conformance/*.maude")
-SEEDS_DIR = ROOT / "docs" / "example-seeds"
+SEEDS_DIR = REPO / "docs" / "example-seeds"
 MAX_TERM = 4000
 CANDIDATES_PER_KEY = 2       # verified examples kept per rule or op
 TRIES_PER_KEY = 6            # candidates checked per rule or op
@@ -252,12 +255,20 @@ class OpIndex:
         return best
 
 
+def rel(path: Path) -> Path:
+    """A spec file relative to the spec root, a seed file relative to this repository."""
+    try:
+        return path.relative_to(ROOT)
+    except ValueError:
+        return path.relative_to(REPO)
+
+
 def scan_src(src_dir: Path):
     """Return (rules, equation-defined op keys, operator index, variable names)."""
     variables: set[str] = set()
     raw = []  # (file, line, module, keyword, text)
     for path in sorted(src_dir.glob("*.maude")):
-        rel = path.relative_to(ROOT).as_posix()
+        rel = rel(path).as_posix()
         module = None
         current = None
         for number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
@@ -580,7 +591,7 @@ def run_test_file(maude: str, path: Path, cache: Path | None, digest: str, timeo
     search_text = "".join(t + "\n" for t in texts)
 
     def run_cached(mode: str, program: str) -> str:
-        name = "{}-{}-{}.txt".format(path.relative_to(ROOT).as_posix().replace("/", "_"),
+        name = "{}-{}-{}.txt".format(rel(path).as_posix().replace("/", "_"),
                                      mode, digest)
         cached = cache / name if cache else None
         if cached is not None and cached.is_file():
@@ -594,7 +605,7 @@ def run_test_file(maude: str, path: Path, cache: Path | None, digest: str, timeo
     outputs = {"search": run_cached("search", prelude + search_text)}
     for line in outputs["search"].splitlines():
         if line.startswith(("Warning:", "Error:")):
-            print("warning: {}: {}".format(path.relative_to(ROOT).as_posix(), line),
+            print("warning: {}: {}".format(rel(path).as_posix(), line),
                   file=sys.stderr)
             break
     states = solution_states(outputs["search"])
@@ -621,7 +632,7 @@ def inputs_digest(maude: str, seeds: Path | None) -> str:
     seed_files = sorted(seeds.glob("*.maude")) if seeds and seeds.is_dir() else []
     for path in sorted(list(SRC.glob("*.maude")) + list((ROOT / "tests").rglob("*.maude"))
                        + seed_files):
-        digest.update(path.relative_to(ROOT).as_posix().encode())
+        digest.update(rel(path).as_posix().encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()[:16]
 
@@ -629,7 +640,7 @@ def inputs_digest(maude: str, seeds: Path | None) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate docs/examples.json (verified examples).")
     parser.add_argument("--maude", help="Maude binary (default: MAUDE in config.mk)")
-    parser.add_argument("--out", default=str(ROOT / "docs" / "examples.json"))
+    parser.add_argument("--out", default=str(REPO / "docs" / "examples.json"))
     parser.add_argument("--seeds", default=str(SEEDS_DIR),
                         help="directory of seed files (default: docs/example-seeds; "
                              "empty string for none)")
@@ -643,7 +654,7 @@ def main() -> int:
 
     maude = args.maude
     if maude is None:
-        config = (ROOT / "config.mk").read_text(encoding="utf-8")
+        config = (REPO / "config.mk").read_text(encoding="utf-8")
         match = re.search(r"^MAUDE\s*:=\s*(\S+)", config, re.MULTILINE)
         if match is None:
             print("no MAUDE in config.mk; use --maude", file=sys.stderr)
@@ -674,7 +685,7 @@ def main() -> int:
     op_candidates: dict[str, list[dict]] = {}
 
     for run in runs:
-        rel = run["path"].relative_to(ROOT).as_posix()
+        rel = rel(run["path"]).as_posix()
         prelude = run["prelude"]
         searches = run["searches"]
         path_bodies = split_results(run["outputs"]["path"])

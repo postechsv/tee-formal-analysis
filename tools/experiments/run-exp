@@ -1,0 +1,50 @@
+#!/bin/bash
+# Run every model-checking run of a table of the paper: p1 .. p6 under the threats non, oom, msg.
+#
+#   run-exp TABLE [-non-parallel]
+#
+#   TABLE          table2: the original RA and TA (Table 2 of the paper)
+#                  table3: the patched RA and TA (Table 3 of the paper)
+#   -non-parallel  one run after the other; without it the runs go through GNU parallel
+#
+# The Maude files and the logs go to results/TABLE/maude-files and results/TABLE/logs.  In results/,
+# ../tools/experiments/gen-report TABLE writes TABLE-report.csv, and
+# ../tools/experiments/gen-table TABLE-report.csv writes TABLE.html.
+
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$here/../.." && pwd)
+
+run() {
+
+    case $1 in
+        table2) prog="normal" ;;
+        table3) prog="-patch" ;;
+        *) echo "error: wrong table"; exit 65 ;;
+    esac
+
+    out="$root/results/$1"
+    tht=("non" "oom" "msg")
+
+    cmds=()
+
+    for v in {1..6}
+    do
+        for t in "${tht[@]}"
+        do
+            cmds+=("$here/run p$v $t $prog $out/maude-files $out/logs -silent")
+        done
+    done
+
+    case $2 in
+        -non-parallel)
+            for mm in "${cmds[@]}"
+            do
+                ${mm% -silent}
+            done ;;
+        *) parallel --bar ::: "${cmds[@]}" ;;
+    esac
+
+}
+
+# arg 1: table, 2: parallel
+run "$1" "$2"

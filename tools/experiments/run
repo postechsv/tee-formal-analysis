@@ -1,0 +1,66 @@
+#!/bin/bash
+# One model-checking run of the paper experiments (Table 2 and Table 3) on the MQT-TZ build with the
+# invisible-transition reduction (make mqttz INVISIBLE=1).
+#
+#   run PROP THREAT [-patch] [MAUDE_DIR] [LOG_DIR] [-silent]
+#
+#   PROP       p1 .. p6, the LTL property (case-studies/mqttz/properties/properties.maude)
+#   THREAT     non (no threat), oom (out-of-memory threat), msg (message intruder)
+#   -patch     the patched RA and TA (mqttzHostPatched, mqttzTaPatched); any other value: the
+#              original programs (mqttzHost, mqttzTA)
+#   MAUDE_DIR  where the generated Maude file goes (default: results/maude-files)
+#   LOG_DIR    where the Maude output goes (default: results/logs)
+#   -silent    do not print the paths of the written files
+#
+# The Maude binary is MAUDE_BIN, else MAUDE of config.mk, else maude on PATH.
+
+root=$(cd "$(dirname "$0")/../.." && pwd)
+maude_bin="${MAUDE_BIN:-$(sed -n 's/^MAUDE[[:space:]]*:\{0,1\}=[[:space:]]*//p' "$root/config.mk" 2>/dev/null | head -n 1)}"
+maude_bin="${maude_bin:-maude}"
+build="$root/build/mqttz-inv/main.maude"
+[ -f "$build" ] || { echo "error: $build not found; run make mqttz INVISIBLE=1 first"; exit 66; }
+
+run() {
+    case $6 in
+        -silent) verbose=false ;;
+        *)       verbose=true ;;
+    esac
+
+    case $1 in
+        p1|p2|p3|p4|p5|p6) p="$1" ;;
+        *) echo "error: wrong property"; exit 65 ;;
+    esac
+
+    case $2 in
+        oom) int="none" intRule="pr OOM-THREAT .";;
+        msg) int="initInt" intRule="pr MSG-THREAT .";;
+        non) int="none" intRule="";;
+        *) echo "error: wrong threat"; exit 65 ;;
+    esac
+
+    case $3 in
+        -patch) raProg="mqttzHostPatched" taProg="mqttzTaPatched" prn="_patch" ;;
+        *) raProg="mqttzHost" taProg="mqttzTA" prn="" ;;
+    esac
+
+    # The invisible-transition reduction G of the paper: the three modules of the build together.
+    red="pr IMP-INVISIBLE-REDUCTION . pr TEE-API-CALL-INVISIBLE-REDUCTION . pr INVISIBLE-REDUCTION ."
+    main="load $build"
+    analysis="mod ANALYSIS is pr ANALYSIS-CMD . $red $intRule endm"
+    cmd="set verbose on .\nred modelCheck(scenario($raProg, $taProg, $int),$p) ."
+
+    name=`echo "$1"_"$2""$prn" | tr '-' '_'`
+
+    mf="${4:-$root/results/maude-files}"
+    mkdir -p "$mf"
+    echo -e "$main\n$analysis\n$cmd\n" > "$mf/$name.maude"
+    if [ "$verbose" = true ]; then echo "write a maude file at $mf/$name.maude"; fi
+
+    of="${5:-$root/results/logs}"
+    mkdir -p "$of"
+    "$maude_bin" < "$mf/$name.maude" > "$of/$name.txt" 2>&1
+    if [ "$verbose" = true ]; then echo "write an output file at $of/$name.txt"; fi
+}
+
+# arg 1: LTL property, 2: threat, 3: TA prog, 4: maude file dir, 5: out file dir, 6: silent
+run "$1" "$2" "$3" "$4" "$5" "$6"

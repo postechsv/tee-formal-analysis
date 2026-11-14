@@ -4,13 +4,13 @@
 #   make NAME=t             build build/t/src and build/t/tests
 #   make NAME=t CRYPTO=0    build without the crypto modules
 #   make NAME=t WITHOUT=M   build without module M (must be a pr line in main.maude)
-#   make NAME=t DMC=1       build the DM-Check version (tools/gen-dmc.py) instead of a plain copy
-#   make NAME=t GHOST=x.maude   compose the ghost file(s) with the spec rules (tools/ghost.py)
+#   make NAME=t DMC=1       build the DM-Check version (tools/dmc/gen-dmc.py) instead of a plain copy
+#   make NAME=t GHOST=x.maude   compose the ghost file(s) with the spec rules (tools/build/ghost.py)
 #                           before the copy or gen-dmc; a space-separated list is allowed, and a
 #                           case-study .toml gives its [ghost] tables. Cached like DMC; GHOST= turns it off.
 #   make NAME=t WEAKEN=x.toml   weaken the rule conditions of the [weaken-rule-condition] tables of
-#                           a case-study .toml (tools/weaken.py) before the ghosts. Cached like GHOST.
-#   make mqttz [MODE=dmc] [INVISIBLE=1]  build the case study case-studies/mqttz (tools/tee-build.py):
+#                           a case-study .toml (tools/build/weaken.py) before the ghosts. Cached like GHOST.
+#   make mqttz [MODE=dmc] [INVISIBLE=1]  build the case study case-studies/mqttz (tools/build/tee-build.py):
 #                           the spec with its features and ghosts, and build/mqttz/main.maude
 #   make NAME=t test        build, then run test-api and test-checks in build/t/tests
 #   make test-api           API-level black-box tests ($(SPEC)/tests/api/test-*.maude)
@@ -18,7 +18,7 @@
 #   make V=1 test           verbose: stream the Maude output of each test file / check file
 #   make dmc                same as make DMC=1 (the setting is cached like the features)
 #   make check-dmc          regenerate the DMC build and run gen-dmc's ground checks (exit 2 on mismatch)
-#   make NAME=t DMC=1 M2L=1 build the maude2lean version (tools/gen-maude2lean.py on the DMC build)
+#   make NAME=t DMC=1 M2L=1 build the maude2lean version (tools/lean/gen-maude2lean.py on the DMC build)
 #   make m2l                same as make DMC=1 M2L=1 (cached)
 #   make check-m2l          regenerate the M2L build and run gen-maude2lean's checks
 #   make lean               translate the M2L build to Lean: build/t/lean/TeeSpec.lean (MAUDE2LEAN)
@@ -38,7 +38,7 @@
 #   .stage/        intermediate, removed after each successful build. A failed build leaves
 #                  the stamp untouched, so the next run rebuilds.
 #
-# Setting precedence: command line > build/$(NAME)/config.mk (cache) > mk/features.mk.
+# Setting precedence: command line > build/$(NAME)/config.mk (cache) > features.mk.
 # Personal settings such as the Maude path go in config.mk at the repo root (gitignored).
 
 # Ignore a NAME inherited from the shell environment; only make arguments or config.mk set it.
@@ -71,20 +71,20 @@ LEAN_OUT = $(OUT)/lean/TeeSpec.lean
 -include $(OUT)/config.mk
 
 # Feature table (defaults with ?=).
-include mk/features.mk
+include features.mk
 
-# DM-Check transform (tools/gen-dmc.py). Not a spec feature: it does not drop any files.
+# DM-Check transform (tools/dmc/gen-dmc.py). Not a spec feature: it does not drop any files.
 DMC ?= 0
 
-# maude2lean build (tools/gen-maude2lean.py): the DMC build without sort tests. Needs DMC=1;
+# maude2lean build (tools/lean/gen-maude2lean.py): the DMC build without sort tests. Needs DMC=1;
 # cached like DMC.
 M2L ?= 0
 # M2L_EQ=0: the M2L build without gen-dmc's _.=._ (gen-maude2lean --no-eq; its uses become the built-in ==).
 M2L_EQ ?= 1
 
-# Ghost files (tools/ghost.py) composed with the stage. Not a spec feature either.
+# Ghost files (tools/build/ghost.py) composed with the stage. Not a spec feature either.
 GHOST ?=
-# Case-study manifest whose [weaken-rule-condition] tables weaken rule conditions (tools/weaken.py).
+# Case-study manifest whose [weaken-rule-condition] tables weaken rule conditions (tools/build/weaken.py).
 WEAKEN ?=
 # Case-study manifest whose [invisible] rules give the invisible-transition reduction (see below).
 INVISIBLE_G ?=
@@ -107,12 +107,12 @@ VFLAG = $(if $(filter 1,$(V)),-v)
 all: src
 
 # Case studies: the directories case-studies/NAME with a NAME.toml.  make NAME_OF_CASE builds it with
-# tools/tee-build.py; MODE (plain, dmc, m2l), INVISIBLE and SPEC are taken from the command line only.
+# tools/build/tee-build.py; MODE (plain, dmc, m2l), INVISIBLE and SPEC are taken from the command line only.
 CASES := $(foreach D,$(wildcard case-studies/*/),$(if $(wildcard $(D)$(notdir $(D:/=)).toml),$(notdir $(D:/=))))
 MODE ?= plain
 .PHONY: $(CASES)
 $(CASES):
-	@python3 tools/tee-build.py case-studies/$@ --mode $(MODE) $(if $(and $(filter command line,$(origin INVISIBLE)),$(filter 1,$(INVISIBLE))),--invisible) $(if $(filter command line,$(origin SPEC)),--spec $(SPEC))
+	@python3 tools/build/tee-build.py case-studies/$@ --mode $(MODE) $(if $(and $(filter command line,$(origin INVISIBLE)),$(filter 1,$(INVISIBLE))),--invisible) $(if $(filter command line,$(origin SPEC)),--spec $(SPEC))
 
 # Stop early on invalid values or unmet requirements.
 $(if $(filter-out 0 1,$(V)),$(error V must be 0 or 1, got '$(V)'))
@@ -128,7 +128,7 @@ $(foreach F,$(FEATURES),\
   $(if $(filter 1,$($(F))),\
     $(foreach G,$($(F)_REQUIRES),$(if $(filter 0,$($(G))),$(error $(F) requires $(G))))))
 
-# Arguments for tools/select-main.awk. Disabled features contribute their lists.
+# Arguments for tools/build/select-main.awk. Disabled features contribute their lists.
 DROP_LOADS := $(foreach F,$(FEATURES),$(if $(filter 0,$($(F))),$($(F)_LOADS)))
 DROP_MODULES := $(foreach F,$(FEATURES),$(if $(filter 0,$($(F))),$($(F)_MODULES))) $(WITHOUT)
 
@@ -145,13 +145,13 @@ DROP_TESTS := $(foreach F,$(FEATURES),$(if $(filter 0,$($(F))),$($(F)_TESTS)))
 API_TESTS := $(filter-out $(DROP_TESTS),$(ALL_API_TESTS))
 CHECK_TESTS := $(filter-out $(DROP_TESTS),$(ALL_CHECK_TESTS))
 # The test runners run in $(OUT)/tests. A full copy of $(SPEC)/tests/ is made, and the runners
-# (tools/run-api-suite.py, tools/run-checks.py) are copied next to it, so relative loads such as ../src/main resolve inside $(OUT).
+# (tools/test/run-api-suite.py, tools/test/run-checks.py) are copied next to it, so relative loads such as ../src/main resolve inside $(OUT).
 # With every API test selected, run the runner without arguments so it checks the total.
 API_FULL := $(if $(filter-out $(API_TESTS),$(ALL_API_TESTS)),,1)
 API_ARGS = $(if $(API_FULL),,$(addprefix $(OUT)/tests/,$(API_TESTS)))
 CHECK_ARGS = $(addprefix $(OUT)/tests/,$(CHECK_TESTS))
 TEST_SRCS := $(shell find $(SPEC)/tests -type f)
-RUNNERS := tools/run-api-suite.py tools/run-checks.py
+RUNNERS := tools/test/run-api-suite.py tools/test/run-checks.py
 
 # gen-dmc reads the stage and writes $(OUT)/src; derived tests go to $(OUT)/tests. Its
 # bookkeeping lives in $(OUT)/.dmc-cache, outside src/ (the DMC=0 path replaces src/ wholesale).
@@ -159,22 +159,22 @@ RUNNERS := tools/run-api-suite.py tools/run-checks.py
 # With M2L=1, gen-dmc writes $(OUT)/.m2l/dmc-src and gen-maude2lean reads it and writes $(OUT)/src;
 # the derived tests load ../src/main, so they run on the M2L build. M2L_CHECK=1 (check-m2l) adds --check.
 DMC_OUT = $(if $(filter 1,$(M2L)),$(OUT)/.m2l/dmc-src,$(OUT)/src)
-GEN_M2L = python3 tools/gen-maude2lean.py $(OUT)/.m2l/dmc-src $(OUT)/src --cache-dir $(OUT)/.m2l-cache --maude $(MAUDE) $(if $(M2L_CHECK),--check) $(if $(filter 0,$(M2L_EQ)),--no-eq)
-GEN_DMC = python3 tools/gen-dmc.py $(STAGE)/src $(DMC_OUT) --tests $(STAGE)/tests --tests-out $(OUT)/tests --cache-dir $(OUT)/.dmc-cache --maude $(MAUDE) $(if $(DMC_CHECK),--check)
+GEN_M2L = python3 tools/lean/gen-maude2lean.py $(OUT)/.m2l/dmc-src $(OUT)/src --cache-dir $(OUT)/.m2l-cache --maude $(MAUDE) $(if $(M2L_CHECK),--check) $(if $(filter 0,$(M2L_EQ)),--no-eq)
+GEN_DMC = python3 tools/dmc/gen-dmc.py $(STAGE)/src $(DMC_OUT) --tests $(STAGE)/tests --tests-out $(OUT)/tests --cache-dir $(OUT)/.dmc-cache --maude $(MAUDE) $(if $(DMC_CHECK),--check)
 
 # Everything that decides the final tree. config.want changes with every setting; .inputs
 # with the selected file list, so deleting a file (which no longer appears in the lists) rebuilds.
-FINAL_INPUTS := $(MAIN_SRC) $(SRC_FILES) $(TEST_SRCS) $(RUNNERS) tools/select-main.awk mk/features.mk $(OUT)/config.want $(OUT)/.inputs
-FINAL_INPUTS += $(if $(filter 1,$(DMC)),tools/gen-dmc.py $(wildcard tools/dmc-lib/*))
-FINAL_INPUTS += $(if $(filter 1,$(M2L)),tools/gen-maude2lean.py)
-FINAL_INPUTS += $(if $(strip $(GHOST)),$(GHOST) tools/ghost.py tools/gen-dmc.py)
-FINAL_INPUTS += $(if $(strip $(WEAKEN)),$(WEAKEN) tools/weaken.py tools/gen-dmc.py)
-# INVISIBLE_G=x.toml (set by tools/tee-build.py): with INVISIBLE=1, invisible-reduction.maude is
-# generated from the [invisible] rules of x.toml (tools/gen-invisible.py), after the ghosts are
+FINAL_INPUTS := $(MAIN_SRC) $(SRC_FILES) $(TEST_SRCS) $(RUNNERS) tools/build/select-main.awk features.mk $(OUT)/config.want $(OUT)/.inputs
+FINAL_INPUTS += $(if $(filter 1,$(DMC)),tools/dmc/gen-dmc.py $(wildcard tools/dmc/lib/*))
+FINAL_INPUTS += $(if $(filter 1,$(M2L)),tools/lean/gen-maude2lean.py)
+FINAL_INPUTS += $(if $(strip $(GHOST)),$(GHOST) tools/build/ghost.py tools/dmc/gen-dmc.py)
+FINAL_INPUTS += $(if $(strip $(WEAKEN)),$(WEAKEN) tools/build/weaken.py tools/dmc/gen-dmc.py)
+# INVISIBLE_G=x.toml (set by tools/build/tee-build.py): with INVISIBLE=1, invisible-reduction.maude is
+# generated from the [invisible] rules of x.toml (tools/build/gen-invisible.py), after the ghosts are
 # composed, so that an invisible step updates the ghost state like its rule.  Without it, the
 # spec's own invisible-reduction.maude is used.
 GEN_INVISIBLE := $(and $(strip $(INVISIBLE_G)),$(filter 1,$(INVISIBLE)))
-FINAL_INPUTS += $(if $(GEN_INVISIBLE),tools/gen-invisible.py $(INVISIBLE_G))
+FINAL_INPUTS += $(if $(GEN_INVISIBLE),tools/build/gen-invisible.py $(INVISIBLE_G))
 
 # The cache is updated last, so a failed build never leaves bad settings behind.
 src: $(FINAL_STAMP)
@@ -187,14 +187,14 @@ $(FINAL_STAMP): $(FINAL_INPUTS) | $(OUT)
 	$(Q)rm -rf $(STAGE) $(OUT)/tests
 	$(Q)mkdir -p $(STAGE)/src $(STAGE)/tests
 	$(Q)awk -v skip_loads='$(DROP_LOADS)' -v skip_mods='$(DROP_MODULES)' -v without='$(WITHOUT)' \
-		-f tools/select-main.awk $(MAIN_SRC) > $(STAGE)/src/main.maude
+		-f tools/build/select-main.awk $(MAIN_SRC) > $(STAGE)/src/main.maude
 	$(Q)$(if $(filter 1,$(INVISIBLE)),echo 'load invisible-reduction' >> $(STAGE)/src/main.maude)
 	$(Q)$(if $(SRC_FILES),cp $(SRC_FILES) $(STAGE)/src/)
 	$(Q)cp -R $(SPEC)/tests/. $(STAGE)/tests/
 	$(Q)cp $(RUNNERS) $(STAGE)/tests/
-	$(Q)$(if $(strip $(WEAKEN)),python3 tools/weaken.py $(STAGE)/src $(WEAKEN))
-	$(Q)$(if $(strip $(GHOST)),python3 tools/ghost.py $(STAGE)/src $(GHOST))
-	$(Q)$(if $(GEN_INVISIBLE),python3 tools/gen-invisible.py --src $(STAGE)/src $(INVISIBLE_G))
+	$(Q)$(if $(strip $(WEAKEN)),python3 tools/build/weaken.py $(STAGE)/src $(WEAKEN))
+	$(Q)$(if $(strip $(GHOST)),python3 tools/build/ghost.py $(STAGE)/src $(GHOST))
+	$(Q)$(if $(GEN_INVISIBLE),python3 tools/build/gen-invisible.py --src $(STAGE)/src $(INVISIBLE_G))
 	$(Q)if [ '$(DMC)' = 1 ]; then \
 		rm -rf $(OUT)/src $(OUT)/.m2l && $(GEN_DMC) $(if $(filter 1,$(M2L)),&& $(GEN_M2L)); \
 	else \
@@ -242,11 +242,11 @@ lean: src
 	@mkdir -p $(OUT)/lean
 	cd $(OUT)/src && $(MAUDE2LEAN) main.maude $(M2L_FLAGS) -o $(abspath $(LEAN_OUT))
 
-# Static documentation site from $(SPEC)/src/ (tools/gen-docs.py). Independent of NAME and the features.
-# docs/overview.html is the hand-written body of index.html. docs/examples.json (tools/gen-examples.py)
+# Static documentation site from $(SPEC)/src/ (tools/docs/gen-docs.py). Independent of NAME and the features.
+# tools/docs/input/overview.html is the hand-written body of index.html. tools/docs/input/examples.json (tools/docs/gen-examples.py)
 # gives the verified examples shown, collapsed, under rules and ops.
-docs: docs/overview.html tools/gen-docs.py docs/examples.json
-	python3 tools/gen-docs.py --src $(SPEC)/src --out build/docs --overview docs/overview.html --examples docs/examples.json --check
+docs: tools/docs/input/overview.html tools/docs/gen-docs.py tools/docs/input/examples.json
+	python3 tools/docs/gen-docs.py --src $(SPEC)/src --out build/docs --overview tools/docs/input/overview.html --examples tools/docs/input/examples.json --check
 
 help config:
 	@echo "NAME=$(NAME)  OUT=$(OUT)  SPEC=$(SPEC)  MAUDE=$(MAUDE)"

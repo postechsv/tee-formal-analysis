@@ -5,7 +5,7 @@
 # printed in the paper: a TA-side rule fires only when the status of the TA is normal, so such a TA
 # stops at its next step.  The paper artifact checks the status only in the functions that allocate
 # memory, so its TA goes on after a memory error and only an allocation fails; the analysis follows
-# the artifact (tools/weaken.py).
+# the artifact (tools/build/weaken.py).
 [weaken-rule-condition]
 class      = "TAKernel"                 # and its subclass TrustedApp
 condition  = "status : normal"
@@ -36,7 +36,7 @@ false-after   = ["handle-invoke-ta-finish", "handle-session-req-finish",
                  "handle-session-req-panic", "return-smc-request-panic"]
 
 
-# The invisible-transition reduction (make mqttz INVISIBLE=1, tools/gen-invisible.py): the rules
+# The invisible-transition reduction (make mqttz INVISIBLE=1, tools/build/gen-invisible.py): the rules
 # listed here become equations.  They follow Section 8.1 of the paper: G = G1 + G2 + G3, rules that
 # affect a single object and do not change the value of a proposition of the properties
 # (properties/properties.maude); a listed rule must not update a ghost attribute above.
@@ -47,7 +47,6 @@ false-after   = ["handle-invoke-ta-finish", "handle-session-req-finish",
 #   G2: the K rules (imp.maude) except loops (while) and function calls (fCall, fExec, bindV,
 #       bindR, bindS, fRetn, fQuit).
 #   G3: the rules by which a TA calls a TEE API function.
-# docs/invisible-g/ compares this with the G of the paper artifact.
 [invisible]
 rules = [
   # G2
@@ -205,7 +204,7 @@ rules = [
   "generate-random-success",
 ]
 
-# The broker TA, translated from the upstream C source by tools/ta2imp.py (see its docstring).
+# The broker TA, translated from the upstream C source by tools/ta2imp/ta2imp.py (see its docstring).
 [ta.broker]
 source    = "ta/hot_cache_ta.c"        # MQT-TZ, as published
 patches   = ["ta/model.patch"]         # the modeling changes of the C code (see the patch)

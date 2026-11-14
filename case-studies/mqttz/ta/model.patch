@@ -1,4 +1,4 @@
-Modeling changes of the MQT-TZ TA (hot_cache_ta.c as published), applied before tools/ta2imp.py
+Modeling changes of the MQT-TZ TA (hot_cache_ta.c as published), applied before tools/ta2imp/ta2imp.py
 translates it.  Everything the model leaves out or changes is here, as C; the [ta.broker] table of
 mqttz.toml only says what to translate.
 

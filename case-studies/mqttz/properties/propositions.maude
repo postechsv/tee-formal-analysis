@@ -34,7 +34,6 @@ omod PROPOSITION is
   --- var TN : AppId .
   --- var SMAP : Map{AppId,StorageStatus} .
   var ALGO : Algorithm .
-  var KS : KConfig .
   var KEYS : List{CryptoKey} .
   --- var SESI : SessionId .
   --- var FUNC : FuncId .
@@ -90,13 +89,12 @@ omod PROPOSITION is
 
 --- True if the MQT-TZ TA has started running/executing.
   op start.TA : -> Prop .
-  ceq < BI : Broker | infra : {REE} | {< TI : TrustedApp | state-changed : true, proc : KS > TEE} > CF |= start.TA = true
-   if KS =/= none .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | state-changed : true, running : true > TEE} > CF |= start.TA = true .
   eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= start.TA = false [owise] .
 
 --- True if the MQT-TZ TA has finished its execution.
   op term.TA : -> Prop .
-  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | state-changed : true, proc : none > TEE} > CF |= term.TA = true .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | state-changed : true, running : false > TEE} > CF |= term.TA = true .
   eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= term.TA = false [owise] .
 
 --- True if publisher 'I' can send a message with a topic that subscriber 'J' is subscribed to.

@@ -150,6 +150,10 @@ FINAL_INPUTS := $(MAIN_SRC) $(SRC_FILES) $(TEST_SRCS) $(RUNNERS) tools/select-ma
 FINAL_INPUTS += $(if $(filter 1,$(DMC)),tools/gen-dmc.py $(wildcard tools/dmc-lib/*))
 FINAL_INPUTS += $(if $(filter 1,$(M2L)),tools/gen-maude2lean.py)
 FINAL_INPUTS += $(if $(strip $(GHOST)),$(GHOST) tools/ghost.py tools/gen-dmc.py)
+# With ghosts, the equations of invisible-reduction.maude are regenerated from the composed rules, so
+# that an invisible step updates the ghost state like its rule.
+GHOST_INVISIBLE := $(and $(strip $(GHOST)),$(filter 1,$(INVISIBLE)))
+FINAL_INPUTS += $(if $(GHOST_INVISIBLE),tools/gen-invisible.py docs/invisible-g/decisions.tsv)
 
 # The cache is updated last, so a failed build never leaves bad settings behind.
 src: $(FINAL_STAMP)
@@ -168,6 +172,7 @@ $(FINAL_STAMP): $(FINAL_INPUTS) | $(OUT)
 	$(Q)cp -R $(SPEC)/tests/. $(STAGE)/tests/
 	$(Q)cp $(RUNNERS) $(STAGE)/tests/
 	$(Q)$(if $(strip $(GHOST)),python3 tools/ghost.py $(STAGE)/src $(GHOST))
+	$(Q)$(if $(GHOST_INVISIBLE),python3 tools/gen-invisible.py --src $(STAGE)/src --decisions docs/invisible-g/decisions.tsv)
 	$(Q)if [ '$(DMC)' = 1 ]; then \
 		rm -rf $(OUT)/src $(OUT)/.m2l && $(GEN_DMC) $(if $(filter 1,$(M2L)),&& $(GEN_M2L)); \
 	else \

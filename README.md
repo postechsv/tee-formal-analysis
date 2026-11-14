@@ -17,6 +17,10 @@ that specification.
 | `results/paper/` | Raw logs of the paper experiments. Other output under `results/` is not tracked. |
 | `docs/` | Inputs of the documentation site, notes, and the paper. |
 
+## Contents
+
+
+
 ## Requirements
 
 - Maude 3

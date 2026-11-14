@@ -5,6 +5,7 @@ Usage
     python3 tools/tee-build.py case-studies/NAME [--mode plain|dmc|m2l] [--invisible] [--spec DIR]
 
 case-studies/NAME/NAME.toml says what the analyzed system is:
+    [weaken-rule-condition]  rule conditions weakened for the analysis (tools/weaken.py)
     [ghost]           ghost attributes of spec objects (tools/ghost.py)
     [invisible]       the rules turned into equations with --invisible (tools/gen-invisible.py)
     [ta.KEY]          a trusted application translated from C (tools/ta2imp.py)
@@ -59,6 +60,7 @@ def main(argv):
     make += ['%s=%s' % kv for kv in sorted(flags.items())]
     make += ['DMC=%d' % (args.mode != 'plain'), 'M2L=%d' % (args.mode == 'm2l'),
              'INVISIBLE=%d' % args.invisible,
+             'WEAKEN=' + (os.path.relpath(manifest, ROOT) if 'weaken-rule-condition' in data else ''),
              'GHOST=' + (os.path.relpath(manifest, ROOT) if 'ghost' in data else ''),
              'INVISIBLE_G=' + (os.path.relpath(manifest, ROOT) if args.invisible else '')]
     if args.invisible and 'invisible' not in data:

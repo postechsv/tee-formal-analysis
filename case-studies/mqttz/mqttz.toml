@@ -33,12 +33,13 @@ structs   = ["aes_cipher"]
 main      = "ta/main.imp"              # the dispatcher of the model (RA interface), in TEE-IMP
 template  = "ta/template.maude"
 output    = "broker-ta.maude"
-drop-calls = ["printf", "EMSG", "IMSG", "DMSG", "snprintf", "sprintf", "strcpy",
-              "TEE_Free", "TEE_GetSystemTime", "TEE_TIME_SUB", "fill_ss"]
+drop-calls = ["printf", "EMSG", "snprintf", "strcpy",           # logging, timing output, the IV copy
+              "TEE_Free", "TEE_GetSystemTime", "TEE_TIME_SUB",
+              "fill_ss"]                                           # pre-loading the storage (benchmark)
 malloc-never-fails = true
 drop-vars = [                          # what the model has no counterpart for
   "read_raw_object.read_bytes", "read_raw_object.data_sz",                 # byte counts, sizes
-  "payload_reencryption.param_types", "payload_reencryption.params",       # unmapped TEE_Param
+  "payload_reencryption.param_types",                                      # TEE_Param types
   "payload_reencryption.exp_param_types", "payload_reencryption.data_size",
   "payload_reencryption.dec_data_size", "payload_reencryption.enc_data_size",
   "payload_reencryption.t1", "payload_reencryption.t2", "payload_reencryption.t_aux",  # timing
@@ -97,3 +98,4 @@ signature = "(struct AesCipher) & session, TEE-ObjectId oriCliId, TEE-Buffer ori
 "params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ + TA_AES_IV_SIZE" = "oriCliData"
 "params[1].memref.buffer"                                      = "destCliId"
 "params[1].memref.buffer + TA_MQTTZ_CLI_ID_SZ + TA_AES_IV_SIZE" = "destCliData"
+"params[3].value.b"                                            = "drop"   # pre-load keys (fill_ss)

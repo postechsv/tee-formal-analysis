@@ -1,3 +1,18 @@
+Modeling changes of the MQT-TZ TA (hot_cache_ta.c as published), applied before tools/ta2imp.py
+translates it.  Translation details (types, sizes, memory references, dropped calls) are declared in
+the [ta.broker] table of mqttz.toml instead; this patch only changes what the code does.
+
+1. get_key: the model analyzes the storage path.  The key is looked up in secure storage under
+   cli_id and saved there when it is missing; the in-memory key (key_mode == 0, keyinmem) and the
+   copy of the id into my_id are left out, so key_mode goes from the signature and the two calls.
+   res and save_key_res are declared here because the model's variable names are declared in
+   MQTTZ-PROGRAM-DECL (env/base.maude) and ta2imp does not declare new ones.
+2. read_raw_object: the model reads an object whole, so there is no byte count to compare with
+   the object size; the read only fails through its result.
+3. payload_reencryption: decrypt with the origin key (TA_AES_MODE_DECODE) and encrypt with the
+   destination key (TA_AES_MODE_ENCODE).  Upstream calls alloc_resources the other way round, with
+   FIXME comments on both calls.
+
 --- a/hot_cache_ta.c
 +++ b/hot_cache_ta.c
 @@ -213,7 +213,7 @@

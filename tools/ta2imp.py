@@ -28,8 +28,10 @@ the manifest):
                 call (buffer sizes: the model has no sizes)
     drop-vars   ["FUNCTION.NAME", ...]: variables or parameters the model does not have; their
                 declarations and every statement that mentions them (for an if, its condition)
-                are left out.  A statement that mentions a parameter removed by [memref] and not
-                listed here is an error.
+                are left out.  An if condition that combines a dropped name with other terms by
+                && or || is an error (change the condition in a patch).  A statement that
+                mentions a parameter removed by [memref] or [drop-args] and not listed here is an
+                error.
     [malloc]    "FUNCTION.VAR" = TEE-IMP value assigned by `VAR = TEE_Malloc(...)` (default # noData)
     [inline]    "FUNCTION.VAR" = TEE-IMP value: VAR is replaced by the value; its declaration
                 and its assignments are left out
@@ -42,7 +44,10 @@ the manifest):
     [memref.FUNCTION]  how the TEE_Param memory references of FUNCTION map to model values:
                 signature = "the TEE-IMP parameter list that replaces the C one",
                 "C expression" = "model parameter" for each buffer (casts are ignored), e.g.
-                "params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ" = "oriCliIv"
+                "params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ" = "oriCliIv";
+                "C expression" = "drop" for a TEE_Param field the model does not have: the
+                statements that use it are left out.  Pointer arithmetic on a mapped buffer that
+                has no entry of its own is an error.
 
 Canonical form of the translation (no manifest entry needed): switch becomes an if/else chain,
 a != b becomes ! (a == b), every if and else body is a block, and a call in an if condition or in
@@ -132,6 +137,7 @@ API = {
 API_RESULT = 'TEE_Result'      # C return type of the API functions above that return a value
 
 PARSER = Parser(Language(tree_sitter_c.language()))
+DROP = '@drop@'      # translation of a [memref] entry "drop": the statement is left out
 IND = '  '
 
 
@@ -277,7 +283,9 @@ class Translator(object):
             for c in walk(f.body):
                 if c.type == 'call_expression':
                     callee = text(c.child_by_field_name('function'))
-                    if callee in self.funcs and callee not in self.cfg.drop_calls:
+                    if callee in self.cfg.drop_calls:
+                        self.cfg.used.add(('call', callee))
+                    elif callee in self.funcs:
                         visit(callee)
             order.append(name)
         for r in roots:
@@ -385,7 +393,7 @@ class Translator(object):
         drop-vars does not list."""
         txt = ' '.join(lines)
         has = lambda n: re.search(r'(?<![\w-])%s(?![\w-])' % re.escape(camel(n)), txt) is not None
-        if any(has(n) for n in self.dropped):
+        if DROP in txt or any(has(n) for n in self.dropped):
             return True
         bad = sorted(n for n in self.removed - self.dropped if has(n))
         if bad:
@@ -408,6 +416,7 @@ class Translator(object):
             if e.type == 'call_expression':
                 callee = text(e.child_by_field_name('function'))
                 if callee in self.cfg.drop_calls:
+                    self.cfg.used.add(('call', callee))
                     return []
                 var = self.cfg.assign.get(callee)
                 line = pad + ('%s := %s ;' % (camel(var), self.expr(e)) if var else '%s ;' % self.expr(e))
@@ -426,6 +435,7 @@ class Translator(object):
                 return []
             pre, c = self.hoist(cond, depth)
             if self.gone(pre + [c]):
+                self.mixed_condition(cond)
                 return []
             out = pre + [pad + 'if (%s) {' % c]
             out += self.block(s.child_by_field_name('consequence'), depth + 1)
@@ -461,6 +471,27 @@ class Translator(object):
         if t == 'break_statement':
             return []
         raise TransError('%s: unsupported statement %s: %s' % (self.f.name, t, text(s)[:60]))
+
+    def mixed_condition(self, cond):
+        """An error when a condition left out because of a dropped name has && or || operands
+        that do not mention one: leaving it out would also drop those tests."""
+        c = strip_parens(cond)
+        if c.type == 'binary_expression' and text(c.child_by_field_name('operator')) in ('&&', '||'):
+            ops = []
+
+            def flat(e):
+                e = strip_parens(e)
+                if e.type == 'binary_expression' and text(e.child_by_field_name('operator')) in ('&&', '||'):
+                    flat(e.child_by_field_name('left'))
+                    flat(e.child_by_field_name('right'))
+                else:
+                    ops.append(e)
+            flat(c)
+            keep = [o for o in ops if not self.gone([self.expr(o)])]
+            if keep:
+                raise TransError('%s: the condition %s is left out for a dropped name, but %s does not '
+                                 'mention one; change the condition in a patch'
+                                 % (self.f.name, text(cond), text(keep[0])))
 
     def inserts(self, callee, depth):
         out = []
@@ -593,7 +624,12 @@ class Translator(object):
         nt = norm(text(e))
         if nt in self.memmap:
             self.cfg.used.add(('mem', self.f.name, nt))
-            return self.memmap[nt]
+            return DROP if self.memmap[nt] == 'drop' else self.memmap[nt]
+        if e.type == 'binary_expression' and text(e.child_by_field_name('operator')) in ('+', '-'):
+            base = norm(text(e.child_by_field_name('left')))
+            if any(base == k or base.startswith(k + '+') for k in self.memmap):
+                raise TransError('%s: %s is an offset into a memory reference without an entry of its '
+                                 'own in [memref.%s]' % (self.f.name, text(e), self.f.name))
         rw = self.cfg.rewrite.get(nt)
         if rw is not None:
             self.cfg.used.add((id(self.cfg.rewrite), nt))
@@ -739,6 +775,7 @@ def translate(manifest, key, out_path=None):
                       ('assign', cfg.assign)):
         unused += ['[%s] %s' % (name, k) for k in tab if (id(tab), k) not in cfg.used]
     unused += ['drop-vars %s' % k for k in cfg.drop_vars if (id(cfg.drop_vars), k) not in cfg.used]
+    unused += ['drop-calls %s' % k for k in cfg.drop_calls if ('call', k) not in cfg.used]
     unused += ['[[insert]] %d' % k for k in range(len(cfg.insert)) if ('ins', k) not in cfg.used]
     for fn, mem in cfg.memref.items():
         unused += ['[memref.%s] %s' % (fn, k) for k in mem if k != 'signature' and ('mem', fn, norm(k)) not in cfg.used]

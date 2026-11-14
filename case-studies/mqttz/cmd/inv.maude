@@ -1,4 +1,4 @@
-load ../main
+load ../system
 load ../scenarios/inv
 load ../properties/properties
 load ../threats/main

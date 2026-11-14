@@ -22,3 +22,78 @@ init        = false
 true-after  = ["handle-invoke-ta", "handle-invoke-ta-finish",
                "handle-session-req", "handle-session-req-finish"]
 false-after = ["tee-api-call-accept", "tee-api-call-return", "return-smc-request-panic"]
+
+# The broker TA, translated from the upstream C source by tools/ta2imp.py (see its docstring).
+[ta.broker]
+source    = "ta/hot_cache_ta.c"        # MQT-TZ, as published
+origin    = "upstream"
+patches   = ["ta/model.patch"]         # modeling changes of the C code (get_key, FIXMEs, read count)
+functions = ["payload_reencryption"]   # and the functions it calls
+structs   = ["aes_cipher"]
+main      = "ta/main.imp"              # the dispatcher of the model (RA interface), in TEE-IMP
+template  = "ta/template.maude"
+output    = "broker-ta.maude"
+drop-calls = ["printf", "EMSG", "IMSG", "DMSG", "snprintf", "sprintf", "strcpy",
+              "TEE_Free", "TEE_GetSystemTime", "TEE_TIME_SUB", "fill_ss"]
+malloc-never-fails = true
+drop-vars = [                          # what the model has no counterpart for
+  "read_raw_object.read_bytes", "read_raw_object.data_sz",                 # byte counts, sizes
+  "payload_reencryption.param_types", "payload_reencryption.params",       # unmapped TEE_Param
+  "payload_reencryption.exp_param_types", "payload_reencryption.data_size",
+  "payload_reencryption.dec_data_size", "payload_reencryption.enc_data_size",
+  "payload_reencryption.t1", "payload_reencryption.t2", "payload_reencryption.t_aux",  # timing
+  "payload_reencryption.fake_iv",
+]
+
+[ta.broker.programs]
+mqttzTA        = []
+mqttzTaPatched = ["ta/fix.patch"]      # code-level patch: a failed alloc_resources is out of memory
+
+[ta.broker.types]
+"aes_cipher.algo"                = "TEE-Algorithm"
+"aes_cipher.mode"                = "TEE-OperationMode"
+"alloc_resources.session"        = "(struct AesCipher) &"
+"set_aes_key.session"            = "(struct AesCipher) &"
+"set_aes_iv.session"             = "(struct AesCipher) &"
+"cipher_buffer.sess"             = "(struct AesCipher) &"
+"cipher_buffer.dec_data"         = "TEE-Buffer &"
+"read_raw_object.cli_id"         = "TEE-ObjectId"
+"read_raw_object.data"           = "TEE-Buffer &"
+"save_key.cli_id"                = "TEE-ObjectId"
+"save_key.obj_data_flag"         = "TEE-DataFlags"
+"get_key.cli_id"                 = "TEE-ObjectId"
+"get_key.cli_key"                = "TEE-Buffer &"
+
+[ta.broker.alias]                      # sess = (aes_cipher *) session
+"alloc_resources.sess" = "session"
+"set_aes_key.sess"     = "session"
+"set_aes_iv.sess"      = "session"
+
+[ta.broker.drop-args]                  # buffer sizes
+"read_raw_object" = [1, 3]
+"cipher_buffer"   = [2, 4]
+
+[ta.broker.malloc]
+"payload_reencryption.dest_cli_iv" = "# dummyIv"   # the fixed IV of upstream (fake_iv)
+
+[ta.broker.inline]
+"alloc_resources.key" = "# (attrContentData(randomAttrVal))"   # the dummy key
+
+[ta.broker.rewrite]
+"sess->key_size * 8" = "sess->key_size"    # the model counts key sizes in bits
+
+[ta.broker.assign]
+"TEE_CloseAndDeletePersistentObject1" = "res"   # returns a result in the model
+
+[[ta.broker.insert]]                   # the handle argument of createPersistent is read
+function = "save_key"
+before   = "TEE_CreatePersistentObject"
+imp      = "object := # oid(0, ta) ;"
+
+[ta.broker.memref.payload_reencryption]
+signature = "(struct AesCipher) & session, TEE-ObjectId oriCliId, TEE-Buffer oriCliIv, TEE-Buffer oriCliData, TEE-ObjectId destCliId, TEE-Buffer & destCliData"
+"params[0].memref.buffer"                                      = "oriCliId"
+"params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ"                 = "oriCliIv"
+"params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ + TA_AES_IV_SIZE" = "oriCliData"
+"params[1].memref.buffer"                                      = "destCliId"
+"params[1].memref.buffer + TA_MQTTZ_CLI_ID_SZ + TA_AES_IV_SIZE" = "destCliData"

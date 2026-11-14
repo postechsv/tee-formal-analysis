@@ -1,0 +1,20 @@
+--- a/hot_cache_ta.c
++++ b/hot_cache_ta.c
+@@ -353,7 +353,7 @@
+     //if (alloc_resources(session, TA_AES_MODE_DECODE) != TEE_SUCCESS)
+     if (alloc_resources(session, TA_AES_MODE_DECODE) != TEE_SUCCESS)
+     {
+-        res = TEE_ERROR_GENERIC;
++        res = TEE_ERROR_OUT_OF_MEMORY;
+         goto exit;
+     }
+     printf("MQTTZ: Initialized AES Session!\n");
+@@ -449,7 +449,7 @@
+     //if (alloc_resources(session, TA_AES_MODE_ENCODE) != TEE_SUCCESS)
+     if (alloc_resources(session, TA_AES_MODE_ENCODE) != TEE_SUCCESS)
+     {
+-        res = TEE_ERROR_GENERIC;
++        res = TEE_ERROR_OUT_OF_MEMORY;
+         goto exit;
+     }
+     printf("MQTTZ: Initialized AES ENCODE Session!\n");

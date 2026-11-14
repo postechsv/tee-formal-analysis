@@ -1,0 +1,112 @@
+--- a/hot_cache_ta.c
++++ b/hot_cache_ta.c
+@@ -213,7 +213,7 @@
+ 	}
+ 	res = TEE_ReadObjectData(object, data, object_info.dataSize,
+ 				 &read_bytes);
+-	if (res != TEE_SUCCESS || read_bytes != object_info.dataSize) {
++	if (res != TEE_SUCCESS) {
+ 		EMSG("TEE_ReadObjectData failed 0x%08x, read %" PRIu32 " over %u",
+ 				res, read_bytes, object_info.dataSize);
+ 		goto exit;
+@@ -263,52 +263,23 @@
+     return 0;
+ }
+ 
+-static int get_key(char *cli_id, char *cli_key, int key_mode)
++/*
++ * Model: the key is always looked up in secure storage under cli_id, and saved there when it is
++ * missing.  The in-memory key (key_mode == 0) and the copy of the id into my_id are left out.
++ */
++static int get_key(char *cli_id, char *cli_key)
+ {
+-    // TODO Implement Cache Logic
+-    char fke_key[TA_AES_KEY_SIZE + 1] = "11111111111111111111111111111111";
+-    size_t read_bytes = TA_AES_KEY_SIZE + 1;
+-    char my_id[TA_MQTTZ_CLI_ID_SZ + 1];
+-    strncpy(my_id, cli_id, TA_MQTTZ_CLI_ID_SZ);
+-    my_id[TA_MQTTZ_CLI_ID_SZ] = '\0';
+-    printf("My ID: %s %i\n", my_id, strlen(my_id));
+-    // FIXME this is only for comparing w/ cache, comment after
+-    /*
+-    int rand_num = rand() % TABLE_SIZE;
+-    char my_id[TA_MQTTZ_CLI_ID_SZ + 1];
+-    if (rand_num >= 1000)
+-        snprintf(my_id, TA_MQTTZ_CLI_ID_SZ + 1, "00000000%i", rand_num);
+-    else if (rand_num < 1000 && rand_num >= 100)
+-        snprintf(my_id, TA_MQTTZ_CLI_ID_SZ + 1, "000000000%i", rand_num);
+-    else if (rand_num < 100 && rand_num >= 10)
+-        snprintf(my_id, TA_MQTTZ_CLI_ID_SZ + 1, "0000000000%i",
+-                rand_num);
+-    else
+-        snprintf(my_id, TA_MQTTZ_CLI_ID_SZ + 1, "00000000000%i",
+-                rand_num);
+-    printf("Rand ID: %s %i\n", my_id, strlen(my_id));
+-    */// Until here
+-    if (key_mode == 0)
+-        goto keyinmem;
+-    //if ((read_raw_object(cli_id, strlen(cli_id), cli_key, read_bytes) 
+-    if ((read_raw_object(my_id, strlen(my_id), cli_key, read_bytes) 
+-            != TEE_SUCCESS))// || (read_bytes != TA_AES_KEY_SIZE))
++    TEE_Result res;
++    int save_key_res;
++    if (read_raw_object(cli_id, strlen(cli_id), cli_key, TA_AES_KEY_SIZE + 1)
++            != TEE_SUCCESS)
+     {
+-        // FIXME We should not do this, using cache instead
+-        // FIXME We should run the TA as a service not to reload it every time
+         printf("MQTTZ: Key not found! Saving it to persistent storage.\n");
+-        save_key(my_id, cli_key);
++        save_key_res = save_key(cli_id, cli_key);
+         printf("MQTTZ: Only once!!!\n");
+         return 0;
+-        // FIXME delete from previous FIXME to this one
+-        //printf("Key not found in storage!\n");
+-        return 1;
+     }
+     return 0;
+-keyinmem:
+-    strcpy(cli_key, fke_key);
+-    cli_key[TA_AES_KEY_SIZE] = '\0';
+-    return 0;
+ }
+ 
+ static int fill_ss(int table_size)
+@@ -362,8 +333,7 @@
+             * (TA_AES_KEY_SIZE + 1), 0);
+     printf("MQTTZ: Allocated Origin Cli Key\n");
+     //if (get_key(ori_cli_id, ori_cli_key, params[3].value.a) != 0)
+-    if (get_key((char *) params[0].memref.buffer, ori_cli_key,
+-                params[3].value.a) != 0)
++    if (get_key((char *) params[0].memref.buffer, ori_cli_key) != 0)
+     {
+         res = TEE_ERROR_OUT_OF_MEMORY;
+         goto exit;
+@@ -381,7 +351,7 @@
+     // 2. Decrypt Inbound Traffic w/ Origin Key
+     // FIXME FIXME FIXME
+     //if (alloc_resources(session, TA_AES_MODE_DECODE) != TEE_SUCCESS)
+-    if (alloc_resources(session, TA_AES_MODE_ENCODE) != TEE_SUCCESS)
++    if (alloc_resources(session, TA_AES_MODE_DECODE) != TEE_SUCCESS)
+     {
+         res = TEE_ERROR_GENERIC;
+         goto exit;
+@@ -461,8 +431,7 @@
+             * (TA_AES_KEY_SIZE + 1), 0);
+     printf("MQTTZ: Allocated Destination Cli Key\n");
+     //if (get_key(dest_cli_id, dest_cli_key, (int) params[3].value.a) != 0)
+-    if (get_key((char *) params[1].memref.buffer, dest_cli_key,
+-                (int) params[3].value.a) != 0)
++    if (get_key((char *) params[1].memref.buffer, dest_cli_key) != 0)
+     {
+         res = TEE_ERROR_OUT_OF_MEMORY;
+         goto exit;
+@@ -478,7 +447,7 @@
+     TEE_GetSystemTime(&t1);
+     // FIXME 
+     //if (alloc_resources(session, TA_AES_MODE_ENCODE) != TEE_SUCCESS)
+-    if (alloc_resources(session, TA_AES_MODE_DECODE) != TEE_SUCCESS)
++    if (alloc_resources(session, TA_AES_MODE_ENCODE) != TEE_SUCCESS)
+     {
+         res = TEE_ERROR_GENERIC;
+         goto exit;

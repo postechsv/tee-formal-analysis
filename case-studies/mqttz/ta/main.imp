@@ -7,7 +7,7 @@
       session . keyHandle := sessKeyHandle ;
 
       if (command == # TA-REENCRYPT) {
-        ret := payloadReencryption(session, oriCliId, oriCliIv, oriCliData, destCliId, destCliData) ;
+        ret := payloadReencryption(addr(session), oriCliId, oriCliIv, oriCliData, destCliId, destCliData) ;
       } else {
         ret := # errorNotSupported ;
       }

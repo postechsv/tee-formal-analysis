@@ -46,12 +46,12 @@ make docs                    # documentation site of the spec in build/docs
 
 ## MQT-TZ
 
-`case-studies/mqttz/mqttz.toml` describes the system: the API feature groups of the spec it uses and
-the ghost state its LTL propositions read (`running` of the TA), which the spec
-itself does not have.  How it is analyzed is chosen when it is built:
+`case-studies/mqttz/mqttz.toml` describes the system: the ghost state its LTL propositions read
+(`running` of the TA), which the spec itself does not have, and the TA translation.  Every API
+feature group of the spec is on.  How it is analyzed is chosen when it is built:
 
 ```bash
-make mqttz                   # build/mqttz: the spec with those features and ghosts, and main.maude
+make mqttz                   # build/mqttz: the spec with the ghosts, and main.maude
 make mqttz INVISIBLE=1       # build/mqttz-inv: the same with the invisible-transition reduction
 make mqttz MODE=dmc          # build/mqttz-dmc: the DM-Check build
 ```

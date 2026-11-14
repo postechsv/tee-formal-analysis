@@ -22,8 +22,6 @@ the manifest):
     malloc-never-fails  `if (!x)` after `x = TEE_Malloc(...)` is left out
     [types]     "FUNCTION.VAR", "FUNCTION.PARAM" or "STRUCT.FIELD" -> TEE-IMP type, when the C
                 type does not tell (e.g. `char *` is TEE-Buffer, TEE-ObjectId or TEE-Buffer &)
-    [alias]     "FUNCTION.VAR" = "OTHER": VAR is another name of OTHER (a pointer to it); its
-                declaration and its assignment `VAR = ...` are left out and VAR is renamed OTHER
     [drop-args] "FUNCTION" = [index, ...]: parameters left out of the definition and of every
                 call (buffer sizes: the model has no sizes)
     drop-vars   ["FUNCTION.NAME", ...]: variables or parameters the model does not have; their
@@ -48,6 +46,12 @@ the manifest):
                 "C expression" = "drop" for a TEE_Param field the model does not have: the
                 statements that use it are left out.  Pointer arithmetic on a mapped buffer that
                 has no entry of its own is an error.
+
+Pointers are translated as they are: a pointer to void, to a translated struct or to an int type
+is a TEE-IMP pointer type (void *, (struct S) *, int *), &x is addr(x), *p is deref(p), p->f is
+p -> f, and casts are left out (void * converts to and from any pointer type, as in C).  A
+`char *` is a buffer (TEE-Buffer) for now.  The arguments of a TEE API call are passed as the
+model's stubs take them: an output argument &x is the lvalue x.
 
 Canonical form of the translation (no manifest entry needed): switch becomes an if/else chain,
 a != b becomes ! (a == b), every if and else body is a block, and a call in an if condition or in
@@ -177,7 +181,6 @@ class Config(object):
         self.drop_calls = set(table.get('drop-calls', []))
         self.malloc_safe = table.get('malloc-never-fails', False)
         self.types = table.get('types', {})
-        self.alias = table.get('alias', {})
         self.drop_args = {k: set(v) for k, v in table.get('drop-args', {}).items()}
         self.drop_vars = set(table.get('drop-vars', []))
         self.malloc = table.get('malloc', {})
@@ -263,9 +266,16 @@ class Translator(object):
         t = self.cfg.get(self.cfg.types, key)
         if t is not None:
             return t
-        if ctype in self.struct_types:
+        if ptr and ctype != 'char':     # char * is a buffer (C_TYPES)
+            if ctype == 'void':
+                return 'void *'
+            if ctype in self.struct_types:
+                return '(%s) *' % self.struct_types[ctype]
+            if ctype in C_TYPES and C_TYPES[ctype] == 'int':
+                return 'int *'
+        elif ctype in self.struct_types:
             return self.struct_types[ctype]
-        if ctype in C_TYPES:
+        if ctype in C_TYPES and not (ptr and C_TYPES[ctype] != 'TEE-Buffer'):
             return C_TYPES[ctype]
         raise TransError('%s: no TEE-IMP type for C type %s%s; add it to [types]'
                          % (key, ctype, ' *' if ptr else ''))
@@ -346,12 +356,6 @@ class Translator(object):
                 ps.append('%s %s' % (self.imp_type('%s.%s' % (f.name, n), ct, ptr), camel(n)))
             sig = ', '.join(ps)
         self.mallocs = set()
-        self.aliases = {}
-        for k, v in self.cfg.alias.items():
-            fn, var = k.split('.', 1)
-            if fn == f.name:
-                self.cfg.used.add((id(self.cfg.alias), k))
-                self.aliases[var] = v
         self.inlines = {}
         for k, v in self.cfg.inline.items():
             fn, var = k.split('.', 1)
@@ -506,7 +510,7 @@ class Translator(object):
         out = []
         for d in s.children_by_field_name('declarator'):
             name, ptr, arr = declarator_name(d)
-            if name in self.dropped or name in self.aliases or name in self.inlines:
+            if name in self.dropped or name in self.inlines:
                 continue
             if arr:
                 raise TransError('%s: array %s; list it in drop-vars' % (self.f.name, name))
@@ -524,7 +528,7 @@ class Translator(object):
         lhs, rhs = e.child_by_field_name('left'), e.child_by_field_name('right')
         if e.child_by_field_name('operator') is not None and text(e.child_by_field_name('operator')) != '=':
             raise TransError('%s: compound assignment %s' % (self.f.name, text(e)))
-        if lhs.type == 'identifier' and (text(lhs) in self.aliases or text(lhs) in self.inlines):
+        if lhs.type == 'identifier' and text(lhs) in self.inlines:
             return []
         out = self.assign_value(lhs, rhs, depth)
         if self.gone(out):
@@ -640,8 +644,6 @@ class Translator(object):
             n = text(e)
             if n in self.inlines:
                 return self.inlines[n]
-            if n in self.aliases:
-                return camel(self.aliases[n])
             if n in CONSTANTS:
                 return '# %s' % CONSTANTS[n]
             if n in DATA_FLAGS:
@@ -665,10 +667,12 @@ class Translator(object):
         if t == 'cast_expression':
             return self.expr(e.child_by_field_name('value'), sub)
         if t == 'pointer_expression':
-            return self.expr(e.child_by_field_name('argument'), sub)
+            op = text(e.child_by_field_name('operator'))
+            return '%s(%s)' % ('addr' if op == '&' else 'deref', self.expr(e.child_by_field_name('argument'), sub))
         if t == 'field_expression':
-            return '%s . %s' % (self.expr(e.child_by_field_name('argument'), sub),
-                                camel(text(e.child_by_field_name('field'))))
+            op = text(e.child_by_field_name('operator'))
+            return '%s %s %s' % (self.expr(e.child_by_field_name('argument'), sub),
+                                 '->' if op == '->' else '.', camel(text(e.child_by_field_name('field'))))
         if t == 'unary_expression':
             op = text(e.child_by_field_name('operator'))
             arg = e.child_by_field_name('argument')
@@ -690,6 +694,13 @@ class Translator(object):
                                self.expr(e.child_by_field_name('index'), sub))
         raise TransError('%s: unsupported expression %s: %s' % (self.f.name, t, text(e)[:60]))
 
+    def api_arg(self, e, sub):
+        """An argument of a TEE API call: the stubs take an output argument by reference, so &x is
+        the lvalue x."""
+        if e.type == 'pointer_expression' and text(e.child_by_field_name('operator')) == '&':
+            return self.expr(e.child_by_field_name('argument'), sub)
+        return self.expr(e, sub)
+
     def call(self, e, sub):
         callee = text(e.child_by_field_name('function'))
         args = named(e.child_by_field_name('arguments'))
@@ -700,10 +711,10 @@ class Translator(object):
             out = []
             for a in spec:
                 if isinstance(a, tuple):
-                    v = self.expr(args[a[0]], sub)
+                    v = self.api_arg(args[a[0]], sub)
                     out.append('# %s(%s)' % (a[1], v[2:]) if v.startswith('# ') else v)
                 else:
-                    out.append(self.expr(args[a], sub))
+                    out.append(self.api_arg(args[a], sub))
             return '%s(%s)' % (name, ', '.join(out))
         if callee in self.funcs:
             drops = self.cfg.drop_args.get(callee, set())
@@ -770,7 +781,7 @@ def translate(manifest, key, out_path=None):
         lines = tr.program() + main
         bodies[prog] = '\n'.join(('    ' + ln) if ln else '' for ln in lines)
     unused = []
-    for name, tab in (('types', cfg.types), ('alias', cfg.alias), ('drop-args', cfg.drop_args),
+    for name, tab in (('types', cfg.types), ('drop-args', cfg.drop_args),
                       ('malloc', cfg.malloc), ('inline', cfg.inline), ('rewrite', cfg.rewrite),
                       ('assign', cfg.assign)):
         unused += ['[%s] %s' % (name, k) for k in tab if (id(tab), k) not in cfg.used]

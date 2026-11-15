@@ -1,116 +1,99 @@
 # TEE Formal Analysis
 
 Formal analyses of trusted applications on top of the [TEE formal specification](https://github.com/kkw423/tee-formal-spec)
-(a Maude model of the GlobalPlatform TEE Internal Core API), and the tools that build and transform
-that specification.
+(a Maude model of the GlobalPlatform TEE Internal Core API), and the tools that transform that
+specification for an analysis.  The specification is a separate repository: each case study names
+the revision it uses, which is fetched and built with the specification's own Makefile.
+
+개요와 논문 정보
+
+한두 문단 소개: 무엇을 검증하는지(MQT-TZ의 RA와 TA를 위협 모델 아래에서 LTL로 model checking), 핵심 결과가 무엇인지(원본에서 위반이 발견되고 patch로 해결된다 등).
+
+
+## Paper
+
+Geunyeol Yu, Seunghyun Chae, Kyungmin Bae, Sungkun Moon.
+[Formal Specification of Trusted Execution Environment APIs](https://doi.org/10.1007/978-3-031-57259-3_5).
+FASE 2024, LNCS, Springer.
 
 ## Layout
 
 | Path | Contents |
 | --- | --- |
-| `spec/` | The specification, as a git submodule of `tee-formal-spec` (pinned commit). |
-| `case-studies/mqttz/` | The MQT-TZ broker: `mqttz.toml` (the manifest), `ta/` (the upstream C TA, its modeling patch, the fix patch, the TEE-IMP dispatcher and the template), `ra/`, `env/` (broker, clients, entities, TA constants), `system.maude`, `scenarios/`, `properties/` (LTL), `threats/`, `tests/`, `cmd/` (entry modules of the analyses). |
-| `case-studies/kmgk/` | The KMGK benchmark. Not yet ported to the current specification. |
-| `tools/build/` | Spec and case-study build: `tee-build.py` (case-study build), `select-main.awk`, `ghost.py`, `drop-condition.py`, `gen-invisible.py`. |
-| `tools/ta2imp/` | `ta2imp.py` (C TA to TEE-IMP); `translate.py`, the translator of the original artifact (not used by `ta2imp.py`). |
+| `mqttz/` | The MQT-TZ case study: `Makefile`, `mqttz.toml` (the system and its analyses: `[model-checking]`, the analysis of the paper), `core/` (the model files written by hand), `scripts/` (the experiments of the paper), `models/` (the built models, not tracked). See [mqttz/README.md](mqttz/README.md). |
+| `kmgk/` | The KMGK benchmark. Not yet ported to the current specification. |
+| `tools/build/` | `tee-build.py` (builds an analysis of a case study), `transform.mk` (the transforms of a spec build: `drop-class-attribute.py`, `ghost.py`, `gen-invisible.py`, DM-Check, maude2lean). |
+| `tools/lang/` | `preprocess.py`: preprocesses the C source of a TA into the programs of the model. |
 | `tools/dmc/`, `tools/lean/` | `gen-dmc.py` (DM-Check build) and its Maude libraries; `gen-maude2lean.py`. |
-| `tools/test/` | The spec test runners. |
-| `tools/docs/` | `gen-docs.py` (documentation site), `gen-examples.py`, and their inputs in `input/`. |
-| `tools/experiments/` | Scripts that run the experiments of the paper (Table 2 and Table 3) and summarize their logs. |
-| `features.mk` | Feature groups of the specification that a build can drop. |
-| `results/` | Output of the experiments (not tracked). |
-| `paper.pdf` | The paper. |
+| `build/` | Cache (not tracked): the fetched spec revisions and the transformed builds. |
+
+The feature groups of the specification, its test suites and its documentation site are in the
+specification repository.
 
 ## Contents
 
 ```
 tee-formal-analysis/
-├── Makefile                        Entry point: build the spec, its tests, case studies, docs
-├── features.mk                     Feature groups of the spec a build can drop (was mk/)
-├── config.mk                       Personal settings, gitignored: MAUDE, MAUDE2LEAN paths
 ├── README.md                       This guide
 ├── LICENSE                         License of this artifact (GPL-3.0)
-├── paper.pdf                       The paper (at the root, as in the original artifact)
-├── spec/                           The TEE formal specification (git submodule tee-formal-spec)
-├── case-studies/
-│   ├── mqttz/                      The MQT-TZ broker
-│   │   ├── mqttz.toml              Manifest: ghosts, invisible rules, TA translation
-│   │   ├── main.maude              Loads the model files
-│   │   ├── system.maude            Module MQTTZ: all entity behaviors, the RA and the TA
-│   │   ├── ta/                     The trusted application
-│   │   │   ├── hot_cache_ta.c      Upstream C source, as published
-│   │   │   ├── model.patch         Modeling changes to the C code
-│   │   │   ├── fix.patch           Code-level fix (mqttzTaPatched)
-│   │   │   ├── main.imp            void main() dispatcher 
-│   │   │   └── template.maude      Template of broker-ta.maude
-│   │   ├── ra/
-│   │   │   └── broker-ra.maude     RA programs mqttzHost and mqttzHostPatched
-│   │   ├── env/                    The other participants
-│   │   │   ├── base.maude          Keys, topics, subscriptions
-│   │   │   ├── entity.maude        Abstract entity and client
-│   │   │   ├── client.maude        Publishers and subscribers
-│   │   │   ├── broker.maude        Broker: storing and re-encrypting messages
-│   │   │   └── ta-data.maude       TA constants (TA_* macros of hot_cache_ta.h)
-│   │   ├── scenarios/              Initial states
-│   │   │   ├── aux.maude           Initialization functions (clients, keys)
-│   │   │   ├── base.maude          The paper scenario: 2 publishers, 2 subscribers, 1 broker,
-│   │   │   │                       2 topics
-│   │   │   └── inv.maude           Smaller scenarios scenario-inv1..4
-│   │   ├── threats/
-│   │   │   ├── main.maude          Loads the threats
-│   │   │   ├── oom.maude           Out-of-memory threat (OOM-THREAT)
-│   │   │   └── msg.maude           Message intruder (MSG-THREAT, initInt)
-│   │   ├── properties/
-│   │   │   ├── propositions.maude  State propositions (read the ghost state)
-│   │   │   └── properties.maude    LTL properties p1–p6
-│   │   ├── cmd/                    Entry modules of the analyses (ANALYSIS-CMD)
-│   │   │   ├── main.maude          system + scenarios/base + threats + properties
-│   │   │   └── inv.maude           system + scenarios/inv + threats + properties
-│   │   └── tests/
-│   │       ├── main.maude          Test driver
-│   │       └── cases/              Calls of the TA, per API group: transient, persistent,
-│   │                               data-stream, generic, cryptographic
-│   └── kmgk/                       The KMGK benchmark (not yet ported to the current spec)
+├── config.mk                       Personal settings, gitignored: MAUDE, MAUDE2LEAN paths
+├── mqttz/                          The MQT-TZ case study (details in mqttz/README.md)
+│   ├── Makefile                    make <analysis>: builds models/<analysis>
+│   ├── mqttz.toml                  The system (spec revision, TA preprocessing) and the analyses
+│                                   ([model-checking]: dropped attribute, ghost, invisible rules)
+│   ├── core/                       The model files written by hand: system, TA (C source and
+│   │                               patches), RA, environment, scenarios, threats, properties,
+│   │                               entry modules, tests
+│   ├── scripts/                    Paper Table 2 and Table 3: run, run-exp, gen-report, gen-table
+│   ├── models/                     Built by make, gitignored: one final model per analysis
+│   └── output/                     Created by the scripts, gitignored
+├── kmgk/                           The KMGK benchmark (not yet ported to the current spec)
 ├── tools/
 │   ├── build/
-│   │   ├── tee-build.py            Build a case study from its .toml manifest
-│   │   ├── select-main.awk         Filter src/main.maude for a feature configuration
+│   │   ├── tee-build.py            Build an analysis of a case study into C/models/A
+│   │   ├── transform.mk            The transforms of a spec build (drop, ghost, invisible, DMC, M2L)
+│   │   ├── drop-class-attribute.py Drop a class attribute from rule left-hand sides
 │   │   ├── ghost.py                Compose ghost state with the spec rules
-│   │   ├── drop-condition.py       Drop rule conditions
 │   │   └── gen-invisible.py        Generate the invisible-transition reduction
-│   ├── ta2imp/
-│   │   ├── ta2imp.py               Translate a C trusted application into TEE-IMP
-│   │   └── translate.py            Translator of the original artifact (not used by ta2imp.py)
+│   ├── lang/
+│   │   └── preprocess.py           Preprocess the C source of a TA into the programs of the model
 │   ├── dmc/
 │   │   ├── gen-dmc.py              Generate the DM-Check build of the spec
-│   │   └── lib/                    Maude libraries of gen-dmc (was dmc-lib/)
-│   ├── lean/
-│   │   └── gen-maude2lean.py       Generate the maude2lean build from the DMC build
-│   ├── test/
-│   │   ├── run-api-suite.py        API-level black-box test runner
-│   │   └── run-checks.py           search/red check runner
-│   ├── docs/
-│   │   ├── gen-docs.py             Build the documentation site
-│   │   ├── gen-examples.py         Generate input/examples.json
-│   │   └── input/
-│   │       ├── overview.html       Hand-written body of index.html
-│   │       ├── seeds/              Searches for rules the tests never reach (was example-seeds/)
-│   │       └── examples.json       Verified examples (committed: CI has no Maude)
-│   └── experiments/                Paper Table 2 and Table 3 (was experiments/)
-│       ├── run-exp                 run-exp table2|table3 [-non-parallel]
-│       ├── run                     run PROP THREAT [-patch] [MAUDE_DIR] [LOG_DIR] [-silent]
-│       ├── gen-report              Logs of a table → table<i>-report.csv
-│       └── gen-table               Report → table<i>.html
-├── .github/workflows/docs.yml      Build the docs site and deploy it to GitHub Pages
-├── build/                          Created by make, gitignored
-└── results/                        Created by the experiments, gitignored (empty)
+│   │   └── lib/                    Maude libraries of gen-dmc
+│   └── lean/
+│       └── gen-maude2lean.py       Generate the maude2lean build from the DMC build
+└── build/                          Cache, gitignored: fetched spec revisions (build/spec/) and
+                                    transformed builds (build/C-A/)
 ```
+
+## Case studies and analyses
+
+A case study is a directory `C/` with a manifest `C/C.toml` that says what the analyzed system is:
+the specification (`[spec]`: repository, revision, features) and the TAs preprocessed from C
+(`[ta.KEY]`).  Every other top-level table `[A]` of `C/C.toml` is an analysis `A`, which says how
+the system is analyzed: the build of the specification (`mode`: plain, `dmc` for DM-Check or `m2l`
+for maude2lean) and its transforms (`[A.drop-class-attribute]`, `[A.ghost]`, `[A.invisible]`).
+The model files written by hand are in `C/core/`.  Each case study has its own `C/Makefile`.
+
+`make A` in `C/` (`tools/build/tee-build.py C A`) builds the analysis:
+
+1. the revision of `[spec]` is fetched into `build/spec/<commit>/` (a branch or a tag is fetched
+   again at every build; a commit is fetched once);
+2. the specification is built with its Makefile and the features of `[spec.features]`, and the
+   transforms of `[A]` are applied to it by `tools/build/transform.mk`, in `build/C-A/` (cached;
+   the tables of `[A]` are written to `build/C-A/A.toml` for the transforms);
+3. `C/models/A/` is written from scratch with the final model, which loads on its own: `src/` (the
+   transformed specification), `core/` (a copy of `C/core/`), `ta/` (the preprocessed TAs),
+   `model.maude` and `main.maude` (which adds `core/cmd/main.maude`, the entry module of the
+   analyses).
+
+The scripts of an analysis run on `C/models/A/`.  `make A SPEC=DIR` uses a checkout of the
+specification instead of the revision of `[spec]`.
 
 ## Requirements
 
 - Maude 3
-- GNU Make, Python 3
-- GNU parallel (for `tools/experiments/run-exp`)
+- GNU Make, Python 3, git
 
 Set the Maude binary in `config.mk` (gitignored) at the repository root:
 
@@ -122,52 +105,19 @@ MAUDE2LEAN := /path/to/maude2lean   # only for make lean
 ## Getting started
 
 ```bash
-git clone --recurse-submodules <this repository>
-make test                    # build the spec into build/default and run its test suites
-make help                    # features, settings and targets
-make NAME=t CRYPTO=0 test    # a build without the cryptographic operation API
-make NAME=t DMC=1            # the DM-Check build
-make NAME=t GHOST=FILE.maude DMC=1  # compose a ghost module with the spec rules
-make docs                    # documentation site of the spec in build/docs
+cd mqttz
+make model-checking          # mqttz/models/model-checking: the model of the paper experiments
+make                         # every analysis of mqttz
+make help                    # the analyses
 ```
 
-`SPEC=../tee-formal-spec` builds a sibling checkout of the specification instead of the submodule.
-
-## MQT-TZ
-
-`case-studies/mqttz/mqttz.toml` describes the system: the ghost state its LTL propositions read
-(`running` of the TA), which the spec itself does not have, and the TA translation.  Every API
-feature group of the spec is on.  How it is analyzed is chosen when it is built:
+The transforms can also be applied to a build of a specification checkout, without a case study,
+from the repository root:
 
 ```bash
-make mqttz                   # build/mqttz: the spec with the ghosts, and main.maude
-make mqttz INVISIBLE=1       # build/mqttz-inv: the same with the invisible-transition reduction
-make mqttz MODE=dmc          # build/mqttz-dmc: the DM-Check build
+M="make -f tools/build/transform.mk"
+$M SPEC=../tee-formal-spec NAME=t CRYPTO=0 test   # the spec without the crypto API, and its tests
+$M SPEC=../tee-formal-spec NAME=t DMC=1           # the DM-Check build in build/t
+$M NAME=t GHOST=FILE.maude DMC=1                  # compose a ghost module (SPEC is cached)
+$M help                                           # settings and targets
 ```
-
-The TA programs are translated from `ta/hot_cache_ta.c`, the C source as published, by
-`tools/ta2imp/ta2imp.py` into `build/<name>/ta/broker-ta.maude`: `mqttzTA` from the source with
-`ta/model.patch` (the modeling changes of the C code), and `mqttzTaPatched` with `ta/fix.patch` on
-top (the code-level fix).  What the model leaves out or changes in the C code (logging, timing,
-buffer sizes, the split of the TEE_Param memory references, ...) is in `ta/model.patch`; the
-`[ta.broker]` table of the manifest only says what to translate.  `build/<name>/model.maude` loads the built spec, the model files and the TAs, and
-`build/<name>/main.maude` adds `case-studies/mqttz/cmd/main.maude` (the scenarios, the threats and
-the LTL properties).
-
-## Experiments of the paper
-
-Table 2 of the paper model-checks the properties p1–p6 of the original MQT-TZ RA and TA under no
-threat, the out-of-memory threat and the message intruder; Table 3 does the same for the patched
-RA and TA.  Both run on `build/mqttz-inv`:
-
-```bash
-make mqttz INVISIBLE=1
-tools/experiments/run-exp table2             # results/table2/{maude-files,logs}, in parallel
-tools/experiments/run-exp table3 -non-parallel
-cd results
-../tools/experiments/gen-report table2       # table2-report.csv
-../tools/experiments/gen-table table2-report.csv   # table2.html
-```
-
-`tools/experiments/run PROP THREAT [-patch] [MAUDE_DIR] [LOG_DIR] [-silent]` writes and runs one of
-them (PROP `p1`..`p6`, THREAT `non`, `oom` or `msg`, `-patch` for the patched programs).

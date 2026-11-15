@@ -3,7 +3,7 @@ The Structure of the KMGK Benchmark Directory
 ======================================================
 
 
-The directory 'case-studies/kmgk' contains the files used to formally analyze the KMGK benchmark.
+The directory 'kmgk' contains the files used to formally analyze the KMGK benchmark.
 Below are brief descriptions of each file & subdirectory.
 
 - Formal model of KMGK

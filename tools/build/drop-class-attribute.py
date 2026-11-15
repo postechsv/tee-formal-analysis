@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""drop-condition: drop rule conditions of a spec source tree (rewritten in place).
+"""drop-class-attribute: drop a class attribute from the left-hand sides of spec rules (rewritten in place).
 
 Usage
-    python3 tools/build/drop-condition.py SRC_DIR CASE.toml
+    python3 tools/build/drop-class-attribute.py SRC_DIR CASE.toml
 
-The [drop-rule-condition] table of CASE.toml says which rules no longer require an attribute value
-on the left-hand side; several are written as [[drop-rule-condition]] (an array of tables):
+The [drop-class-attribute] table of CASE.toml says which rules no longer require an attribute value
+on the left-hand side; several are written as [[drop-class-attribute]] (an array of tables):
 
-    [drop-rule-condition]
-    class     = "TAKernel"                 # objects of this class or of a subclass
-    condition = "status : normal"          # the attribute the left-hand side no longer requires
-    rules     = ["*"]                      # rule labels (globs)
-    except    = ["alloc-oper-*"]           # rule labels (globs) left as they are
+    [drop-class-attribute]
+    class          = "TAKernel"            # objects of this class or of a subclass
+    attribute      = "status : normal"     # the attribute the left-hand side no longer requires
+    affected-rules = ["*"]                 # rule labels (globs)
+    excluded-rules = ["alloc-oper-*"]      # rule labels (globs) left as they are
 
-The change is syntactic.  In a rule whose label matches `rules` and no pattern of `except`, and
-whose left-hand side has an object of the class (or a subclass) with the attribute value of
-`condition` (possibly sort-qualified: (normal).AppStatus for normal), that attribute is removed
-from the object, with its comma; the rule then fires whatever the value of the attribute is.  The
-label, the ---@dmc directives and the number of rules are unchanged.  Every pattern of `rules` and
-`except` must match a rule label.
+The change is syntactic.  In a rule whose label matches `affected-rules` and no pattern of
+`excluded-rules`, and whose left-hand side has an object of the class (or a subclass) with the
+attribute value of `attribute` (possibly sort-qualified: (normal).AppStatus for normal), that
+attribute is removed from the object, with its comma; the rule then fires whatever the value of the
+attribute is.  The label, the ---@dmc directives and the number of rules are unchanged.  Every
+pattern of `affected-rules` and `excluded-rules` must match a rule label.
 
-The Makefile runs this on the stage (make DROP_COND=CASE.toml) before the ghosts are composed.
+tools/build/transform.mk runs this on the stage (DROP_ATTR=ANALYSIS.toml) before the ghosts are composed.
 """
 
 import fnmatch
@@ -30,7 +30,7 @@ import re
 import sys
 import tomllib
 
-KEYS = {'class', 'condition', 'rules', 'except'}
+KEYS = {'class', 'attribute', 'affected-rules', 'excluded-rules'}
 
 
 def load_gen():
@@ -62,21 +62,21 @@ def same_value(written, value):
 def entries(path):
     with open(path, 'rb') as fh:
         data = tomllib.load(fh)
-    tables = data.get('drop-rule-condition', [])
+    tables = data.get('drop-class-attribute', [])
     if isinstance(tables, dict):
         tables = [tables]
     out = []
     for i, t in enumerate(tables):
-        where = '%s: [drop-rule-condition] #%d' % (path, i + 1)
+        where = '%s: [drop-class-attribute] #%d' % (path, i + 1)
         unknown = sorted(set(t) - KEYS)
         if unknown:
             raise DropError('%s: unknown key %s' % (where, ', '.join(unknown)))
-        for k in ('class', 'condition', 'rules'):
+        for k in ('class', 'attribute', 'affected-rules'):
             if k not in t:
                 raise DropError('%s: no %s' % (where, k))
-        name, value = attr_value(t['condition'])
+        name, value = attr_value(t['attribute'])
         out.append(dict(where=where, cls=t['class'], attr=name, value=value,
-                        rules=list(t['rules']), exc=list(t.get('except', []))))
+                        rules=list(t['affected-rules']), exc=list(t.get('excluded-rules', []))))
     return out
 
 
@@ -187,10 +187,10 @@ def main(argv):
         for e in entries(path):
             files, subs = scan(gen, src)
             done = drop(gen, src, e, files, subs)
-            print('  drop-condition: %s : %s dropped from %d rules (%s)'
+            print('  drop-class-attribute: %s : %s dropped from %d rules (%s)'
                   % (e['attr'], e['value'], len(done), os.path.relpath(path)))
     except (DropError, gen.GenError) as ex:
-        sys.stderr.write('drop-condition: error: %s\n' % ex)
+        sys.stderr.write('drop-class-attribute: error: %s\n' % ex)
         return 1
     return 0
 

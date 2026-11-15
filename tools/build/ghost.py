@@ -36,7 +36,7 @@ values.
 The .toml file is compiled to a ghost module (written to <SRC_DIR>/../../ghost/<name>.maude when that
 is a build stage, for inspection; else to a temporary directory) and composed like a .maude ghost file.
 
-The Makefile runs this on the stage (make GHOST=...), before the plain copy (DMC=0) or gen-dmc
+tools/build/transform.mk runs this on the stage (GHOST=...), before the plain copy (DMC=0) or gen-dmc
 (DMC=1).
 """
 

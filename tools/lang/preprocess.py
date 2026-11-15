@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
-"""ta2imp: translate the C source of a trusted application into TEE-IMP programs.
+"""preprocess: preprocess the C source of a trusted application, or of the rich application that
+calls it, into the programs of the model.
 
 Usage
-    python3 tools/ta2imp/ta2imp.py case-studies/NAME/NAME.toml [--ta KEY] [--out FILE]
+    python3 tools/lang/preprocess.py NAME/NAME.toml [--ta KEY | --ra KEY] [--out FILE]
 
-The [ta.KEY] table of the case-study manifest says what to translate and how (paths are relative to
-the manifest):
+The [ta.KEY] table of the case-study manifest (a TA), or the [ra.KEY] table (an RA), says what to
+preprocess and how (paths are relative to the manifest):
 
     source     the C source (as published, or written for the model)
     patches    unified diffs applied to the source first: the modeling changes of the C code
-    programs   {PROGRAM = [patch, ...]}: one TEE-IMP program per entry, from the source with
+    programs   {PROGRAM = [patch, ...]}: one model program per entry, from the source with
                `patches` and then the listed patches applied (a code-level fix is a patch here)
-    functions  the functions to translate; the functions they call are translated too
-    structs    the structs to translate (struct declarations come first)
-    main       a TEE-IMP file appended to every program (the entry point of the model)
+    functions  the functions to keep; the functions they call are kept too
+    structs    the structs to keep (struct declarations come first)
+    main       a file in the model's syntax appended to every program (the entry point of the model)
     template   the Maude file the programs are put in: each line `---@program PROGRAM` is replaced
                by the equation of that program
     output     the name of the generated file (default: KEY.maude)
 
     drop-calls          calls whose statements are left out (logging, timing, freeing memory)
     malloc-never-fails  `if (!x)` after `x = TEE_Malloc(...)` is left out
-    [types]     "FUNCTION.VAR", "FUNCTION.PARAM" or "STRUCT.FIELD" -> TEE-IMP type, when the C
+    [types]     "FUNCTION.VAR", "FUNCTION.PARAM" or "STRUCT.FIELD" -> model type, when the C
                 type alone is not the one the model needs (none is needed for MQT-TZ)
     [drop-args] "FUNCTION" = [index, ...]: parameters left out of the definition and of every
                 call (buffer sizes: the model has no sizes)
@@ -33,24 +34,28 @@ the manifest):
     [malloc]    "FUNCTION.VAR" = the initial content of the buffer of `VAR = TEE_Malloc(...)`
                 (default # zeroData: the hint 0 is TEE_MALLOC_FILL_ZERO, the only one supported);
                 the statement becomes VAR := malloc(content) ;
-    [inline]    "FUNCTION.VAR" = TEE-IMP value: VAR is replaced by the value; its declaration
+    [inline]    "FUNCTION.VAR" = model value: VAR is replaced by the value; its declaration
                 and its assignments are left out
-    [rewrite]   "C expression" = "C expression": replaced before translation (e.g. key sizes,
+    [rewrite]   "C expression" = "C expression": replaced before preprocessing (e.g. key sizes,
                 which the model counts in bits)
     [assign]    "CALL" = "VAR": a statement that calls CALL assigns its result to VAR (a TEE
                 API function that returns a value in the model only)
-    [[insert]]  function, before (a called function), imp: a TEE-IMP statement put before the
+    [[insert]]  function, before (a called function), imp: a model statement put before the
                 first statement that calls `before`
+    [invoke]    the TEEC_InvokeCommand calls of an RA: entry = the TA function that serves the
+                command (the model calls it with the command as its first argument), ta-result =
+                the variable that gets the return code of the TA (its output parameter, the last
+                argument; see Client calls below)
     [memref.FUNCTION]  how the TEE_Param memory references of FUNCTION map to model values:
-                signature = "the TEE-IMP parameter list that replaces the C one",
+                signature = "the model parameter list that replaces the C one",
                 "C expression" = "model parameter" for each buffer (casts are ignored), e.g.
                 "params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ" = "oriCliIv";
                 "C expression" = "drop" for a TEE_Param field the model does not have: the
                 statements that use it are left out.  Pointer arithmetic on a mapped buffer that
                 has no entry of its own is an error.
 
-Pointers are translated as they are: a pointer to void, char, a translated struct or an int type
-is a TEE-IMP pointer type (void *, char *, (struct S) *, int *), &x is addr(x), *p is deref(p),
+Pointers are kept as they are: a pointer to void, char, a kept struct or an int type
+is a model pointer type (void *, char *, (struct S) *, int *), &x is addr(x), *p is deref(p),
 p->f is p -> f, NULL is nullptr, and casts are left out (void * converts to and from any pointer
 type, as in C).  A buffer is one object of type char that holds its whole content: TEE_Malloc
 becomes malloc(content), an object in the frame of the calling function (see [malloc]).  So a
@@ -59,7 +64,16 @@ local variable of the function, is an error.  The arguments of a TEE API call ar
 model's stubs take them: an output argument &x of a handle, a struct or an int is the lvalue x,
 and a buffer is passed as the pointer it is.
 
-Canonical form of the translation (no manifest entry needed): switch becomes an if/else chain,
+Client calls (an RA).  A TEEC_Operation variable op is not a model object: the assignments
+op.params[i].tmpref.buffer = X collect the memory references of the operation, and the other fields
+(paramTypes, the sizes) are left out, as the model has no parameter types and no sizes.  The call
+res = TEEC_InvokeCommand(&sess, CMD, &op, &origin) becomes
+    res := teecInvokeCommand(sess, # ENTRY, (CMD, X0, X1, ..., addr(TA-RESULT))) ;
+with ENTRY and TA-RESULT of [invoke]: the TA runs on the memory of the RA, so a buffer X is passed as
+the pointer it is, and the TA writes its return code to TA-RESULT.  The call returns success, or
+TEE_ERROR_TARGET_DEAD when the TA panicked; the return origin is not modeled (list it in drop-vars).
+
+Canonical form of the output (no manifest entry needed): switch becomes an if/else chain,
 a != b becomes ! (a == b), every if and else body is a block, and a call in an if condition or in
 a return value is first assigned to a result variable (res when the function has one of the
 callee's return type, else <callee>_res, declared once next to res or at the start of the body).
@@ -78,9 +92,11 @@ import tree_sitter_c
 
 # ---------------------------------------------------------------------------------------- tables
 
-# C type -> TEE-IMP type.  Struct types of `structs` are added at run time.
+# C type -> model type.  Struct types of `structs` are added at run time.
 C_TYPES = {
     'TEE_Result': 'TEE-Result',
+    'TEEC_Result': 'TEE-Result',
+    'TEEC_Session': 'TEEC-Session',
     'TEE_Attribute': 'TEE-Attribute',
     'TEE_ObjectHandle': 'TEE-ObjectHandle',
     'TEE_OperationHandle': 'TEE-OperationHandle',
@@ -95,6 +111,8 @@ C_TYPES = {
 # TEE constants -> data constants of the model (written # value).
 CONSTANTS = {
     'TEE_SUCCESS': 'success',
+    'TEEC_SUCCESS': 'success',
+    'TEEC_ERROR_TARGET_DEAD': 'errorTargetDead',
     'TEE_HANDLE_NULL': 'null',
     'TEE_ERROR_GENERIC': 'errorGeneric',
     'TEE_ERROR_BAD_PARAMETERS': 'errorBadParameters',
@@ -121,7 +139,7 @@ DATA_FLAGS = {
     'TEE_DATA_FLAG_OVERWRITE': 'overwrite',
 }
 
-# TEE API -> (TEE-IMP name, C arity, arguments).  An argument is the index of a C argument, or
+# TEE API -> (model name, C arity, arguments).  An argument is the index of a C argument, or
 # (index, wrapper): `# v` becomes `# wrapper(v)`.  Arities are those of GlobalPlatform.
 API = {
     'TEE_AllocateOperation': ('allocOperation', 4, [1, 2, 3, 0]),
@@ -144,9 +162,11 @@ API = {
     'TEE_CloseAndDeletePersistentObject1': ('closeAndDeletePersistentObject1', 1, [0]),
 }
 API_RESULT = 'TEE_Result'      # C return type of the API functions above that return a value
+TEEC_OPERATION = 'TEEC_Operation'
+TEEC_INVOKE = 'TEEC_InvokeCommand'
 
 PARSER = Parser(Language(tree_sitter_c.language()))
-DROP = '@drop@'      # translation of a [memref] entry "drop": the statement is left out
+DROP = '@drop@'      # output of a [memref] entry "drop": the statement is left out
 IND = '  '
 
 
@@ -194,6 +214,7 @@ class Config(object):
         self.assign = table.get('assign', {})
         self.insert = table.get('insert', [])
         self.memref = table.get('memref', {})
+        self.invoke = table.get('invoke')
         self.used = set()      # manifest entries that were applied (unused ones are errors)
 
     def path(self, p):
@@ -206,7 +227,7 @@ class Config(object):
         return None
 
 
-# ----------------------------------------------------------------------------------- translator
+# --------------------------------------------------------------------------------- preprocessor
 
 class Func(object):
     def __init__(self, node):
@@ -282,7 +303,7 @@ class Translator(object):
             return self.struct_types[ctype]
         if ctype in C_TYPES and not ptr:
             return C_TYPES[ctype]
-        raise TransError('%s: no TEE-IMP type for C type %s%s; add it to [types]'
+        raise TransError('%s: no model type for C type %s%s; add it to [types]'
                          % (key, ctype, ' *' if ptr else ''))
 
     # ---- program
@@ -361,6 +382,7 @@ class Translator(object):
                 ps.append('%s %s' % (self.imp_type('%s.%s' % (f.name, n), ct, ptr), camel(n)))
             sig = ', '.join(ps)
         self.mallocs = set()
+        self.ops = {}               # TEEC_Operation variable -> {index: model argument}
         self.inlines = {}
         for k, v in self.cfg.inline.items():
             fn, var = k.split('.', 1)
@@ -397,7 +419,7 @@ class Translator(object):
         return out
 
     def gone(self, lines):
-        """True when the translated lines mention a variable of drop-vars (the statement is left
+        """True when the output lines mention a variable of drop-vars (the statement is left
         out); an error when they mention a parameter removed by [memref] or [drop-args] that
         drop-vars does not list."""
         txt = ' '.join(lines)
@@ -523,6 +545,11 @@ class Translator(object):
             if arr:
                 raise TransError('%s: array %s; list it in drop-vars' % (self.f.name, name))
             ct = base_type(s)
+            if ct == TEEC_OPERATION and not ptr:
+                if d.type == 'init_declarator':
+                    raise TransError('%s: the operation %s has an initializer' % (self.f.name, name))
+                self.ops[name] = {}
+                continue
             out.append(IND * depth + '%s %s ;' % (self.imp_type('%s.%s' % (self.f.name, name), ct, ptr), camel(name)))
             if d.type == 'init_declarator':
                 v = d.child_by_field_name('value')
@@ -540,6 +567,8 @@ class Translator(object):
             raise TransError('%s: compound assignment %s' % (self.f.name, text(e)))
         if lhs.type == 'identifier' and text(lhs) in self.inlines:
             return []
+        if self.op_field(lhs, rhs):
+            return []
         src = self.malloc_ptr(rhs)
         if src is not None:
             if lhs.type != 'identifier':
@@ -550,6 +579,44 @@ class Translator(object):
         if self.gone(out):
             return []
         return (self.inserts(self.call_name(rhs), depth) if self.call_name(rhs) else []) + out
+
+    def op_field(self, lhs, rhs):
+        """True for an assignment to a field of a TEEC_Operation variable: a memory reference
+        op.params[i].tmpref.buffer = X is collected for the call, and paramTypes and the sizes
+        are left out."""
+        m = re.match(r'^(\w+)\.(.*)$', norm(text(lhs)))
+        if not m or m.group(1) not in self.ops:
+            return False
+        op, field = m.group(1), m.group(2)
+        b = re.match(r'^params\[(\d+)\]\.tmpref\.buffer$', field)
+        if b:
+            k = int(b.group(1))
+            if k in self.ops[op]:
+                raise TransError('%s: %s is set twice' % (self.f.name, text(lhs)))
+            self.ops[op][k] = self.expr(rhs)
+        elif field != 'paramTypes' and not re.match(r'^params\[\d+\]\.tmpref\.size$', field):
+            raise TransError('%s: the operation field %s is not modeled (only the buffers of '
+                             'temporary memory references are)' % (self.f.name, text(lhs)))
+        return True
+
+    def invoke(self, args, sub):
+        """teecInvokeCommand for TEEC_InvokeCommand(&sess, CMD, &op, &origin)."""
+        inv = self.cfg.invoke
+        if inv is None:
+            raise TransError('%s: %s needs the [invoke] table' % (self.f.name, TEEC_INVOKE))
+        self.cfg.used.add(('invoke',))
+        if len(args) != 4:
+            raise TransError('%s: %s takes 4 arguments, not %d' % (self.f.name, TEEC_INVOKE, len(args)))
+        op = norm(text(args[2]))
+        op = op[1:] if op.startswith('&') else op
+        if op not in self.ops:
+            raise TransError('%s: %s of %s is not a TEEC_Operation variable' % (self.f.name, text(args[2]), TEEC_INVOKE))
+        bufs = self.ops[op]
+        if sorted(bufs) != list(range(len(bufs))):
+            raise TransError('%s: the memory references of %s are not params[0..n-1]' % (self.f.name, op))
+        out = [self.expr(args[1], sub)] + [bufs[k] for k in sorted(bufs)]
+        out.append('addr(%s)' % camel(inv['ta-result']))
+        return 'teecInvokeCommand(%s, # %s, (%s))' % (self.api_arg(args[0], sub), inv['entry'], ', '.join(out))
 
     def assign_value(self, lhs, rhs, depth):
         name = lhs if isinstance(lhs, str) else None
@@ -623,6 +690,8 @@ class Translator(object):
         callee = text(call.child_by_field_name('function'))
         if callee in API:
             return API_RESULT
+        if callee == TEEC_INVOKE:
+            return 'TEEC_Result'
         if callee in self.funcs:
             return self.funcs[callee].ret
         raise TransError('%s: unknown function %s' % (self.f.name, callee))
@@ -741,6 +810,8 @@ class Translator(object):
     def call(self, e, sub):
         callee = text(e.child_by_field_name('function'))
         args = named(e.child_by_field_name('arguments'))
+        if callee == TEEC_INVOKE:
+            return self.invoke(args, sub)
         if callee in API:
             name, arity, spec = API[callee]
             if len(args) != arity:
@@ -756,8 +827,8 @@ class Translator(object):
         if callee in self.funcs:
             drops = self.cfg.drop_args.get(callee, set())
             return '%s(%s)' % (camel(callee), ', '.join(self.expr(a, sub) for k, a in enumerate(args) if k not in drops))
-        raise TransError('%s: call of %s, which is neither translated nor a TEE API function the '
-                         'translator knows; add it to drop-calls or to the API table'
+        raise TransError('%s: call of %s, which is neither kept nor a TEE API function the '
+                         'preprocessor knows; add it to drop-calls or to the API table'
                          % (self.f.name, callee))
 
 
@@ -803,11 +874,11 @@ def apply_patches(src, patches):
     return cur
 
 
-def translate(manifest, key, out_path=None):
+def translate(manifest, key, out_path=None, section='ta'):
     with open(manifest, 'rb') as fh:
         data = tomllib.load(fh)
     base = os.path.dirname(os.path.abspath(manifest))
-    table = data['ta'][key]
+    table = data[section][key]
     cfg = Config(table, base)
     with open(cfg.path(table['main']), encoding='utf-8') as fh:
         main = fh.read().rstrip('\n').split('\n')
@@ -825,6 +896,8 @@ def translate(manifest, key, out_path=None):
     unused += ['drop-vars %s' % k for k in cfg.drop_vars if (id(cfg.drop_vars), k) not in cfg.used]
     unused += ['drop-calls %s' % k for k in cfg.drop_calls if ('call', k) not in cfg.used]
     unused += ['[[insert]] %d' % k for k in range(len(cfg.insert)) if ('ins', k) not in cfg.used]
+    if cfg.invoke is not None and ('invoke',) not in cfg.used:
+        unused.append('[invoke]')
     for fn, mem in cfg.memref.items():
         unused += ['[memref.%s] %s' % (fn, k) for k in mem if k != 'signature' and ('mem', fn, norm(k)) not in cfg.used]
     if unused:
@@ -833,9 +906,12 @@ def translate(manifest, key, out_path=None):
         tmpl = fh.read()
     for prog, body in bodies.items():
         marker = '---@program %s' % prog
-        if tmpl.count(marker) != 1:
+        lines = tmpl.split('\n')
+        at = [k for k, ln in enumerate(lines) if ln.strip() == marker]
+        if len(at) != 1:
             raise TransError('template: expected one line %s' % marker)
-        tmpl = tmpl.replace(marker, '  eq %s =\n\n%s\n  .' % (prog, body))
+        lines[at[0]] = '  eq %s =\n\n%s\n  .' % (prog, body)
+        tmpl = '\n'.join(lines)
     out_path = out_path or os.path.join(base, table.get('output', key + '.maude'))
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as fh:
@@ -846,16 +922,21 @@ def translate(manifest, key, out_path=None):
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('manifest')
-    ap.add_argument('--ta', help='key of the [ta.KEY] table (default: every one)')
-    ap.add_argument('--out', help='output file (only with one TA); default: its output entry')
+    ap.add_argument('--ta', help='key of the [ta.KEY] table')
+    ap.add_argument('--ra', help='key of the [ra.KEY] table')
+    ap.add_argument('--out', help='output file (only with one TA or RA); default: its output entry')
     args = ap.parse_args(argv)
     with open(args.manifest, 'rb') as fh:
-        keys = [args.ta] if args.ta else list(tomllib.load(fh).get('ta', {}))
+        data = tomllib.load(fh)
+    if args.ta or args.ra:
+        keys = [('ta', args.ta)] if args.ta else [('ra', args.ra)]
+    else:       # every TA and every RA
+        keys = [(sec, k) for sec in ('ta', 'ra') for k in data.get(sec, {})]
     try:
-        for k in keys:
-            print('ta2imp: %s' % translate(args.manifest, k, args.out))
+        for sec, k in keys:
+            print('preprocess: %s' % translate(args.manifest, k, args.out, sec))
     except TransError as ex:
-        sys.stderr.write('ta2imp: error: %s\n' % ex)
+        sys.stderr.write('preprocess: error: %s\n' % ex)
         return 1
     return 0
 

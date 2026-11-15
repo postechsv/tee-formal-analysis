@@ -1,45 +1,53 @@
-# Build driver for the TEE formal spec (the submodule spec/, or SPEC=DIR) and its analyses.
+# The transforms of a spec build, run from the repository root with make -f tools/build/transform.mk
+# (written M below).  tools/build/tee-build.py runs it to build an analysis of a case study (the
+# Makefile of the case study: make A in C/).
 #
-#   make                    build build/default/src and build/default/tests from $(SPEC)
-#   make NAME=t             build build/t/src and build/t/tests
-#   make NAME=t CRYPTO=0    build without the crypto modules
-#   make NAME=t WITHOUT=M   build without module M (must be a pr line in main.maude)
-#   make NAME=t DMC=1       build the DM-Check version (tools/dmc/gen-dmc.py) instead of a plain copy
-#   make NAME=t GHOST=x.maude   compose the ghost file(s) with the spec rules (tools/build/ghost.py)
-#                           before the copy or gen-dmc; a space-separated list is allowed, and a
-#                           case-study .toml gives its [ghost] tables. Cached like DMC; GHOST= turns it off.
-#   make NAME=t DROP_COND=x.toml   drop the rule conditions of the [drop-rule-condition] tables of
-#                           a case-study .toml (tools/build/drop-condition.py) before the ghosts. Cached like GHOST.
-#   make mqttz [MODE=dmc] [INVISIBLE=1]  build the case study case-studies/mqttz (tools/build/tee-build.py):
-#                           the spec with its features and ghosts, and build/mqttz/main.maude
-#   make NAME=t test        build, then run test-api and test-checks in build/t/tests
-#   make test-api           API-level black-box tests ($(SPEC)/tests/api/test-*.maude)
-#   make test-checks        search/red checks (completion/*.maude, gp-conformance/*.maude)
-#   make V=1 test           verbose: stream the Maude output of each test file / check file
-#   make dmc                same as make DMC=1 (the setting is cached like the features)
-#   make check-dmc          regenerate the DMC build and run gen-dmc's ground checks (exit 2 on mismatch)
-#   make NAME=t DMC=1 M2L=1 build the maude2lean version (tools/lean/gen-maude2lean.py on the DMC build)
-#   make m2l                same as make DMC=1 M2L=1 (cached)
-#   make check-m2l          regenerate the M2L build and run gen-maude2lean's checks
-#   make lean               translate the M2L build to Lean: build/t/lean/TeeSpec.lean (MAUDE2LEAN)
-#   make docs               build the documentation site: build/docs/index.html
-#   make help               list features, test selection and current values
-#   make clean NAME=t       remove build/t
+# It transforms one build of a spec checkout SPEC (a tee-formal-spec tree; tee-build passes the one
+# it fetched).  The spec is built with its own Makefile (make -C $(SPEC) NAME=t src, which takes the
+# feature settings, e.g. CRYPTO=0) into $(SPEC)/build/t/, and the transforms are applied to a copy
+# of it:
 #
-# build/$(NAME)/ holds:
-#   src/, tests/   the final tree: a copy of the selected sources (DMC=0) or the gen-dmc
-#                  output (DMC=1). Nothing else is written there by the DMC build.
+#   M SPEC=DIR NAME=t       build build/t/src and build/t/tests (a plain copy of the spec build)
+#   M NAME=t DMC=1          build the DM-Check version (tools/dmc/gen-dmc.py) instead of a plain copy
+#   M NAME=t GHOST=x.maude  compose the ghost file(s) with the spec rules (tools/build/ghost.py)
+#                           before the copy or gen-dmc; a space-separated list is allowed, and an
+#                           analysis .toml gives its [ghost] tables. Cached like DMC; GHOST= turns it off.
+#   M NAME=t DROP_ATTR=x.toml  drop the class attributes of the [drop-class-attribute] tables of
+#                           an analysis .toml (tools/build/drop-class-attribute.py) from rule left-hand
+#                           sides before the ghosts. Cached like GHOST.
+#   M NAME=t INVISIBLE=1 INVISIBLE_G=x.toml  the invisible-transition reduction generated from
+#                           the [invisible] rules of x.toml (tools/build/gen-invisible.py)
+#   M NAME=t test           build, then run the spec test suites on build/t/tests
+#   M test-api, test-checks, V=1 test  as in the spec Makefile, on build/t
+#   M dmc                   same as M DMC=1 (the setting is cached)
+#   M check-dmc             regenerate the DMC build and run gen-dmc's ground checks (exit 2 on mismatch)
+#   M NAME=t DMC=1 M2L=1    build the maude2lean version (tools/lean/gen-maude2lean.py on the DMC build)
+#   M m2l                   same as M DMC=1 M2L=1 (cached)
+#   M check-m2l             regenerate the M2L build and run gen-maude2lean's checks
+#   M lean                  translate the M2L build to Lean: build/t/lean/TeeSpec.lean (MAUDE2LEAN)
+#   M help                  list settings and targets
+#   M clean NAME=t          remove build/t
+#
+# build/ is a cache: build/spec/ holds the fetched spec revisions (and their own builds), build/NAME/
+# a transformed build:
+#   src/, tests/   the final tree: a copy of the spec build (DMC=0) or the gen-dmc output (DMC=1).
+#                  Nothing else is written there by the DMC build.
 #   .dmc-cache/    DMC=1 bookkeeping (reflection cache, manifest.json, check-build). Kept across
 #                  builds; only make clean removes it.
 #   .m2l/dmc-src/  M2L=1: the gen-dmc output that gen-maude2lean reads (src/ is its output)
 #   .m2l-cache/    M2L=1 bookkeeping (reflection cache, manifest.json, check inputs)
+#   ghost/         the ghost modules compiled from a .toml (for inspection)
 #   lean/          make lean output
-#   config.mk, config.want, .inputs (the selected input list), .stamp (build marker)
+#   config.mk, config.want, .stamp (build marker)
 #   .stage/        intermediate, removed after each successful build. A failed build leaves
 #                  the stamp untouched, so the next run rebuilds.
 #
-# Setting precedence: command line > build/$(NAME)/config.mk (cache) > features.mk.
+# Setting precedence: command line > build/$(NAME)/config.mk (cache) > defaults.  The feature
+# settings are cached by the spec build ($(SPEC)/build/$(NAME)/config.mk).
 # Personal settings such as the Maude path go in config.mk at the repo root (gitignored).
+
+# This file, for the recursive runs (there is no Makefile at the repository root).
+SELF := $(firstword $(MAKEFILE_LIST))
 
 # Ignore a NAME inherited from the shell environment; only make arguments or config.mk set it.
 ifneq ($(filter environment%,$(origin NAME)),)
@@ -53,11 +61,6 @@ FINAL_STAMP := $(OUT)/.stamp
 # Personal settings (gitignored). Read before MAUDE so it can set MAUDE.
 -include config.mk
 
-# The specification (git submodule spec/ -> tee-formal-spec). SPEC=../tee-formal-spec builds a
-# sibling checkout instead.
-SPEC ?= spec
-$(if $(wildcard $(SPEC)/src/main.maude),,$(error $(SPEC)/src/main.maude not found: run git submodule update --init, or set SPEC))
-
 # Maude binary. Set MAUDE in config.mk, or MAUDE_BIN in the environment.
 MAUDE ?= $(or $(MAUDE_BIN),maude)
 export MAUDE_BIN := $(MAUDE)
@@ -70,10 +73,11 @@ LEAN_OUT = $(OUT)/lean/TeeSpec.lean
 # Settings used by the previous build in this directory.
 -include $(OUT)/config.mk
 
-# Feature table (defaults with ?=).
-include features.mk
+# The spec checkout (a tee-formal-spec tree with its Makefile). Cached like DMC.
+SPEC ?=
+SPEC_OUT = $(SPEC)/build/$(NAME)
 
-# DM-Check transform (tools/dmc/gen-dmc.py). Not a spec feature: it does not drop any files.
+# DM-Check transform (tools/dmc/gen-dmc.py).
 DMC ?= 0
 
 # maude2lean build (tools/lean/gen-maude2lean.py): the DMC build without sort tests. Needs DMC=1;
@@ -82,11 +86,15 @@ M2L ?= 0
 # M2L_EQ=0: the M2L build without gen-dmc's _.=._ (gen-maude2lean --no-eq; its uses become the built-in ==).
 M2L_EQ ?= 1
 
-# Ghost files (tools/build/ghost.py) composed with the stage. Not a spec feature either.
+# Ghost files (tools/build/ghost.py) composed with the stage.
 GHOST ?=
-# Case-study manifest whose [drop-rule-condition] tables drop rule conditions (tools/build/drop-condition.py).
-DROP_COND ?=
-# Case-study manifest whose [invisible] rules give the invisible-transition reduction (see below).
+# Analysis .toml whose [drop-class-attribute] tables drop class attributes from rule left-hand
+# sides (tools/build/drop-class-attribute.py).
+DROP_ATTR ?=
+# Analysis .toml whose [invisible] rules give the invisible-transition reduction: with a spec build
+# that loads invisible-reduction (INVISIBLE=1), that file is generated from the rules
+# (tools/build/gen-invisible.py) after the ghosts are composed, so that an invisible step updates
+# the ghost state like its rule.  Without it, the spec's own invisible-reduction.maude is used.
 INVISIBLE_G ?=
 
 # Verbose output (V=1 or VERBOSE=1): the test runners stream Maude's output and the recipes
@@ -102,56 +110,26 @@ V ?= $(or $(VERBOSE),0)
 Q = $(if $(filter 1,$(V)),,@)
 VFLAG = $(if $(filter 1,$(V)),-v)
 
-.PHONY: all src test test-api test-checks dmc check-dmc m2l check-m2l lean docs help config clean distclean FORCE
+.PHONY: all src test test-api test-checks dmc check-dmc m2l check-m2l lean help config clean distclean FORCE
 
 all: src
 
-# Case studies: the directories case-studies/NAME with a NAME.toml.  make NAME_OF_CASE builds it with
-# tools/build/tee-build.py; MODE (plain, dmc, m2l), INVISIBLE and SPEC are taken from the command line only.
-CASES := $(foreach D,$(wildcard case-studies/*/),$(if $(wildcard $(D)$(notdir $(D:/=)).toml),$(notdir $(D:/=))))
-MODE ?= plain
-.PHONY: $(CASES)
-$(CASES):
-	@python3 tools/build/tee-build.py case-studies/$@ --mode $(MODE) $(if $(and $(filter command line,$(origin INVISIBLE)),$(filter 1,$(INVISIBLE))),--invisible) $(if $(filter command line,$(origin SPEC)),--spec $(SPEC))
+# The goals that build: everything but help/clean.
+BUILD_GOALS := $(filter-out help config clean distclean,$(or $(MAKECMDGOALS),all))
 
 # Stop early on invalid values or unmet requirements.
+ifneq ($(BUILD_GOALS),)
+$(if $(SPEC),,$(error SPEC is not set: give a tee-formal-spec checkout (SPEC=DIR), or build a case study (make in mqttz/)))
+$(if $(wildcard $(SPEC)/Makefile),,$(error $(SPEC)/Makefile not found: SPEC must be a tee-formal-spec checkout))
+endif
 $(if $(filter-out 0 1,$(V)),$(error V must be 0 or 1, got '$(V)'))
 $(if $(filter-out 0 1,$(DMC)),$(error DMC must be 0 or 1, got '$(DMC)'))
 $(if $(filter-out 0 1,$(M2L)),$(error M2L must be 0 or 1, got '$(M2L)'))
 $(if $(filter 1,$(M2L)),$(if $(filter 0,$(DMC)),$(error M2L=1 requires DMC=1)))
 $(if $(filter-out 0 1,$(M2L_EQ)),$(error M2L_EQ must be 0 or 1, got '$(M2L_EQ)'))
 $(foreach G,$(GHOST),$(if $(wildcard $(G)),,$(error GHOST file '$(G)' not found)))
-$(if $(DROP_COND),$(if $(wildcard $(DROP_COND)),,$(error DROP_COND file '$(DROP_COND)' not found)))
+$(if $(DROP_ATTR),$(if $(wildcard $(DROP_ATTR)),,$(error DROP_ATTR file '$(DROP_ATTR)' not found)))
 $(if $(INVISIBLE_G),$(if $(wildcard $(INVISIBLE_G)),,$(error INVISIBLE_G file '$(INVISIBLE_G)' not found)))
-$(foreach F,$(FEATURES),\
-  $(if $(filter-out 0 1,$($(F))),$(error $(F) must be 0 or 1, got '$($(F))'))\
-  $(if $(filter 1,$($(F))),\
-    $(foreach G,$($(F)_REQUIRES),$(if $(filter 0,$($(G))),$(error $(F) requires $(G))))))
-
-# Arguments for tools/build/select-main.awk. Disabled features contribute their lists.
-DROP_LOADS := $(foreach F,$(FEATURES),$(if $(filter 0,$($(F))),$($(F)_LOADS)))
-DROP_MODULES := $(foreach F,$(FEATURES),$(if $(filter 0,$($(F))),$($(F)_MODULES))) $(WITHOUT)
-
-MAIN_SRC := $(SPEC)/src/main.maude
-# Spec files in the stage: every src/*.maude except main.maude and the files of disabled features.
-DROP_SRC := $(addprefix $(SPEC)/src/,$(addsuffix .maude,$(DROP_LOADS)))
-SRC_FILES := $(filter-out $(MAIN_SRC) $(DROP_SRC),$(wildcard $(SPEC)/src/*.maude))
-
-# Test selection. Names are relative to $(SPEC)/tests/. Files listed in F_TESTS of a
-# disabled feature are dropped.
-ALL_API_TESTS := $(patsubst $(SPEC)/tests/%,%,$(wildcard $(SPEC)/tests/api/test-*.maude))
-ALL_CHECK_TESTS := $(patsubst $(SPEC)/tests/%,%,$(wildcard $(SPEC)/tests/completion/*.maude $(SPEC)/tests/gp-conformance/*.maude))
-DROP_TESTS := $(foreach F,$(FEATURES),$(if $(filter 0,$($(F))),$($(F)_TESTS)))
-API_TESTS := $(filter-out $(DROP_TESTS),$(ALL_API_TESTS))
-CHECK_TESTS := $(filter-out $(DROP_TESTS),$(ALL_CHECK_TESTS))
-# The test runners run in $(OUT)/tests. A full copy of $(SPEC)/tests/ is made, and the runners
-# (tools/test/run-api-suite.py, tools/test/run-checks.py) are copied next to it, so relative loads such as ../src/main resolve inside $(OUT).
-# With every API test selected, run the runner without arguments so it checks the total.
-API_FULL := $(if $(filter-out $(API_TESTS),$(ALL_API_TESTS)),,1)
-API_ARGS = $(if $(API_FULL),,$(addprefix $(OUT)/tests/,$(API_TESTS)))
-CHECK_ARGS = $(addprefix $(OUT)/tests/,$(CHECK_TESTS))
-TEST_SRCS := $(shell find $(SPEC)/tests -type f)
-RUNNERS := tools/test/run-api-suite.py tools/test/run-checks.py
 
 # gen-dmc reads the stage and writes $(OUT)/src; derived tests go to $(OUT)/tests. Its
 # bookkeeping lives in $(OUT)/.dmc-cache, outside src/ (the DMC=0 path replaces src/ wholesale).
@@ -162,39 +140,34 @@ DMC_OUT = $(if $(filter 1,$(M2L)),$(OUT)/.m2l/dmc-src,$(OUT)/src)
 GEN_M2L = python3 tools/lean/gen-maude2lean.py $(OUT)/.m2l/dmc-src $(OUT)/src --cache-dir $(OUT)/.m2l-cache --maude $(MAUDE) $(if $(M2L_CHECK),--check) $(if $(filter 0,$(M2L_EQ)),--no-eq)
 GEN_DMC = python3 tools/dmc/gen-dmc.py $(STAGE)/src $(DMC_OUT) --tests $(STAGE)/tests --tests-out $(OUT)/tests --cache-dir $(OUT)/.dmc-cache --maude $(MAUDE) $(if $(DMC_CHECK),--check)
 
-# Everything that decides the final tree. config.want changes with every setting; .inputs
-# with the selected file list, so deleting a file (which no longer appears in the lists) rebuilds.
-FINAL_INPUTS := $(MAIN_SRC) $(SRC_FILES) $(TEST_SRCS) $(RUNNERS) tools/build/select-main.awk features.mk $(OUT)/config.want $(OUT)/.inputs
+# The spec build. Its Makefile is run every time (it rebuilds only what changed and caches the
+# feature settings); the command-line settings reach it through MAKEFLAGS.
+$(SPEC_OUT)/.stamp: FORCE
+	$(Q)$(MAKE) --no-print-directory -C $(SPEC) NAME=$(NAME) src
+
+# Everything that decides the final tree. config.want changes with every setting.
+FINAL_INPUTS := $(SPEC_OUT)/.stamp $(OUT)/config.want
 FINAL_INPUTS += $(if $(filter 1,$(DMC)),tools/dmc/gen-dmc.py $(wildcard tools/dmc/lib/*))
 FINAL_INPUTS += $(if $(filter 1,$(M2L)),tools/lean/gen-maude2lean.py)
 FINAL_INPUTS += $(if $(strip $(GHOST)),$(GHOST) tools/build/ghost.py tools/dmc/gen-dmc.py)
-FINAL_INPUTS += $(if $(strip $(DROP_COND)),$(DROP_COND) tools/build/drop-condition.py tools/dmc/gen-dmc.py)
-# INVISIBLE_G=x.toml (set by tools/build/tee-build.py): with INVISIBLE=1, invisible-reduction.maude is
-# generated from the [invisible] rules of x.toml (tools/build/gen-invisible.py), after the ghosts are
-# composed, so that an invisible step updates the ghost state like its rule.  Without it, the
-# spec's own invisible-reduction.maude is used.
-GEN_INVISIBLE := $(and $(strip $(INVISIBLE_G)),$(filter 1,$(INVISIBLE)))
-FINAL_INPUTS += $(if $(GEN_INVISIBLE),tools/build/gen-invisible.py $(INVISIBLE_G))
+FINAL_INPUTS += $(if $(strip $(DROP_ATTR)),$(DROP_ATTR) tools/build/drop-class-attribute.py tools/dmc/gen-dmc.py)
+FINAL_INPUTS += $(if $(strip $(INVISIBLE_G)),tools/build/gen-invisible.py $(INVISIBLE_G))
 
 # The cache is updated last, so a failed build never leaves bad settings behind.
 src: $(FINAL_STAMP)
-	@echo "config: NAME=$(NAME) $(foreach F,$(FEATURES),$(F)=$($(F))) WITHOUT='$(WITHOUT)' DMC=$(DMC) M2L=$(M2L) M2L_EQ=$(M2L_EQ) DROP_COND='$(DROP_COND)' GHOST='$(GHOST)' INVISIBLE_G='$(INVISIBLE_G)'"
+	@echo "config: NAME=$(NAME) SPEC=$(SPEC) DMC=$(DMC) M2L=$(M2L) M2L_EQ=$(M2L_EQ) DROP_ATTR='$(DROP_ATTR)' GHOST='$(GHOST)' INVISIBLE_G='$(INVISIBLE_G)'"
 	@cmp -s $(OUT)/config.want $(OUT)/config.mk || cp $(OUT)/config.want $(OUT)/config.mk
 
 # Stage, then the final tree, then the stage is removed. A failure before the touch
 # leaves the stamp old, so the next run rebuilds (and starts by removing the stage).
 $(FINAL_STAMP): $(FINAL_INPUTS) | $(OUT)
 	$(Q)rm -rf $(STAGE) $(OUT)/tests
-	$(Q)mkdir -p $(STAGE)/src $(STAGE)/tests
-	$(Q)awk -v skip_loads='$(DROP_LOADS)' -v skip_mods='$(DROP_MODULES)' -v without='$(WITHOUT)' \
-		-f tools/build/select-main.awk $(MAIN_SRC) > $(STAGE)/src/main.maude
-	$(Q)$(if $(filter 1,$(INVISIBLE)),echo 'load invisible-reduction' >> $(STAGE)/src/main.maude)
-	$(Q)$(if $(SRC_FILES),cp $(SRC_FILES) $(STAGE)/src/)
-	$(Q)cp -R $(SPEC)/tests/. $(STAGE)/tests/
-	$(Q)cp $(RUNNERS) $(STAGE)/tests/
-	$(Q)$(if $(strip $(DROP_COND)),python3 tools/build/drop-condition.py $(STAGE)/src $(DROP_COND))
+	$(Q)mkdir -p $(STAGE)
+	$(Q)cp -R $(SPEC_OUT)/src $(SPEC_OUT)/tests $(STAGE)/
+	$(Q)$(if $(strip $(DROP_ATTR)),python3 tools/build/drop-class-attribute.py $(STAGE)/src $(DROP_ATTR))
 	$(Q)$(if $(strip $(GHOST)),python3 tools/build/ghost.py $(STAGE)/src $(GHOST))
-	$(Q)$(if $(GEN_INVISIBLE),python3 tools/build/gen-invisible.py --src $(STAGE)/src $(INVISIBLE_G))
+	$(Q)$(if $(strip $(INVISIBLE_G)),if grep -qx 'load invisible-reduction' $(STAGE)/src/main.maude; then \
+		python3 tools/build/gen-invisible.py --src $(STAGE)/src $(INVISIBLE_G); fi)
 	$(Q)if [ '$(DMC)' = 1 ]; then \
 		rm -rf $(OUT)/src $(OUT)/.m2l && $(GEN_DMC) $(if $(filter 1,$(M2L)),&& $(GEN_M2L)); \
 	else \
@@ -207,33 +180,39 @@ $(FINAL_STAMP): $(FINAL_INPUTS) | $(OUT)
 # is nonzero if either fails.
 test: src
 	@status=0; \
-	$(MAKE) --no-print-directory test-api || status=1; \
-	$(MAKE) --no-print-directory test-checks || status=1; \
+	$(MAKE) --no-print-directory -f $(SELF) test-api || status=1; \
+	$(MAKE) --no-print-directory -f $(SELF) test-checks || status=1; \
 	exit $$status
 
+# The selected test files are those of the spec build ($(SPEC_OUT)/tests.txt).
 test-api: src
-	@if [ -z '$(API_TESTS)' ]; then echo '[test-suite] no API tests selected'; else python3 $(OUT)/tests/run-api-suite.py $(VFLAG) $(API_ARGS); fi
+	@api=$$(sed -n 's|^api |$(OUT)/tests/|p' $(SPEC_OUT)/tests.txt); \
+	if [ -z "$$api" ]; then echo '[test-suite] no API tests selected'; \
+	elif grep -qx api-full $(SPEC_OUT)/tests.txt; then python3 $(OUT)/tests/run-api-suite.py $(VFLAG); \
+	else python3 $(OUT)/tests/run-api-suite.py $(VFLAG) $$api; fi
 
 test-checks: src
-	@if [ -z '$(CHECK_TESTS)' ]; then echo '[checks] no check files selected'; else python3 $(OUT)/tests/run-checks.py $(VFLAG) $(CHECK_ARGS); fi
+	@checks=$$(sed -n 's|^check |$(OUT)/tests/|p' $(SPEC_OUT)/tests.txt); \
+	if [ -z "$$checks" ]; then echo '[checks] no check files selected'; \
+	else python3 $(OUT)/tests/run-checks.py $(VFLAG) $$checks; fi
 
-# The DMC build is a cached setting, like the features: DMC=1 stays until DMC=0 is given.
+# The DMC build is a cached setting: DMC=1 stays until DMC=0 is given.
 dmc:
-	@$(MAKE) --no-print-directory DMC=1 src
+	@$(MAKE) --no-print-directory -f $(SELF) DMC=1 src
 
 # Always regenerates (-B), then runs the ground checks. gen-dmc exits 2 on a mismatch.
 # Not with M2L=1: gen-dmc's load check reads the tests next to its output, which is .m2l/dmc-src there.
 check-dmc:
 	@if [ '$(M2L)' = 1 ]; then echo 'check-dmc: not with M2L=1 (use NAME= of a build with M2L=0)'; exit 1; fi
-	@$(MAKE) --no-print-directory -B DMC=1 DMC_CHECK=1 src
+	@$(MAKE) --no-print-directory -f $(SELF) -B DMC=1 DMC_CHECK=1 src
 
 # The M2L build is a cached setting too (M2L=1 stays until M2L=0 is given).
 m2l:
-	@$(MAKE) --no-print-directory DMC=1 M2L=1 src
+	@$(MAKE) --no-print-directory -f $(SELF) DMC=1 M2L=1 src
 
 # Always regenerates (-B), then runs gen-maude2lean's checks (exit 2 on a mismatch, 3 on load warnings).
 check-m2l:
-	@$(MAKE) --no-print-directory -B DMC=1 M2L=1 M2L_CHECK=1 src
+	@$(MAKE) --no-print-directory -f $(SELF) -B DMC=1 M2L=1 M2L_CHECK=1 src
 
 # Lean translation of the M2L build (https://github.com/fadoss/maude2lean). Set MAUDE2LEAN in config.mk;
 # M2L_FLAGS are passed to it (e.g. --module TEE-BEHAVIOR).
@@ -242,26 +221,16 @@ lean: src
 	@mkdir -p $(OUT)/lean
 	cd $(OUT)/src && $(MAUDE2LEAN) main.maude $(M2L_FLAGS) -o $(abspath $(LEAN_OUT))
 
-# Static documentation site from $(SPEC)/src/ (tools/docs/gen-docs.py). Independent of NAME and the features.
-# tools/docs/input/overview.html is the hand-written body of index.html. tools/docs/input/examples.json (tools/docs/gen-examples.py)
-# gives the verified examples shown, collapsed, under rules and ops.
-docs: tools/docs/input/overview.html tools/docs/gen-docs.py tools/docs/input/examples.json
-	python3 tools/docs/gen-docs.py --src $(SPEC)/src --out build/docs --overview tools/docs/input/overview.html --examples tools/docs/input/examples.json --check
-
 help config:
 	@echo "NAME=$(NAME)  OUT=$(OUT)  SPEC=$(SPEC)  MAUDE=$(MAUDE)"
-	@echo "features:"
-	@$(foreach F,$(FEATURES),echo '  $(F)=$($(F))';) echo '  WITHOUT=$(WITHOUT)'
+	@echo "settings (features: make -C SPEC help):"
 	@echo "  DMC=$(DMC)"
 	@echo "  M2L=$(M2L)  M2L_EQ=$(M2L_EQ)  (MAUDE2LEAN=$(MAUDE2LEAN))"
-	@echo "  DROP_COND=$(DROP_COND)"
+	@echo "  DROP_ATTR=$(DROP_ATTR)"
 	@echo "  GHOST=$(GHOST)"
 	@echo "  INVISIBLE_G=$(INVISIBLE_G)"
 	@echo "  V=$(V)  (display only: not cached; V=1 streams test output)"
-	@echo "tests (relative to $(SPEC)/tests/):"
-	@echo "  api:    $(API_TESTS)"
-	@echo "  checks: $(CHECK_TESTS)"
-	@echo "targets:"
+	@echo "targets (make -f tools/build/transform.mk ...):"
 	@echo "  make [src]     build $(OUT)/src and $(OUT)/tests (DMC=1: gen-dmc output)"
 	@echo "  make test      test-api and test-checks (V=1: stream each file's Maude output)"
 	@echo "  make test-api  API-level tests (run-api-suite.py)"
@@ -271,9 +240,8 @@ help config:
 	@echo "  make m2l       same as DMC=1 M2L=1 (cached): the maude2lean build"
 	@echo "  make check-m2l regenerate the M2L build and run its checks"
 	@echo "  make lean      translate the M2L build with maude2lean: $(LEAN_OUT)"
-	@echo "  make docs      build the documentation site in build/docs (open build/docs/index.html)"
 	@echo "  make clean     remove $(OUT)"
-	@echo "  make distclean remove build/"
+	@echo "  make distclean remove build/ (the fetched specs too)"
 
 clean:
 	rm -rf $(OUT)
@@ -287,15 +255,9 @@ $(OUT):
 # Desired settings, rewritten only when they change. The final tree depends on it.
 # Copied to the cache config.mk (read by the next run) after a successful build.
 # Gated so help/clean never create build directories.
-ifeq (,$(filter help config clean distclean,$(MAKECMDGOALS)))
+ifneq ($(BUILD_GOALS),)
 $(OUT)/config.want: FORCE | $(OUT)
-	@printf '%s\n' '# Generated by Makefile. Do not edit.' $(foreach F,$(FEATURES),'$(F) := $($(F))') 'WITHOUT := $(WITHOUT)' 'DMC := $(DMC)' 'M2L := $(M2L)' 'M2L_EQ := $(M2L_EQ)' 'DROP_COND := $(DROP_COND)' 'GHOST := $(GHOST)' 'INVISIBLE_G := $(INVISIBLE_G)' > $@.tmp
-	@if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
-
-# Selected input files (sorted), rewritten only when the list changes. A deleted or added file
-# changes the list, so the stamp becomes stale.
-$(OUT)/.inputs: FORCE | $(OUT)
-	@printf '%s\n' $(sort $(SRC_FILES) $(TEST_SRCS)) > $@.tmp
+	@printf '%s\n' '# Generated by Makefile. Do not edit.' 'SPEC := $(SPEC)' 'DMC := $(DMC)' 'M2L := $(M2L)' 'M2L_EQ := $(M2L_EQ)' 'DROP_ATTR := $(DROP_ATTR)' 'GHOST := $(GHOST)' 'INVISIBLE_G := $(INVISIBLE_G)' > $@.tmp
 	@if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 endif
 

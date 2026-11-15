@@ -2,4 +2,5 @@
 /build/
 config.mk
 __pycache__/
-results/
+output/
+models/

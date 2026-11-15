@@ -1,5 +1,5 @@
---- The model files of MQT-TZ (the spec and the translated TA are loaded before and after them by
---- build/mqttz/model.maude, see tools/build/tee-build.py).
+--- The model files of MQT-TZ (the spec and the preprocessed TA are loaded before and after them by
+--- models/<analysis>/model.maude, see tools/build/tee-build.py).
 load env/base
 load env/ta-data
 load env/entity

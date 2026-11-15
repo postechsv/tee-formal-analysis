@@ -1,66 +1,115 @@
-#!/bin/bash
-# One model-checking run of the paper experiments (Table 2 and Table 3) on the MQT-TZ build with the
-# invisible-transition reduction (make mqttz INVISIBLE=1).
-#
-#   run PROP THREAT [-patch] [MAUDE_DIR] [LOG_DIR] [-silent]
-#
-#   PROP       p1 .. p6, the LTL property (case-studies/mqttz/properties/properties.maude)
-#   THREAT     non (no threat), oom (out-of-memory threat), msg (message intruder)
-#   -patch     the patched RA and TA (mqttzHostPatched, mqttzTaPatched); any other value: the
-#              original programs (mqttzHost, mqttzTA)
-#   MAUDE_DIR  where the generated Maude file goes (default: results/maude-files)
-#   LOG_DIR    where the Maude output goes (default: results/logs)
-#   -silent    do not print the paths of the written files
-#
-# The Maude binary is MAUDE_BIN, else MAUDE of config.mk, else maude on PATH.
+#!/usr/bin/env python3
+"""One model-checking run of the paper experiments (Table 2 and Table 3) on the model of the
+analysis model-checking (make model-checking in mqttz/), which has the invisible-transition
+reduction.
 
-root=$(cd "$(dirname "$0")/../.." && pwd)
-maude_bin="${MAUDE_BIN:-$(sed -n 's/^MAUDE[[:space:]]*:\{0,1\}=[[:space:]]*//p' "$root/config.mk" 2>/dev/null | head -n 1)}"
-maude_bin="${maude_bin:-maude}"
-build="$root/build/mqttz-inv/main.maude"
-[ -f "$build" ] || { echo "error: $build not found; run make mqttz INVISIBLE=1 first"; exit 66; }
+  run PROP THREAT [-patch] [MAUDE_DIR] [LOG_DIR] [-silent]
 
-run() {
-    case $6 in
-        -silent) verbose=false ;;
-        *)       verbose=true ;;
-    esac
+  PROP       p1 .. p6, the LTL property (core/properties/properties.maude)
+  THREAT     non (no threat), oom (out-of-memory threat), msg (message intruder)
+  -patch     the patched RA and TA (mqttzHostPatched, mqttzTaPatched); any other value: the
+             original programs (mqttzHost, mqttzTA)
+  MAUDE_DIR  where the generated Maude file goes (default: mqttz/output/maude-files)
+  LOG_DIR    where the Maude output goes (default: mqttz/output/logs)
+  -silent    do not print the paths of the written files
 
-    case $1 in
-        p1|p2|p3|p4|p5|p6) p="$1" ;;
-        *) echo "error: wrong property"; exit 65 ;;
-    esac
+The Maude binary is MAUDE_BIN, else MAUDE of config.mk, else maude on PATH.
+"""
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
 
-    case $2 in
-        oom) int="none" intRule="pr OOM-THREAT .";;
-        msg) int="initInt" intRule="pr MSG-THREAT .";;
-        non) int="none" intRule="";;
-        *) echo "error: wrong threat"; exit 65 ;;
-    esac
+CASE = Path(__file__).resolve().parent.parent
+ROOT = CASE.parent
+BUILD = CASE / "models" / "model-checking" / "main.maude"
 
-    case $3 in
-        -patch) raProg="mqttzHostPatched" taProg="mqttzTaPatched" prn="_patch" ;;
-        *) raProg="mqttzHost" taProg="mqttzTA" prn="" ;;
-    esac
+PROPS = {f"p{i}" for i in range(1, 7)}
 
-    # The invisible-transition reduction G of the paper: the three modules of the build together.
-    red="pr IMP-INVISIBLE-REDUCTION . pr TEE-API-CALL-INVISIBLE-REDUCTION . pr INVISIBLE-REDUCTION ."
-    main="load $build"
-    analysis="mod ANALYSIS is pr ANALYSIS-CMD . $red $intRule endm"
-    cmd="set verbose on .\nred modelCheck(scenario($raProg, $taProg, $int),$p) ."
-
-    name=`echo "$1"_"$2""$prn" | tr '-' '_'`
-
-    mf="${4:-$root/results/maude-files}"
-    mkdir -p "$mf"
-    echo -e "$main\n$analysis\n$cmd\n" > "$mf/$name.maude"
-    if [ "$verbose" = true ]; then echo "write a maude file at $mf/$name.maude"; fi
-
-    of="${5:-$root/results/logs}"
-    mkdir -p "$of"
-    "$maude_bin" < "$mf/$name.maude" > "$of/$name.txt" 2>&1
-    if [ "$verbose" = true ]; then echo "write an output file at $of/$name.txt"; fi
+# threat -> (intruder of the scenario, extra import of ANALYSIS)
+THREATS = {
+    "oom": ("none", "OOM-THREAT"),
+    "msg": ("initInt", "MSG-THREAT"),
+    "non": ("none", None),
 }
 
-# arg 1: LTL property, 2: threat, 3: TA prog, 4: maude file dir, 5: out file dir, 6: silent
-run "$1" "$2" "$3" "$4" "$5" "$6"
+# The invisible-transition reduction G of the paper: the three modules of the build together.
+REDUCTION = [
+    "IMP-INVISIBLE-REDUCTION",
+    "TEE-API-CALL-INVISIBLE-REDUCTION",
+    "INVISIBLE-REDUCTION",
+]
+
+
+def maude_bin() -> str:
+    if os.environ.get("MAUDE_BIN"):
+        return os.environ["MAUDE_BIN"]
+    try:
+        for line in (ROOT / "config.mk").read_text().splitlines():
+            m = re.match(r"MAUDE\s*:?=\s*(.*)", line)
+            if m and m.group(1).strip():
+                return m.group(1).strip()
+    except OSError:
+        pass
+    return "maude"
+
+
+def maude_file(prop: str, threat: str, patch: bool) -> str:
+    intruder, threat_mod = THREATS[threat]
+    ra, ta = ("mqttzHostPatched", "mqttzTaPatched") if patch else ("mqttzHost", "mqttzTA")
+    imports = ["ANALYSIS-CMD", *REDUCTION] + ([threat_mod] if threat_mod else [])
+    lines = [f"load {BUILD}", "", "mod ANALYSIS is"]
+    lines += [f"    pr {m} ." for m in imports]
+    lines += [
+        "endm",
+        "",
+        "set verbose on .",
+        f"red modelCheck(scenario({ra}, {ta}, {intruder}), {prop}) .",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def run(prop, threat, patch_arg="", maude_dir="", log_dir="", silent_arg=""):
+    verbose = silent_arg != "-silent"
+    if prop not in PROPS:
+        print("error: wrong property")
+        sys.exit(65)
+    if threat not in THREATS:
+        print("error: wrong threat")
+        sys.exit(65)
+    patch = patch_arg == "-patch"
+
+    name = f"{prop}_{threat}{'_patch' if patch else ''}".replace("-", "_")
+
+    mf = Path(maude_dir or CASE / "output" / "maude-files")
+    mf.mkdir(parents=True, exist_ok=True)
+    mpath = mf / f"{name}.maude"
+    mpath.write_text(maude_file(prop, threat, patch))
+    if verbose:
+        print(f"write a maude file at {mpath}")
+
+    of = Path(log_dir or CASE / "output" / "logs")
+    of.mkdir(parents=True, exist_ok=True)
+    opath = of / f"{name}.txt"
+    with open(mpath) as fin, open(opath, "w") as fout:
+        subprocess.run([maude_bin()], stdin=fin, stdout=fout, stderr=subprocess.STDOUT)
+    if verbose:
+        print(f"write an output file at {opath}")
+
+
+def main(argv):
+    if not BUILD.is_file():
+        print(f"error: {BUILD} not found; run make model-checking in mqttz/ first")
+        sys.exit(66)
+    if len(argv) < 2:
+        print(__doc__.strip())
+        sys.exit(64)
+    # arg 1: LTL property, 2: threat, 3: TA prog, 4: maude file dir, 5: out file dir, 6: silent
+    args = (argv + [""] * 6)[:6]
+    run(*args)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

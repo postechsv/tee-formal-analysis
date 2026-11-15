@@ -1,0 +1,119 @@
+Modeling changes of the MQT-TZ RA (hot_cache/host/main.c of mqttz/optee-apps, as published), applied
+before tools/lang/preprocess.py preprocesses it.  The model keeps payload_reencryption, the call of
+the TA; main.imp is the entry point of the model in place of main, parse_arguments and the
+benchmark loop.
+
+1. The TA runs on the memory of the RA (the shared memory of the spec), so the RA passes its
+   clients as they are: params[0] is the origin client and params[1] the destination client, each
+   a pointer to its mqttz_client.  Upstream copies the fields of a client into one buffer
+   (id | iv | data), as "the internal structure is lost in the REE -> TEE communication", and the
+   TA finds them by offsets; in the model a field of the struct is the part of the buffer at its
+   offset.  The TA writes the result through dest->data.
+2. The timing (params[2], parsed with strtok afterwards) and the benchmark values (params[3]:
+   key_mode and first) are left out, as in the TA (model.patch of the TA, 1 and 5).  So are the
+   session context (ctx: the session is passed as it is), the buffer sizes and the logging.
+3. The return code.  TEEC_InvokeCommand returns TEE_ERROR_TARGET_DEAD when the TA panics, and else
+   the return code of the TA.  The model has the two apart: the TA writes its code to its output
+   parameter, which the model passes as the location of ta_res (see the [ra.host] table), and the
+   call returns success or target-dead.  So res is the code of the TA after a successful call.
+
+--- a/main.c
++++ b/main.c
+@@ -278,86 +278,27 @@
+ }
+ 
+ 
+-TEEC_Result payload_reencryption(struct test_ctx *ctx, mqttz_client *origin,
+-        mqttz_client *dest, mqttz_times *times)
++TEEC_Result payload_reencryption(TEEC_Session sess, mqttz_client *origin,
++        mqttz_client *dest)
+ {
+     // Dummy
+     TEEC_Operation op;
+     uint32_t ori;
+     TEEC_Result res;
++    TEE_Result ta_res;
+ 
+     memset(&op, 0, sizeof op);
+-    //if (times->benchmark)
+-    //{
+     op.paramTypes = TEEC_PARAM_TYPES(
+             TEEC_MEMREF_TEMP_INPUT,
+             TEEC_MEMREF_TEMP_INOUT,
+-            TEEC_MEMREF_TEMP_INOUT,
+-            TEEC_VALUE_INPUT);
+-    //}
+-    //else
+-    //{
+-        /*
+-        op.paramTypes = TEEC_PARAM_TYPES(
+-                TEEC_MEMREF_TEMP_INPUT,
+-                TEEC_MEMREF_TEMP_INOUT,
+-                TEEC_NONE,
+-                TEEC_NONE);
+-    }*/
+-    
+-    // We need to deconstruct the struct the internal structure is lost
+-    // in the REE -> TEE communication.
+-    size_t ori_size = strlen(origin->cli_id) + strlen(origin->iv)
+-            + strlen(origin->data);
+-    char *tmp_ori = malloc(ori_size + 1);
+-    memset(tmp_ori, '\0', ori_size + 1);
+-    strcpy(tmp_ori, origin->cli_id);
+-    strcat(tmp_ori, origin->iv);
+-    strcat(tmp_ori, origin->data);
+-    tmp_ori[ori_size] = '\0'; 
+-    size_t dest_size = strlen(dest->cli_id) + AES_IV_SIZE + MQTTZ_MAX_MSG_SIZE;
+-    char *tmp_dest = malloc(dest_size + 1);
+-    memset(tmp_dest, '\0', dest_size + 1);
+-    strcpy(tmp_dest, dest->cli_id);
+-    op.params[0].tmpref.buffer = tmp_ori;
+-    op.params[0].tmpref.size = ori_size;
+-    op.params[1].tmpref.buffer = tmp_dest;
+-    op.params[1].tmpref.size = dest_size;
+-    op.params[2].tmpref.buffer = malloc(sizeof(char) * 100);
+-    op.params[2].tmpref.size = 100;
+-    op.params[3].value.a = times->key_mode;
+-    op.params[3].value.b = times->first;
+-    // TODO in value.b include if first or not
+-    /*
+-    printf("Invokation with this params: \n%s\n%s\n%s\n%i\n",
+-            op.params[0].tmpref.buffer, op.params[1].tmpref.buffer,
+-            op.params[2].tmpref.buffer, op.params[3].value.a);
+-    */
+-    res = TEEC_InvokeCommand(&ctx->sess, TA_REENCRYPT, &op, &ori);
+-    // Results are stored in tmp_dest
+-    const char deli[] = ",";
+-    char *token;
+-    printf("Times: %s\n", op.params[2].tmpref.buffer);
+-    token = strtok(op.params[2].tmpref.buffer, deli);
+-    times->t_ret_dec_key = (struct timeval){0, atoi(token) * 1000};
+-    token = strtok(NULL, deli);
+-    times->t_enc = (struct timeval){0, atoi(token) * 1000};
+-    token = strtok(NULL, deli);
+-    times->t_ret_enc_key = (struct timeval){0, atoi(token) * 1000};
+-    token = strtok(NULL, deli);
+-    times->t_dec = (struct timeval){0, atoi(token) * 1000};
+-    printf("Results: %s\n", tmp_dest);
+-    /*
+-    switch(res)
+-    {
+-        case TEEC_SUCCESS:
+-            printf("Reencryption finished succesfully!\n");
+-            break;
+-        default:
+-            printf("Failed!\n");
+-    }*/
+-    free(tmp_ori);
+-    free(tmp_dest);
++            TEEC_NONE,
++            TEEC_NONE);
++    op.params[0].tmpref.buffer = origin;
++    op.params[1].tmpref.buffer = dest;
++    res = TEEC_InvokeCommand(&sess, TA_REENCRYPT, &op, &ori);
++    // Results are stored in dest
++    if (res == TEEC_SUCCESS)
++        res = ta_res;
+     return res;
+ }
+ 

@@ -1,13 +1,19 @@
-    void main (int command, int sessAlgo, int sessMode, int sessKeySize, TEE-OperationHandle sessOpHandle, TEE-ObjectHandle sessKeyHandle, char oriCliId, char oriCliIv, char oriCliData, char destCliId, TEE-Result & ret, char & destCliData) {
+    struct MqttzClient {
+      char * cliId ;
+      char * iv ;
+      char * data ;
+    } ;
+
+    void main (int command, (struct MqttzClient) * origin, (struct MqttzClient) * dest, TEE-Result & ret) {
       struct AesCipher session ;
-      session . algo := sessAlgo ;
-      session . mode := sessMode ;
-      session . keySize := sessKeySize ;
-      session . opHandle := sessOpHandle ;
-      session . keyHandle := sessKeyHandle ;
+      session . algo := # anyAlgo ;
+      session . mode := # anyMode ;
+      session . keySize := # anyKeySize ;
+      session . opHandle := # null ;
+      session . keyHandle := # null ;
 
       if (command == # TA-REENCRYPT) {
-        ret := payloadReencryption(addr(session), addr(oriCliId), addr(oriCliIv), addr(oriCliData), addr(destCliId), addr(destCliData)) ;
+        ret := payloadReencryption(addr(session), origin -> cliId, origin -> iv, origin -> data, dest -> cliId, dest -> data) ;
       } else {
         ret := # errorNotSupported ;
       }

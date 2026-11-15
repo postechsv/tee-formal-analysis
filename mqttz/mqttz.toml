@@ -1,18 +1,77 @@
-# MQT-TZ case study: what the analyzed system is.  How it is analyzed (plain model checking, DMC,
-# maude2lean) is chosen when it is built, not here.
+# MQT-TZ case study.  [spec] and [ta.*] say what the analyzed system is; every other top-level
+# table is an analysis, which says how it is analyzed ([model-checking] below).  make <analysis>
+# (tools/build/tee-build.py) builds an analysis from this file, core/ and the spec into
+# models/<analysis>/.
 
-# Rule conditions dropped for the analysis (tools/build/drop-condition.py).  The spec follows the
-# rules printed in the paper: a TA-side rule fires only when the status of the TA is normal, so a TA
-# whose memory is exhausted (the out-of-memory threat, threats/) stops at its next step.  The paper
-# artifact checks the status only in the functions that allocate memory, so its TA goes on after a
-# memory error and only an allocation fails.  Here `status : normal` is removed from the left-hand
-# side of the TA-side rules (a syntactic change): they fire in any status, panic included, which
+# The specification: a revision of tee-formal-spec, fetched into build/spec/ and built with its
+# Makefile (a branch or a tag is fetched again at every build; a commit is fixed).  Every API
+# feature group of the spec (its features.mk) is on unless [spec.features] turns it off
+# (e.g. CRYPTO = 0).
+[spec]
+repo = "https://github.com/kkw423/tee-formal-spec"
+rev  = "88337ad8fd38b3e49025536917b41961be1b8209"   # branch standalone-build
+
+
+# The broker TA, preprocessed from the upstream C source by tools/lang/preprocess.py (see its docstring).
+[ta.broker]
+source    = "core/ta/hot_cache_ta.c"   # MQT-TZ, as published
+patches   = ["core/ta/model.patch"]    # the modeling changes of the C code (see the patch)
+functions = ["payload_reencryption"]   # and the functions it calls
+structs   = ["aes_cipher"]
+main      = "core/ta/main.imp"         # the dispatcher of the model (RA interface)
+template  = "core/ta/template.maude"
+output    = "broker-ta.maude"
+
+# 포인터 loc - 논문 참고
+# 과거 버전에서 Standard를 벗어나는 상황이 있었던 것 같은데 못 고치고 놔둔 상황
+
+
+[ta.broker.programs]
+mqttzTA        = []
+mqttzTaPatched = ["core/ta/fix.patch"] # code-level patch: a failed alloc_resources is out of memory
+
+# The RA of the broker, preprocessed from the upstream host the same way.  The model keeps the call of
+# the TA (payload_reencryption); main.imp is its entry point, which the broker runs for a message.
+[ra.host]
+source     = "core/ra/main.c"           # hot_cache/host/main.c of mqttz/optee-apps, as published
+patches    = ["core/ra/model.patch"]    # the modeling changes of the C code (see the patch)
+functions  = ["payload_reencryption"]
+structs    = ["mqttz_client"]
+main       = "core/ra/main.imp"         # the entry point of the model (the broker interface)
+template   = "core/ra/template.maude"
+output     = "broker-ra.maude"
+drop-calls = ["memset"]
+drop-vars  = ["payload_reencryption.ori"]   # the return origin is not modeled
+# TEEC_InvokeCommand: the TA function that serves the command, and the variable that gets the return
+# code of the TA (ra/model.patch, 3)
+invoke     = { entry = "main", ta-result = "ta_res" }
+
+[ra.host.programs]
+mqttzHost        = []
+mqttzHostPatched = ["core/ra/fix.patch"] # code-level patch: a failed re-encryption is discarded
+
+# ------------------------------------------------------------------------------------- analyses
+
+# Model checking of the MQT-TZ LTL properties (core/properties/) under the threats of core/threats/,
+# with the invisible-transition reduction of the paper: Table 2 and Table 3 (scripts/).  An analysis
+# table has mode (plain | dmc | m2l: how the spec is built) and the transforms of the spec build:
+# drop-class-attribute, ghost and invisible (without invisible, there is no reduction).
+[model-checking]
+mode = "plain"                         # plain | dmc | m2l: how the spec is built
+
+# Class attributes dropped from rule left-hand sides for the analysis
+# (tools/build/drop-class-attribute.py).  The spec follows the rules printed in the paper: a TA-side
+# rule fires only when the status of the TA is normal, so a TA whose memory is exhausted (the
+# out-of-memory threat, core/threats/) stops at its next step.  The paper artifact checks the
+# status only in the functions that allocate memory, so its TA goes on after a memory error and
+# only an allocation fails.  Here `status : normal` is removed from the left-hand side of the
+# TA-side rules (a syntactic change): they fire in any status, panic included, which
 # over-approximates the TA.
-[drop-rule-condition]
-class     = "TAKernel"                 # and its subclass TrustedApp
-condition = "status : normal"
-rules     = ["*"]
-except    = [                          # the functions that allocate memory keep the condition
+[model-checking.drop-class-attribute]
+class          = "TAKernel"            # and its subclass TrustedApp
+attribute      = "status : normal"
+affected-rules = ["*"]
+excluded-rules = [                     # the functions that allocate memory keep the condition
   "allocate-transient-*",
   "alloc-oper-*",
   "alloc-enumerator-*",
@@ -21,10 +80,10 @@ except    = [                          # the functions that allocate memory keep
 ]
 
 
-# Ghost state read by the LTL propositions (properties/propositions.maude).
+# Ghost state read by the LTL propositions (core/properties/propositions.maude).
 
 # running: the TA serves a request, from its start to its finish or to the answer of a panicked TA.
-[ghost]
+[model-checking.ghost]
 var           = "running"
 class         = "TrustedApp"
 initial-value = false
@@ -33,10 +92,10 @@ false-after   = ["handle-invoke-ta-finish", "handle-session-req-finish",
                  "handle-session-req-panic", "return-smc-request-panic"]
 
 
-# The invisible-transition reduction (make mqttz INVISIBLE=1, tools/build/gen-invisible.py): the rules
+# The invisible-transition reduction (tools/build/gen-invisible.py): the rules
 # listed here become equations.  They follow Section 8.1 of the paper: G = G1 + G2 + G3, rules that
 # affect a single object and do not change the value of a proposition of the properties
-# (properties/properties.maude); a listed rule must not update a ghost attribute above.
+# (core/properties/properties.maude); a listed rule must not update a ghost attribute above.
 #   G1: the start rules (api-call init) and finish rules (api-call final) of the TEE API functions
 #       on the TA object alone, except those that panic the TA.  Not here: the exec-stage and
 #       handle-side rules, rules on several objects, and the TEE Client API rules of the RA
@@ -44,7 +103,7 @@ false-after   = ["handle-invoke-ta-finish", "handle-session-req-finish",
 #   G2: the K rules (imp.maude) except loops (while) and function calls (fCall, fExec, bindV,
 #       bindR, bindS, fRetn, fQuit).
 #   G3: the rules by which a TA calls a TEE API function.
-[invisible]
+[model-checking.invisible]
 rules = [
   # G2
   "lookup",
@@ -200,21 +259,3 @@ rules = [
   "derive-key-success",
   "generate-random-success",
 ]
-
-# The broker TA, translated from the upstream C source by tools/ta2imp/ta2imp.py (see its docstring).
-[ta.broker]
-source    = "ta/hot_cache_ta.c"        # MQT-TZ, as published
-patches   = ["ta/model.patch"]         # the modeling changes of the C code (see the patch)
-functions = ["payload_reencryption"]   # and the functions it calls
-structs   = ["aes_cipher"]
-main      = "ta/main.imp"              # the dispatcher of the model (RA interface), in TEE-IMP
-template  = "ta/template.maude"
-output    = "broker-ta.maude"
-
-# 포인터 loc - 논문 참고
-# Standard를 벗어나는 상황이 있었던 것 같은데 못 고치고 놔둔 상황
-
-
-[ta.broker.programs]
-mqttzTA        = []
-mqttzTaPatched = ["ta/fix.patch"]      # code-level patch: a failed alloc_resources is out of memory

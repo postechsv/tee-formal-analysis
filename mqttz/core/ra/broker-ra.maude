@@ -1,6 +1,12 @@
---- This file defines the MQT-TZ RA program and its behaviors.
+--- This file defines the behaviors of the MQT-TZ RA.  Its programs (mqttzHost, mqttzHostPatched)
+--- are preprocessed from the upstream host (ra/main.c) by tools/lang/preprocess.py, from the
+--- [ra.host] table of mqttz.toml, into models/<analysis>/ra/broker-ra.maude.
 
-mod MQTTZ-RA-PROGRAM is
+--- This module declares what the programs of the RA and of the TA share: the client struct, the
+--- mqttz_client of the RA, which the TA reads and writes through its memory references, and the
+--- values the model puts in place of what it does not have.
+
+mod MQTTZ-CLIENT-DECL is
   pr TEE-BEHAVIOR .
   pr TEE-IMP-BEHAVIOR .
   pr MQTTZ-PROGRAM-DECL .
@@ -8,90 +14,18 @@ mod MQTTZ-RA-PROGRAM is
   pr MQTTZ-CRYPTO-KEY-VALUE .
   pr MQTTZ-CONSTANTS .
 
+  op MqttzClient : -> ImpType [ctor] .
+  --- The session context of the TA before alloc_resources sets it (TEE_Malloc fills it with zero).
   op anyAlgo : -> Algorithm [ctor] .
   op anyMode : -> Mode [ctor] .
   op anyKeySize : -> Nat [ctor] .
   op anyData : -> Data [ctor] .
   --- discarded: the data the patched RA returns when the TA fails, so that the message is
-  --- dropped (the 404 of the original artifact; Fig. 21, discardMsg).
+  --- dropped (the 404 of the original artifact; Fig. 21, discardMsg).  DISCARDED is its name in
+  --- the C source of the RA (ra/fix.patch).
   op discarded : -> Data [ctor] .
-  op AesCipher : -> ImpType [ctor] .
-
-  --- The original MQT-TZ RA program.
-
-  op mqttzHost : -> Program [ctor] .
-  eq mqttzHost =
-    struct AesCipher {
-      int algo ;
-      int mode ;
-      int keySize ;
-      TEE-OperationHandle opHandle ;
-      TEE-ObjectHandle keyHandle ;
-    } ;
-
-    void main(char oriCliId , char oriCliData , char destCliId , TEE-Result & ret , char & destCliData) {
-      TEEC-Session sess ;
-      --- TeecOpenSession(# taInst(1) , 'ret , 'sess) ;
-      sess := # sessionId(0) ;
-
-      struct AesCipher sessionContext ;
-      sessionContext . algo := # anyAlgo ;
-      sessionContext . mode := # anyMode ;
-      sessionContext . keySize := # anyKeySize ;
-      sessionContext . opHandle := # null ;
-      sessionContext . keyHandle := # null ;
-      char oriCliIv ; oriCliIv := # randomData ;
-      int cmd ; cmd := # TA-REENCRYPT ;
-
-      ret := # errorGeneric ; destCliData := # anyData ;
-      teecInvokeCommand(sess, # main, (cmd, sessionContext . algo, sessionContext . mode,
-                 sessionContext . keySize, sessionContext . opHandle, sessionContext . keyHandle,
-                 oriCliId, oriCliIv, oriCliData, destCliId, addr(ret), addr(destCliData))) ;
-
-      --- var 'ret2 ;
-      --- TeecCloseSession('sess , 'ret2) ;
-    }
-  .
-
-  --- The MQT-TZ program with a code-level patch.
-
-  op mqttzHostPatched : -> Program [ctor] .
-  eq mqttzHostPatched =
-    struct AesCipher {
-      int algo ;
-      int mode ;
-      int keySize ;
-      TEE-OperationHandle opHandle ;
-      TEE-ObjectHandle keyHandle ;
-    } ;
-
-    void main(char oriCliId , char oriCliData , char destCliId , TEE-Result & ret , char & destCliData) {
-      TEEC-Session sess ;
-      --- TeecOpenSession(# taInst(1) , 'ret , 'sess) ;
-      sess := # sessionId(0) ;
-
-      struct AesCipher sessionContext ;
-      sessionContext . algo := # anyAlgo ;
-      sessionContext . mode := # anyMode ;
-      sessionContext . keySize := # anyKeySize ;
-      sessionContext . opHandle := # null ;
-      sessionContext . keyHandle := # null ;
-      char oriCliIv ; oriCliIv := # randomData ;
-      int cmd ; cmd := # TA-REENCRYPT ;
-
-      ret := # errorGeneric ; destCliData := # anyData ;
-      teecInvokeCommand(sess, # main, (cmd, sessionContext . algo, sessionContext . mode,
-                 sessionContext . keySize, sessionContext . opHandle, sessionContext . keyHandle,
-                 oriCliId, oriCliIv, oriCliData, destCliId, addr(ret), addr(destCliData))) ;
-
-      if (ret == # errorOutOfMemory || ret == # errorTargetDead) {
-        destCliData := # discarded ;
-      }
-
-      --- var 'ret2 ;
-      --- TeecCloseSession('sess , 'ret2) ;
-    }
-  .
+  op DISCARDED : -> Data .
+  eq DISCARDED = discarded .
 endm
 
 --- This module defines the behaviors of the MQT-TZ RA.
@@ -99,7 +33,7 @@ endm
 omod MQTTZ-RA-BEHAVIOR is
   --- pr MQTTZ-BROKER .
   pr MQTTZ-RE-ENC-REQ .
-  pr MQTTZ-RA-PROGRAM .
+  pr MQTTZ-CLIENT-DECL .
 
   --- vars BI RI : Oid .
   --- vars MSG MSG' : MqttzMsg .
@@ -128,6 +62,7 @@ omod MQTTZ-RA-BEHAVIOR is
   var RES : ArgList .
   var DATA : Data .
   var MSG : Msg .
+  var MEM : Map{Nat,Value?} .
 
 
   op fileName : Oid -> FileName [ctor] .
@@ -194,24 +129,32 @@ omod MQTTZ-RA-BEHAVIOR is
   ceq normalFinish((V # DATA)) = true if DATA =/= discarded .
   eq normalFinish(VL) = false [owise] .
 
+  --- The memory of the RA when its program starts: the outputs of main, ret and destCliData, are
+  --- the objects at the locations 0 and 1, with the values errorGeneric and anyData.  outputs(KS)
+  --- are their values when the program has finished.
+  op raMemory : -> CStore .
+  eq raMemory = cstore((0 |-> # errorGeneric) ; (1 |-> # anyData), 2, empty) .
+  op outputs : KConfig -> ArgList .
+  eq outputs(store((0 |-> V1) ; (1 |-> V2) ; MEM) KS) = V1 V2 .
+
 --- The following three rules define how the MQT-TZ RA program is executed and its results are returned.
 
   rl [accept-re-enc-req]:
     < RI : RichApp | proc : none, prog : P > reqRA(reEncReq(DATA, PUB, SUB, MSG, N))
     => 
-    < RI : RichApp | proc : mkConf(P, main, (# fileName(PUB) # DATA # fileName(SUB) # errorGeneric # anyData)) > reqRA(reEncReq(DATA, PUB, SUB, MSG, N)) .
+    < RI : RichApp | proc : mkConf(P, main, (# fileName(PUB) # DATA # fileName(SUB) loc(0) loc(1)), raMemory) > reqRA(reEncReq(DATA, PUB, SUB, MSG, N)) .
 
   crl [return-re-enc-req]:
     < RI : RichApp | proc : KS > reqRA(reEncReq(DATA, PUB, SUB, MSG, N))
     => 
     < RI : RichApp | proc : none > retRA(reEncReq(extractData(RES), PUB, SUB, MSG, N))
-  if finished(KS) /\ RES := getVals((ret , destCliData), KS) /\ normalFinish(RES) .
+  if finished(KS) /\ RES := outputs(KS) /\ normalFinish(RES) .
 
   crl [return-re-enc-req]:
     < RI : RichApp | proc : KS > reqRA(reEncReq(DATA, PUB, SUB, MSG, N))
     => 
     < RI : RichApp | proc : none > ignoreRA(reEncReq(DATA, PUB, SUB, MSG, N))
-  if finished(KS) /\ RES := getVals((ret , destCliData), KS) /\ not normalFinish(RES) .
+  if finished(KS) /\ RES := outputs(KS) /\ not normalFinish(RES) .
 
   --- rl [return-ra-request] :
   ---   waitReqRA(msg DATA from PUB to TOPIC , SUB)

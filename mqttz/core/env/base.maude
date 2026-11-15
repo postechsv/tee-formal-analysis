@@ -234,6 +234,10 @@ mod MQTTZ-PROGRAM-DECL is
 
   op sessionContext : -> Var [ctor] .
   op ret : -> Var [ctor] .
+  --- The clients of a re-encryption (mqttz_client of the RA) and the return code of the TA.
+  op origin : -> Var [ctor] .
+  op dest : -> Var [ctor] .
+  op taRes : -> Var [ctor] .
 
   op main : -> FuncId [ctor] .
 endm

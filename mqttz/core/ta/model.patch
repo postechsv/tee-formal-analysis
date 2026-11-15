@@ -1,12 +1,12 @@
-Modeling changes of the MQT-TZ TA (hot_cache_ta.c as published), applied before tools/ta2imp/ta2imp.py
-translates it.  Everything the model leaves out or changes is here, as C; the [ta.broker] table of
-mqttz.toml only says what to translate.
+Modeling changes of the MQT-TZ TA (hot_cache_ta.c as published), applied before
+tools/lang/preprocess.py preprocesses it.  Everything the model leaves out or changes is here, as C;
+the [ta.broker] table of mqttz.toml only says what to preprocess.
 
 1. get_key: the model analyzes the storage path.  The key is looked up in secure storage under
    cli_id and saved there when it is missing; the in-memory key (key_mode == 0, keyinmem) and the
    copy of the id into my_id are left out, so key_mode goes from the signature and the two calls.
    res and save_key_res are declared here because the model's variable names are declared in
-   MQTTZ-PROGRAM-DECL (env/base.maude) and ta2imp does not declare new ones.
+   MQTTZ-PROGRAM-DECL (env/base.maude) and preprocess.py does not declare new ones.
 2. read_raw_object: the model reads an object whole and has no buffer sizes, so there is no byte
    count to compare with the object size and no short-buffer case; the size parameters of
    read_raw_object and cipher_buffer go.  The sizes passed to the TEE API stay (the model does not
@@ -17,7 +17,11 @@ mqttz.toml only says what to translate.
 4. payload_reencryption takes the parts of its memory references (origin client id, IV and data,
    destination client id and data) as pointers.  TA_InvokeCommandEntryPoint, which the model
    replaces by its dispatcher (ta/main.imp), checks the parameter types, pre-loads the keys
-   (fill_ss) and splits the references.
+   (fill_ss) and splits the references.  In the model a memory reference is the mqttz_client of
+   the RA (ra/model.patch, 1): the dispatcher takes the origin and the destination client, and a
+   part of a reference is the field at its offset (origin -> iv for params[0].memref.buffer +
+   TA_MQTTZ_CLI_ID_SZ).  The session context is the TA's, made as TA_OpenSessionEntryPoint makes
+   it (the handles null).
 5. Output that the model does not have is left out: logging (printf, EMSG), the timing of the
    benchmark (TEE_GetSystemTime, TEE_TIME_SUB and the times written to params[2]), and the IV
    written back to params[1].  The IV of the encryption is the content of a fresh buffer instead of

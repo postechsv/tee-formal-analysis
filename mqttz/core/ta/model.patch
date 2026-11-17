@@ -1,6 +1,6 @@
 Modeling changes of the MQT-TZ TA (hot_cache_ta.c as published), applied before
-tools/lang/preprocess.py preprocesses it.  Everything the model leaves out or changes is here, as C;
-the [ta.broker] table of mqttz.toml only says what to preprocess.
+tools/lang-preprocess.py preprocesses it.  Everything the model leaves out or changes is here, as C;
+the [ta.broker] table of model-checking.toml only says what to preprocess.
 
 1. get_key: the model analyzes the storage path.  The key is looked up in secure storage under
    cli_id and saved there when it is missing; the in-memory key (key_mode == 0, keyinmem) and the
@@ -15,15 +15,17 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
    destination key (TA_AES_MODE_ENCODE).  Upstream calls alloc_resources the other way round, with
    FIXME comments on both calls.
 4. payload_reencryption takes the parts of its memory references (origin client id, IV and data,
-   destination client id and data) as pointers.  TA_InvokeCommandEntryPoint, which the model
-   replaces by its dispatcher (ta/main.imp), checks the parameter types, pre-loads the keys
-   (fill_ss) and splits the references.  In the model a memory reference is the mqttz_client of
-   the RA (ra/model.patch, 1): the dispatcher takes the origin and the destination client, and a
-   part of a reference is the field at its offset (origin -> iv for params[0].memref.buffer +
-   TA_MQTTZ_CLI_ID_SZ).  The session context is the TA's, made as TA_OpenSessionEntryPoint makes
-   it (the handles null).
-5. Output that the model does not have is left out: logging (printf, EMSG), the timing of the
-   benchmark (TEE_GetSystemTime, TEE_TIME_SUB and the times written to params[2]), and the IV
+   destination client id and data) as pointers.  TA_InvokeCommandEntryPoint, the entry point of
+   the model, checks the parameter types (not modeled) and splits the references.  In the model a
+   memory reference is the mqttz_client of the RA (ra/model.patch, 1), declared here: the entry
+   point takes the origin and the destination client, and a part of a reference is the field at
+   its offset (origin -> iv for params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ;
+   [ta.broker.memref.TA_InvokeCommandEntryPoint] of model-checking.toml).  The session context is a local
+   of the entry point, made as TA_OpenSessionEntryPoint makes it (the handles null; alloc_resources
+   sets the other fields before they are read).
+5. Output that the model does not have is left out: logging (printf, EMSG), the benchmark (the
+   pre-loading of the keys, fill_ss for params[3], and TEE_GetSystemTime, TEE_TIME_SUB and the
+   times written to params[2]), and the IV
    written back to params[1].  The IV of the encryption is the content of a fresh buffer instead of
    the copy of upstream's fixed fake_iv.
 6. Memory: TEE_Malloc never fails in the model, so its checks go, and the model frees a buffer when
@@ -33,8 +35,17 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
 
 --- a/hot_cache_ta.c
 +++ b/hot_cache_ta.c
-@@ -52,14 +52,12 @@
+@@ -50,16 +50,21 @@
+     TEE_ObjectHandle key_handle;
+ } aes_cipher;
  
++/* The client of the RA (struct mqttz_client of host/main.c): a memory reference of the model */
++typedef struct mqttz_client {
++    char *cli_id;
++    char *iv;
++    char *data;
++} mqttz_client;
++
  static TEE_Result alloc_resources(void *session, uint32_t mode)
  {
 -    printf("MQTTZ: Started AES Resource Allocation\n");
@@ -48,7 +59,7 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
      switch (mode) {
          case TA_AES_MODE_ENCODE:
              sess->mode = TEE_MODE_ENCRYPT;
-@@ -78,11 +76,9 @@
+@@ -78,11 +83,9 @@
              sess->key_size * 8);
      if (res != TEE_SUCCESS)
      {
@@ -60,7 +71,7 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
      // Free Previous Key Handle
      if (sess->key_handle != TEE_HANDLE_NULL)
          TEE_FreeTransientObject(sess->key_handle);
-@@ -90,37 +86,23 @@
+@@ -90,37 +93,23 @@
              &sess->key_handle);
      if (res != TEE_SUCCESS)
      {
@@ -98,7 +109,7 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
      return res;
  err:
      if (sess->op_handle != TEE_HANDLE_NULL)
-@@ -152,14 +134,12 @@
+@@ -152,14 +141,12 @@
      res = TEE_PopulateTransientObject(sess->key_handle, &attr, 1);
      if (res != TEE_SUCCESS)
      {
@@ -113,7 +124,7 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
          return res;
      }
      return res;
-@@ -180,8 +160,7 @@
+@@ -180,8 +167,7 @@
   * This method reads an object from Secure Storage but is always invoked
   * from within a TA. Hence why we don't check the parameter types.
   */
@@ -123,7 +134,7 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
  {
  	TEE_ObjectHandle object;
  	TEE_ObjectInfo object_info;
-@@ -189,63 +168,47 @@
+@@ -189,63 +175,47 @@
  	uint32_t read_bytes;
      // Check if object is in memory
  	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE,
@@ -194,7 +205,7 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
      obj_data_flag = TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_ACCESS_WRITE
          | TEE_DATA_FLAG_ACCESS_WRITE_META | TEE_DATA_FLAG_OVERWRITE;
      res = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, cli_id,
-@@ -255,60 +218,28 @@
+@@ -255,60 +225,28 @@
      res = TEE_WriteObjectData(object, cli_key, strlen(cli_key));
      if (res != TEE_SUCCESS)
      {
@@ -267,7 +278,7 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
  }
  
  static int fill_ss(int table_size)
-@@ -333,110 +264,60 @@
+@@ -333,110 +271,60 @@
      return 0;
  }
  
@@ -385,7 +396,7 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
      //char *dest_cli_id;
      char *dest_cli_iv;
      //char *dest_cli_data;
-@@ -446,93 +327,55 @@
+@@ -446,93 +334,55 @@
              * (TA_AES_IV_SIZE + 1), 0);
      //dest_cli_data = (char *) TEE_Malloc(sizeof *dest_cli_data 
      //        * (TA_MQTTZ_MAX_MSG_SZ + 1), 0);
@@ -482,25 +493,37 @@ the [ta.broker] table of mqttz.toml only says what to preprocess.
      goto exit;
  exit:
      return res;
-@@ -582,7 +425,20 @@
+@@ -574,17 +424,29 @@
+     TEE_Free(sess);
+ }
+ 
+-TEE_Result TA_InvokeCommandEntryPoint(void __unused *session,
++TEE_Result TA_InvokeCommandEntryPoint(void __unused *sess_ctx,
+ 				      uint32_t command,
+ 				      uint32_t param_types,
+ 				      TEE_Param params[4])
+ {
++	/* The session context, made as TA_OpenSessionEntryPoint makes it */
++	aes_cipher session;
++	session.key_handle = TEE_HANDLE_NULL;
++	session.op_handle = TEE_HANDLE_NULL;
  	switch (command) {
          case TA_REENCRYPT:
-             printf("Aloha?\n");
+-            printf("Aloha?\n");
 -            return payload_reencryption(session, param_types, params);
 +            if (param_types != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
 +                                               TEE_PARAM_TYPE_MEMREF_INOUT,
 +                                               TEE_PARAM_TYPE_MEMREF_INOUT,
 +                                               TEE_PARAM_TYPE_VALUE_INPUT))
 +                return TEE_ERROR_BAD_PARAMETERS;
-+            // Pre-load keys for a fair comparison with the cache
-+            if (params[3].value.b == 1)
-+                fill_ss(TABLE_SIZE);
-+            return payload_reencryption(session,
++            return payload_reencryption(&session,
 +                    (char *) params[0].memref.buffer,
 +                    (char *) params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ,
 +                    (char *) params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ + TA_AES_IV_SIZE,
 +                    (char *) params[1].memref.buffer,
 +                    (char *) params[1].memref.buffer + TA_MQTTZ_CLI_ID_SZ + TA_AES_IV_SIZE);
  	default:
- 		EMSG("Command ID 0x%x is not supported", command);
+-		EMSG("Command ID 0x%x is not supported", command);
  		return TEE_ERROR_NOT_SUPPORTED;
+ 	}
+ }

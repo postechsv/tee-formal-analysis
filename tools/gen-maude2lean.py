@@ -3,7 +3,7 @@
 
 Usage
   Build the DMC tree first (tools/dmc/gen-dmc.py), then:
-      python3 tools/lean/gen-maude2lean.py build/t/.m2l/dmc-src build/t/src --cache-dir build/t/.m2l-cache --check
+      python3 tools/gen-maude2lean.py build/t/.m2l/dmc-src build/t/src --cache-dir build/t/.m2l-cache --check
   Translate to Lean (https://github.com/fadoss/maude2lean):
       cd build/t/src && maude2lean main.maude -o ../lean/TeeSpec.lean
   make NAME=t M2L=1 runs both generators (M2L=1 needs DMC=1); make lean runs maude2lean.
@@ -59,7 +59,7 @@ TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def load_gen_dmc():
-    spec = importlib.util.spec_from_file_location('gen_dmc', os.path.join(TOOLS_DIR, '..', 'dmc', 'gen-dmc.py'))
+    spec = importlib.util.spec_from_file_location('gen_dmc', os.path.join(TOOLS_DIR, 'dmc', 'gen-dmc.py'))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -77,7 +77,6 @@ SORT_TEST_RE = re.compile(
     r"(?<![\w\-'$#%:.])(?P<neg>not(?:\s+|\s*(?P<open>\(\s*)))?"
     r"(?P<var>[A-Za-z][\w\-']*)(?::(?P<vsort>[\w\-']+(?:\{[^{}\s]*\})?))?"
     r"\s+::\s+(?P<sort>[A-Za-z][\w\-']*(?:\{[^{}\s]*\})?)(?P<close>\s*\))?")
-VAR_DECL_RE = re.compile(r'^vars?\s+(.+?)\s*:\s*(\S+)\s*\.$')
 BOOL_RE = re.compile(r"(?<![\w\-'$#%:])(True|False)(?![\w\-'])")
 
 
@@ -97,9 +96,7 @@ def read_tree(src):
     """FileInfo (with units) of every file main.maude loads; the others are copied verbatim."""
     loaded = dmc.loaded_files(src)
     fis = {}
-    for f in sorted(os.listdir(src)):
-        if not f.endswith('.maude'):
-            continue
+    for f in dmc.spec_files(src):
         with open(os.path.join(src, f), encoding='utf-8', newline='') as fh:
             fi = dmc.FileInfo(f, fh.read())
         if f in loaded:
@@ -125,10 +122,9 @@ def index_modules(fis):
                 cur.end = u
                 cur = None
             elif u.kind == 'stmt':
-                m = VAR_DECL_RE.match(u.text)
-                if m:
-                    for v in m.group(1).split():
-                        cur.vars[v] = m.group(2)
+                for names, sort in dmc.var_decls(u.text) or []:
+                    for v in names:
+                        cur.vars[v] = sort
                 cur.stmts.append(u)
     return mods
 
@@ -358,8 +354,7 @@ def main(argv=None):
         text = render_file(fi, new, inserts.get(f, [])) if fi.units else fi.raw
         if args.no_eq:
             text = drop_eq(text, eq_counts)
-        with open(os.path.join(out, f), 'w', encoding='utf-8', newline='') as fh:
-            fh.write(text)
+        dmc.write_file(out, f, text)
 
     manifest = {'counts': counts,
                 'uses': dict((M, sorted(pred_name(S, K) for S, K in ps)) for M, ps in sorted(uses.items())),

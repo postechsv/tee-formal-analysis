@@ -8,8 +8,8 @@ subscribers and broker around them, modeled on top of the TEE formal specificati
 ```
 mqttz/
 ├── Makefile                    make <analysis>: builds models/<analysis>
-├── mqttz.toml                  The system (spec revision, TA preprocessing) and the analyses
-│                               ([model-checking]: dropped attribute, ghost, invisible rules)
+├── model-checking.toml         The analysis: the system (spec revision, TA preprocessing),
+│                               the dropped attribute, ghost and invisible rules
 ├── core/                       The model files written by hand
 │   ├── main.maude              Loads the model files
 │   ├── system.maude            MQT-TZ module: all entity behaviors, the RA and the TA
@@ -17,7 +17,6 @@ mqttz/
 │   │   ├── hot_cache_ta.c      Upstream C source, as published
 │   │   ├── model.patch         Modeling changes to the C code
 │   │   ├── fix.patch           Code-level fix (mqttzTaPatched)
-│   │   ├── main.imp            void main() dispatcher
 │   │   └── template.maude      Template of broker-ta.maude
 │   ├── ra/
 │   │   └── broker-ra.maude     RA programs mqttzHost and mqttzHostPatched
@@ -58,26 +57,27 @@ mqttz/
 
 ## The system
 
-`mqttz.toml` names the revision of the specification (`[spec]`; every API feature group is on) and
+`model-checking.toml` names the revision of the specification (`[spec]`, with the feature groups that the spec selects) and
 the TA.  The TA programs are preprocessed from `core/ta/hot_cache_ta.c`, the C source as
-published, by `tools/lang/preprocess.py` into `models/<analysis>/ta/broker-ta.maude`: `mqttzTA`
+published, by `tools/lang-preprocess.py` into `models/<analysis>/ta/broker-ta.maude`: `mqttzTA`
 from the source with `core/ta/model.patch` (the modeling changes of the C code), and
 `mqttzTaPatched` with `core/ta/fix.patch` on top (the code-level fix).  What the model leaves out
 or changes in the C code (logging, timing, buffer sizes, the split of the TEE_Param memory
 references, ...) is in `core/ta/model.patch`; the `[ta.broker]` table of the manifest only says
-what to preprocess.
+what to preprocess.  The entry point of the model, `void main`, is `TA_InvokeCommandEntryPoint`,
+preprocessed like the other functions.
 
 ## Model checking
 
-`[model-checking]` of `mqttz.toml` is the analysis of the paper: the LTL properties p1–p6 of
+`model-checking.toml` is the analysis of the paper: the LTL properties p1–p6 of
 `core/properties/` under no threat, the out-of-memory threat and the message intruder.  It builds
 the specification with
 
-- `[model-checking.drop-class-attribute]`: `status : normal` dropped from the left-hand side of the TA-side rules,
+- `[drop-class-attribute]`: `status : normal` dropped from the left-hand side of the TA-side rules,
   so that the TA goes on after a memory error of the out-of-memory threat, as in the paper
   artifact;
-- `[model-checking.ghost]`: the ghost attribute `running` of the TA, which the LTL propositions read;
-- `[model-checking.invisible]`: the invisible-transition reduction of Section 8.1 of the paper.
+- `[ghost]`: the ghost attribute `running` of the TA, which the LTL propositions read;
+- `[invisible]`: the invisible-transition reduction of Section 8.1 of the paper.
 
 ```bash
 make model-checking                     # models/model-checking

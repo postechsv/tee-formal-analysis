@@ -1,37 +1,62 @@
-# MQT-TZ case study.  [spec] and [ta.*] say what the analyzed system is; every other top-level
-# table is an analysis, which says how it is analyzed ([model-checking] below).  make <analysis>
-# (tools/build/tee-build.py) builds an analysis from this file, core/ and the spec into
-# models/<analysis>/.
+# MQT-TZ: the model checking of the paper.
+# An analysis file (tools/build/tee-build.py), standalone: the analyzed system ([spec], [ta.*],
+# [ra.*]) and how it is analyzed (mode, output, and the transforms of the spec build below).
+# make model-checking builds it from this file, core/ and the spec into the output directory.
+#
+# Model checking of the MQT-TZ LTL properties (core/properties/) under the threats of core/threats/,
+# with the invisible-transition reduction of the paper: Table 2 and Table 3 (scripts/).  The analysis
+# has mode (plain | dmc | m2l: how the spec is built) and the transforms of the spec build:
+# drop-class-attribute, ghost and invisible (without invisible, there is no reduction).
+mode = "plain"                         # plain | dmc | m2l: how the spec is built
+output = "models/model-checking"       # the directory of the built model
+
+# Rules of the spec that this analysis leaves out (tools/build/drop-rules.py).  As in the paper
+# artifact, a panicked TA blocks its client: the request that was being served gets
+# TEE_ERROR_TARGET_DEAD (return-smc-request-panic), but a later request through the session of the
+# panicked instance is never answered, so the RA and the broker stop.  The spec answers such a
+# request at once with TEE_ERROR_TARGET_DEAD (handle-smc-request-target-dead, as GP does), after
+# which the original RA forwards a message the TA never wrote, and P1 holds under the message
+# intruder; the paper reports P1 violated there (Table 10).
+drop-rules = ["handle-smc-request-target-dead"]
 
 # The specification: a revision of tee-formal-spec, fetched into build/spec/ and built with its
-# Makefile (a branch or a tag is fetched again at every build; a commit is fixed).  Every API
-# feature group of the spec (its features.mk) is on unless [spec.features] turns it off
+# Makefile (a branch or a tag is fetched again at every build; a commit is fixed).  The spec
+# selects its feature groups (the defaults of its features.mk); [spec.features] overrides them
 # (e.g. CRYPTO = 0).
 [spec]
-repo = "https://github.com/kkw423/tee-formal-spec"
-rev  = "88337ad8fd38b3e49025536917b41961be1b8209"   # branch standalone-build
+repo = "https://github.com/postechsv/tee-formal-spec"
+rev  = "a4bf510a13f8be0479e3bdb744851456747b9363"   # main, PR #12 merged
 
 
-# The broker TA, preprocessed from the upstream C source by tools/lang/preprocess.py (see its docstring).
+# The broker TA, preprocessed from the upstream C source by tools/lang-preprocess.py (see its docstring).
 [ta.broker]
 source    = "core/ta/hot_cache_ta.c"   # MQT-TZ, as published
 patches   = ["core/ta/model.patch"]    # the modeling changes of the C code (see the patch)
 functions = ["payload_reencryption"]   # and the functions it calls
-structs   = ["aes_cipher"]
-main      = "core/ta/main.imp"         # the dispatcher of the model (RA interface)
+structs   = ["aes_cipher", "mqttz_client"]
+entry     = "TA_InvokeCommandEntryPoint"   # the entry point of the model (RA interface)
 template  = "core/ta/template.maude"
 output    = "broker-ta.maude"
+drop-vars = ["TA_InvokeCommandEntryPoint.param_types"]   # the parameter types are not modeled
 
-# 포인터 loc - 논문 참고
-# 과거 버전에서 Standard를 벗어나는 상황이 있었던 것 같은데 못 고치고 놔둔 상황
 
+# The memory references of the entry point: a reference is the mqttz_client of the RA, and a part
+# of it is the field at its offset (model.patch, 4).
+[ta.broker.memref.TA_InvokeCommandEntryPoint]
+signature = "int command, (struct MqttzClient) * origin, (struct MqttzClient) * dest"
+"params[0].memref.buffer" = "origin -> cliId"
+"params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ" = "origin -> iv"
+"params[0].memref.buffer + TA_MQTTZ_CLI_ID_SZ + TA_AES_IV_SIZE" = "origin -> data"
+"params[1].memref.buffer" = "dest -> cliId"
+"params[1].memref.buffer + TA_MQTTZ_CLI_ID_SZ + TA_AES_IV_SIZE" = "dest -> data"
 
 [ta.broker.programs]
 mqttzTA        = []
 mqttzTaPatched = ["core/ta/fix.patch"] # code-level patch: a failed alloc_resources is out of memory
 
 # The RA of the broker, preprocessed from the upstream host the same way.  The model keeps the call of
-# the TA (payload_reencryption); main.imp is its entry point, which the broker runs for a message.
+# the TA (payload_reencryption); core/ra/main.imp is its entry point, which the broker runs for a
+# message.
 [ra.host]
 source     = "core/ra/main.c"           # hot_cache/host/main.c of mqttz/optee-apps, as published
 patches    = ["core/ra/model.patch"]    # the modeling changes of the C code (see the patch)
@@ -50,15 +75,6 @@ invoke     = { entry = "main", ta-result = "ta_res" }
 mqttzHost        = []
 mqttzHostPatched = ["core/ra/fix.patch"] # code-level patch: a failed re-encryption is discarded
 
-# ------------------------------------------------------------------------------------- analyses
-
-# Model checking of the MQT-TZ LTL properties (core/properties/) under the threats of core/threats/,
-# with the invisible-transition reduction of the paper: Table 2 and Table 3 (scripts/).  An analysis
-# table has mode (plain | dmc | m2l: how the spec is built) and the transforms of the spec build:
-# drop-class-attribute, ghost and invisible (without invisible, there is no reduction).
-[model-checking]
-mode = "plain"                         # plain | dmc | m2l: how the spec is built
-
 # Class attributes dropped from rule left-hand sides for the analysis
 # (tools/build/drop-class-attribute.py).  The spec follows the rules printed in the paper: a TA-side
 # rule fires only when the status of the TA is normal, so a TA whose memory is exhausted (the
@@ -67,7 +83,7 @@ mode = "plain"                         # plain | dmc | m2l: how the spec is buil
 # only an allocation fails.  Here `status : normal` is removed from the left-hand side of the
 # TA-side rules (a syntactic change): they fire in any status, panic included, which
 # over-approximates the TA.
-[model-checking.drop-class-attribute]
+[drop-class-attribute]
 class          = "TAKernel"            # and its subclass TrustedApp
 attribute      = "status : normal"
 affected-rules = ["*"]
@@ -83,13 +99,16 @@ excluded-rules = [                     # the functions that allocate memory keep
 # Ghost state read by the LTL propositions (core/properties/propositions.maude).
 
 # running: the TA serves a request, from its start to its finish or to the answer of a panicked TA.
-[model-checking.ghost]
+[ghost]
 var           = "running"
 class         = "TrustedApp"
 initial-value = false
-true-after    = ["handle-invoke-ta", "handle-session-req"]
-false-after   = ["handle-invoke-ta-finish", "handle-session-req-finish",
-                 "handle-session-req-panic", "return-smc-request-panic"]
+# A TA serves the requests of its RA and TA clients alike by handle-invoke-ta and
+# handle-invoke-ta-finish.  A panicked TA stays running: the panic keeps it from finishing (P4).
+# return-session-request-panic (the same for a TA client) has two TrustedApp objects on its
+# left-hand side, which ghost.py does not support; the TA of MQT-TZ has no TA client.
+true-after    = ["handle-invoke-ta"]
+false-after   = ["handle-invoke-ta-finish"]
 
 
 # The invisible-transition reduction (tools/build/gen-invisible.py): the rules
@@ -100,10 +119,10 @@ false-after   = ["handle-invoke-ta-finish", "handle-session-req-finish",
 #       on the TA object alone, except those that panic the TA.  Not here: the exec-stage and
 #       handle-side rules, rules on several objects, and the TEE Client API rules of the RA
 #       (tee-client.maude), as the paper argues termination and confluence for TAs only.
-#   G2: the K rules (imp.maude) except loops (while) and function calls (fCall, fExec, bindV,
+#   G2: the K rules (lang/c/semantics.maude) except loops (while) and function calls (fCall, fExec, bindV,
 #       bindR, bindS, fRetn, fQuit).
 #   G3: the rules by which a TA calls a TEE API function.
-[model-checking.invisible]
+[invisible]
 rules = [
   # G2
   "lookup",
@@ -130,10 +149,7 @@ rules = [
   "allocObj",
   "malloc",
   "fdecl",
-  "fdecl-lib",
   "sdecl",
-  "assign-list",
-  "assign-list-end",
   # G3
   "tee-api-call",
   "tee-api-call-accept",
@@ -168,7 +184,6 @@ rules = [
   "create-persist-success",
   "create-persist-fail",
   "create-persist-mem-err",
-  "create-persist-mem-err-final",
   "close-and-delete-persistent-subroutine",
   "close-and-delete-persistent-success",
   "close-and-delete-persistent-null-success",

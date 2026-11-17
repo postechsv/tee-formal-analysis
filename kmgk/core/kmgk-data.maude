@@ -1,0 +1,88 @@
+--- Constants of the KMGK programs: the macros and enumerators of the upstream headers that the
+--- preprocessed TAs use (written NAME-WITH-DASHES), shared by the TAs and the RA.
+
+mod KMGK-DATA is
+  pr TEE-BEHAVIOR .
+  pr TEE-C-BEHAVIOR .
+
+  --- gatekeeper_ipc.h: the commands and the errors of the Gatekeeper TA.
+  ops GK-ENROLL GK-VERIFY : -> Nat .
+  eq GK-ENROLL = 0 .
+  eq GK-VERIFY = 1 .
+  ops ERROR-NONE ERROR-INVALID ERROR-RETRY ERROR-UNKNOWN : -> Nat .
+  eq ERROR-NONE = 0 .
+  eq ERROR-INVALID = 1 .
+  eq ERROR-RETRY = 2 .
+  eq ERROR-UNKNOWN = 3 .
+
+  --- ta_gatekeeper.h.
+  ops HANDLE-VERSION HANDLE-VERSION-THROTTLE HANDLE-FLAG-THROTTLE-SECURE : -> Nat .
+  eq HANDLE-VERSION = 2 .
+  eq HANDLE-VERSION-THROTTLE = 2 .
+  eq HANDLE-FLAG-THROTTLE-SECURE = 1 .
+  ops HMAC-SHA256-KEY-SIZE-BYTE HMAC-SHA256-KEY-SIZE-BIT : -> Nat .
+  eq HMAC-SHA256-KEY-SIZE-BYTE = 32 .
+  eq HMAC-SHA256-KEY-SIZE-BIT = 256 .
+  --- TEE_TRUE is TEE_SUCCESS; TEE_FALSE is 1, a value that no TEE API call returns.
+  op TEE-TRUE : -> ReturnCode .
+  eq TEE-TRUE = success .
+  op TEE-FALSE : -> ReturnCode [ctor] .
+
+  --- failure_record.c (see model.patch, 2 and 3).
+  op MAX-FAILURE-RECORDS : -> Nat .
+  eq MAX-FAILURE-RECORDS = 2 .
+  ops FAILURE-TIMEOUT-MS DAY-IN-MS UINT64-MAX : -> Nat .
+  eq FAILURE-TIMEOUT-MS = 30000 .
+  eq DAY-IN-MS = 86400000 .
+  eq UINT64-MAX = 18446744073709551615 .
+
+  --- The secret object of the master key (secret_ID upstream, model.patch, 4) and the size of its
+  --- data, in fragments.
+  op SECRET-ID : -> FileName [ctor] .
+  op SECRET-DATA-SIZE : -> Nat .
+  eq SECRET-DATA-SIZE = 1 .
+
+  --- common.h (KEYMASTER_REQ_SHIFT is 2), ta_ca_defs.h, tables.h, auth.h and operations.h of the
+  --- Keymaster TA (see its model.patch).
+  ops KM-BEGIN KM-UPDATE KM-FINISH KM-ABORT : -> Nat .
+  eq KM-BEGIN = 4 .
+  eq KM-UPDATE = 8 .
+  eq KM-FINISH = 12 .
+  eq KM-ABORT = 16 .
+  ops KM-ERROR-OK KM-ERROR-UNSUPPORTED-PURPOSE KM-ERROR-KEY-USER-NOT-AUTHENTICATED
+      KM-ERROR-INVALID-OPERATION-HANDLE KM-ERROR-VERIFICATION-FAILED KM-ERROR-TOO-MANY-OPERATIONS
+      KM-ERROR-UNKNOWN-ERROR KM-ERROR-UNIMPLEMENTED : -> Int .
+  eq KM-ERROR-OK = 0 .
+  eq KM-ERROR-UNSUPPORTED-PURPOSE = -2 .
+  eq KM-ERROR-KEY-USER-NOT-AUTHENTICATED = -26 .
+  eq KM-ERROR-INVALID-OPERATION-HANDLE = -28 .
+  eq KM-ERROR-VERIFICATION-FAILED = -30 .
+  eq KM-ERROR-TOO-MANY-OPERATIONS = -31 .
+  eq KM-ERROR-UNIMPLEMENTED = -100 .
+  eq KM-ERROR-UNKNOWN-ERROR = -1000 .
+  ops KM-PURPOSE-SIGN KM-PURPOSE-VERIFY : -> Nat .
+  eq KM-PURPOSE-SIGN = 2 .
+  eq KM-PURPOSE-VERIFY = 3 .
+  --- UNDEFINED is UINT32_MAX (tables.h).
+  op UNDEFINED : -> Nat .
+  eq UNDEFINED = 4294967295 .
+  op KM-MAX-OPERATION : -> Nat .
+  eq KM-MAX-OPERATION = 2 .
+  ops HW-AUTH-TOKEN-VERSION HW-AUTH-PASSWORD : -> Nat .
+  eq HW-AUTH-TOKEN-VERSION = 0 .
+  eq HW-AUTH-PASSWORD = 1 .
+  --- The auth token key object (auth_token_key_id[] upstream) and the size of its data.
+  op AUTH-TOKEN-KEY-ID : -> FileName [ctor] .
+  op AUTH-TOKEN-KEY-SIZE : -> Nat .
+  eq AUTH-TOKEN-KEY-SIZE = 1 .
+endm
+
+--- The names of the entry point of the TAs (TA_InvokeCommandEntryPoint, preprocessed) and of the
+--- programs of the RA.
+
+mod KMGK-PROGRAM-DECL is
+  pr KMGK-DATA .
+
+  op main : -> FuncId [ctor] .
+  ops cmdId req resp ret : -> Var [ctor] .
+endm

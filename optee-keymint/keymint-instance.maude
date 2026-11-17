@@ -1,0 +1,107 @@
+--- Instance-lifetime model of the OP-TEE KeyMint TA of android.googlesource.com/tee/optee/ta/keymint
+--- at revision ffced1f, with the KeyMint core of platform/system/keymint (kmr-ta, fda4e68).
+---
+--- What is modeled (the Rust source it abstracts):
+---   * one TA instance: the global KeyMintTa of src/main.rs:62 (in_early_boot, boot_info).
+---   * the instance exists while at least one session is open; it is destroyed when the last
+---     session closes (SINGLE_INSTANCE without KEEP_ALIVE, src/config.rs:48).  A new instance starts
+---     with in_early_boot = true and boot_info = None (kmr-ta ta/src/lib.rs:322-333).
+---   * SetBootInfo (kmr-ta lib.rs:556-590, reached from lib.rs:712) is accepted only while early
+---     boot is on and boot_info is None.  It has no client check.
+---   * DeviceEarlyBootEnded (lib.rs:851, 991) turns early boot off, with no check.
+---   * the open/close entry points only log (src/main.rs:141-165): they touch no state.
+---
+--- What is NOT modeled: the TEE-provided RootOfTrust path (HMAC-authenticated, lib.rs:1063-1110;
+--- it has the same first-value-wins rule, so the same reset applies to it), the KeyMint key
+--- operations, and the ids of the clients.  The boot component is a client (boot); it provisions the
+--- boot info once, at boot (the protocol of hal/src/lib.rs:292-316 is not in this tree, so "once" is
+--- an assumption, stated in the README).
+---
+--- Clients: boot (the boot component), hal (the HAL session), att (an REE client that can open a
+--- session: the TA has no client check on open).
+--- Sessions: ss(B, H, A) with one Bool per client (boot, hal, att); a client holds at most one
+--- session in this model.  (A set of clients with an idempotent operator did not stay bounded in
+--- Maude: duplicates grew.)
+--- hist(L, D, P): L = the boot info of the current instance was set by boot,
+---                D = an instance was destroyed after its boot info was set by boot,
+---                P = boot has provisioned (it does so only once).
+---
+--- Load and run from the analysis directory:  maude -no-banner keymint-scenarios.maude
+
+mod KM-INST is
+  protecting BOOL .
+
+  sorts BI Sess Inst Hist Sys .
+
+  op ss : Bool Bool Bool -> Sess [ctor] .      --- boot, hal, att hold a session
+
+  ops unset legitV attV : -> BI [ctor] .
+  op noInst : -> Inst [ctor] .
+  op inst : Bool BI -> Inst [ctor] .
+  op hist : Bool Bool Bool -> Hist [ctor] .
+  op sys : Inst Sess Hist -> Sys [ctor] .
+
+  vars E L D P H A B2 : Bool . var BI1 : BI . var I : Inst . var Hi : Hist .
+
+  --- A session is opened: a new instance (in early boot, no boot info), or the live one.
+  rl [open-new-boot] : sys(noInst, ss(false, false, false), Hi) => sys(inst(true, unset), ss(true, false, false), Hi) .
+  rl [open-new-hal]  : sys(noInst, ss(false, false, false), Hi) => sys(inst(true, unset), ss(false, true, false), Hi) .
+  rl [open-new-att]  : sys(noInst, ss(false, false, false), Hi) => sys(inst(true, unset), ss(false, false, true), Hi) .
+  rl [open-join-boot] : sys(inst(E, BI1), ss(false, H, A), Hi) => sys(inst(E, BI1), ss(true, H, A), Hi) .
+  rl [open-join-hal]  : sys(inst(E, BI1), ss(B2, false, A), Hi) => sys(inst(E, BI1), ss(B2, true, A), Hi) .
+  rl [open-join-att]  : sys(inst(E, BI1), ss(B2, H, false), Hi) => sys(inst(E, BI1), ss(B2, H, true), Hi) .
+
+  --- SetBootInfo from boot: accepted once, in early boot, when boot_info is None (lib.rs:556-590).
+  rl [set-boot] : sys(inst(true, unset), ss(true, H, A), hist(false, D, false))
+               => sys(inst(true, legitV), ss(true, H, A), hist(true, D, true)) .
+
+  --- SetBootInfo from att: the same acceptance rule, with no client check (lib.rs:712, 556).
+  rl [set-att] : sys(inst(true, unset), ss(B2, H, true), Hi)
+              => sys(inst(true, attV), ss(B2, H, true), Hi) .
+
+  --- DeviceEarlyBootEnded (lib.rs:851, 991): boot ends early boot after it set its value;
+  --- att may end it too (no client check).
+  --- The TA checks nothing here (early_boot_ended, lib.rs:991): boot may end early boot at any time.
+  rl [end-boot] : sys(inst(true, BI1), ss(true, H, A), hist(L, D, P))
+               => sys(inst(false, BI1), ss(true, H, A), hist(L, D, P)) .
+  rl [end-att] : sys(inst(true, BI1), ss(B2, H, true), Hi)
+              => sys(inst(false, BI1), ss(B2, H, true), Hi) .
+
+  --- A session closes.  With another session open, the instance stays (close-keep-*).
+  --- The hal never closes in KM-INST (its close rules are in KM-HAL).
+  crl [close-keep-boot] : sys(I, ss(true, H, A), Hi) => sys(I, ss(false, H, A), Hi) if H or A .
+  crl [close-keep-att]  : sys(I, ss(B2, H, true), Hi) => sys(I, ss(B2, H, false), Hi) if B2 or H .
+
+  --- The last session closes: the instance is destroyed with its boot info.  The new state
+  --- records that the boot info set by boot was lost (D).
+  rl [close-last-boot] : sys(inst(E, BI1), ss(true, false, false), hist(L, D, P))
+                      => sys(noInst, ss(false, false, false), hist(false, D or L, P)) .
+  rl [close-last-att]  : sys(inst(E, BI1), ss(false, false, true), hist(L, D, P))
+                      => sys(noInst, ss(false, false, false), hist(false, D or L, P)) .
+endm
+
+mod KM-HAL is
+  including KM-INST .
+
+  vars E L D P H A B2 : Bool . var BI1 : BI . var I : Inst . var Hi : Hist .
+
+  --- The HAL closes its session.  close-last-hal: as the last session, the instance is destroyed.
+  --- That is the trigger of an HAL restart or crash.  The repo does not show whether the real
+  --- HAL does this.
+  crl [close-keep-hal] : sys(I, ss(B2, true, A), Hi) => sys(I, ss(B2, false, A), Hi) if B2 or A .
+  rl [close-last-hal] : sys(inst(E, BI1), ss(false, true, false), hist(L, D, P))
+                     => sys(noInst, ss(false, false, false), hist(false, D or L, P)) .
+endm
+
+--- A panic of the TA destroys the instance whatever sessions are open (GP: the instance is gone).
+--- The HAL then reconnects on TEEC_ERROR_TARGET_DEAD (kmgk keymaster/ipc/optee_keymaster_ipc.cpp:233),
+--- which opens a fresh instance with no boot info.  Whether an REE request can make the TA panic is
+--- NOT established by this model: the rule is a free choice of the search.
+mod KM-PANIC is
+  including KM-HAL .
+
+  vars E L D P : Bool . var BI1 : BI . var Hi : Hist . var B2 A H : Bool .
+
+  rl [panic] : sys(inst(E, BI1), ss(B2, H, A), hist(L, D, P))
+            => sys(noInst, ss(false, false, false), hist(false, D or L, P)) .
+endm

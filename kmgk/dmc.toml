@@ -1,0 +1,232 @@
+# KMGK: the Keymaster and Gatekeeper TAs of linaro-swg/kmgk on OP-TEE.
+# An analysis file (tools/build/tee-build.py), standalone: the analyzed system ([spec], [ta.*])
+# and its DM-Check build (mode dmc), with the directives of the DM-Check transform in [dmc].
+# make dmc builds it from this file, core/ and the spec into the output directory.
+mode = "dmc"
+output = "models/dmc"                  # the directory of the built model
+
+# The specification.
+[spec]
+repo = "https://github.com/postechsv/tee-formal-spec"
+rev  = "a4bf510a13f8be0479e3bdb744851456747b9363"   # main, PR #12 merged
+
+# The Gatekeeper TA, preprocessed from the upstream C sources by tools/lang-preprocess.py (see its
+# docstring).
+[ta.gatekeeper]
+source    = ["core/ta/gatekeeper/ta_gatekeeper.h", "core/ta/gatekeeper/failure_record.h",
+             "core/ta/gatekeeper/failure_record.c", "core/ta/gatekeeper/gatekeeper_ta.c"]
+patches   = ["core/ta/gatekeeper/model.patch"]   # the modeling changes of the C code
+functions = ["TA_Enroll", "TA_Verify"]            # and the functions they call
+structs   = ["password_handle_t", "hw_auth_token_t", "failure_record_t",
+             "gk_enroll_request_t", "gk_enroll_response_t",
+             "gk_verify_request_t", "gk_verify_response_t"]
+globals   = ["failure_record_size", "failure_record_user_id", "failure_record_timestamp",
+             "failure_record_counter"]
+entry     = "TA_InvokeCommandEntryPoint"          # the entry point of the model
+template  = "core/ta/gatekeeper/template.maude"
+output    = "gatekeeper-ta.maude"
+drop-calls = ["EMSG", "DMSG", "TA_MintAuthToken"]
+drop-vars = ["TA_InvokeCommandEntryPoint.param_types"]   # the parameter types are not modeled
+
+# The memory references of the entry point: the request and the response.
+[ta.gatekeeper.memref.TA_InvokeCommandEntryPoint]
+signature = "int cmdId, void * req, void * resp"
+"params[0].memref.buffer" = "req"
+"params[1].memref.buffer" = "resp"
+
+[ta.gatekeeper.c-types]
+uint8_t = "char"
+uint64_t = "int"
+int64_t = "int"
+bool = "bool"
+secure_id_t = "int"
+salt_t = "int"
+
+# The size of the secret data that TA_GetMasterKey reads (the model counts sizes in fragments).
+[ta.gatekeeper.rewrite]
+"sizeof(secretData)" = "SECRET_DATA_SIZE"
+
+[ta.gatekeeper.programs]
+gatekeeperTA = []
+
+# The Keymaster TA, preprocessed the same way: the operation table and the paths of begin,
+# update, finish and abort for HMAC keys (see model.patch).
+[ta.keymaster]
+source    = ["core/ta/keymaster/operations.h", "core/ta/keymaster/operations.c",
+             "core/ta/keymaster/auth.c", "core/ta/keymaster/keystore_ta.c"]
+patches   = ["core/ta/keymaster/model.patch"]
+functions = ["TA_begin", "TA_update", "TA_finish", "TA_abort"]
+structs   = ["hw_auth_token_t", "keymaster_key_blob_t", "keymaster_operation_t",
+             "km_begin_request_t", "km_begin_response_t", "km_update_request_t",
+             "km_update_response_t", "km_finish_request_t", "km_finish_response_t",
+             "km_abort_request_t", "km_abort_response_t"]
+globals   = ["operations_op_handle", "operations_key_material", "operations_key_user_secure_id",
+             "operations_key_user_auth_type", "operations_key_no_auth_required",
+             "operations_key_auth_timeout", "operations_purpose", "operations_last_access",
+             "operations_operation", "operations_min_sec", "operations_do_auth"]
+entry     = "TA_InvokeCommandEntryPoint"
+template  = "core/ta/keymaster/template.maude"
+output    = "keymaster-ta.maude"
+drop-calls = ["EMSG", "DMSG"]
+drop-vars = ["TA_InvokeCommandEntryPoint.param_types", "TA_InvokeCommandEntryPoint.exp_param_types"]
+
+# The memory references of the entry point: the request and the response.
+[ta.keymaster.memref.TA_InvokeCommandEntryPoint]
+signature = "int cmdId, void * req, void * resp"
+"params[0].memref.buffer" = "req"
+"params[1].memref.buffer" = "resp"
+
+[ta.keymaster.c-types]
+uint8_t = "char"
+uint64_t = "int"
+bool = "bool"
+size_t = "int"
+keymaster_error_t = "int"
+keymaster_operation_handle_t = "int"
+keymaster_purpose_t = "int"
+hw_authenticator_type_t = "int"
+
+[ta.keymaster.programs]
+keymasterTA = []
+
+# ------------------------------------------------------------------- DM-Check directives
+
+# The DM-Check directives of the spec (tools/dmc/gen-dmc.py --directives), the table [dmc].
+#
+# The spec carries no DM-Check annotations: this file says how gen-dmc turns its statements into
+# the DMC build.  An entry names the statements it applies to; the directive syntax is that of
+# gen-dmc's docstring ("Directives").  An entry that matches nothing in a build (a feature group the
+# build leaves out, e.g. CRYPTO=0) is reported as a warning.
+#
+#   qid-subsort  = "S"  (in [dmc])                `subsort Qid < S .` is dropped (the Qid literals of S are numbered)
+#   qid-literals = ["op", ...]        `op op : Qid -> S .`: its literals become constants of S
+#   [dmc.close-sort]  S = "C"            the sort S gets the constructor C : Nat -> S
+#   [dmc.owise]    f = "ACTION"       every [owise] equation of the operator f; ACTION is
+#                                      drop | cond(C) | enumerate(...) | recurse(...) | shapes(...)
+#                  f = { action = "ACTION", scope = [M, ...], classes = [K, ...],
+#                        exact-classes = [K, ...], sort-split = "Sp < S", exclude-ctors = [c, ...] }
+#   [dmc.rules]    label = "D" or ["D", ...]   the rule with that label; D is inline-match | split |
+#                                      split(B) | restrict(V=S, ...) | drop | pattern(V=P) | shape-cond(...)
+#   [dmc.equations]  f = { drop = ["LHS", ...] }   the equations of f with these left-hand sides are
+#                                      left out of the DMC build (white space in LHS ignored)
+#
+[dmc]
+qid-subsort  = "Var"
+qid-literals = ["fileName"]
+
+[dmc.close-sort]
+# src/constants.maude
+FileName = "mkFileName"
+AppId = "mkAppId"
+# src/lang.maude
+FuncId = "mkFuncId"
+# src/tee-api.maude
+TeeApi = "mkTeeApi"
+# lang/c/semantics.maude
+Label = "mkLabel"
+Var = "mkVar"
+
+[dmc.owise]
+# src/constants.maude
+supportedStorage = "enumerate(STORID)"
+attrsKeySize = { action = "recurse(sep=_,_, empty=empty)", scope = ["TEE-BEHAVIOR"] }
+supported = "enumerate(arg1, arg2)"
+# src/cryptographic.maude
+digestMessage = "drop"
+runOp = "enumerate(arg2, arg4)"
+computeMAC = "enumerate(arg1)"
+outputSize = { action = "enumerate(DATA)", scope = ["TEE-BEHAVIOR"] }
+regionsOverlapBadly = { action = "enumerate(arg1, arg2)", scope = ["TEE-BEHAVIOR"] }
+overlapSensitive = { action = "enumerate(API)", scope = ["TEE-BEHAVIOR"] }
+validSignatureDigestLength = "enumerate(ALG)"
+validRsaCiphertextSize = { action = "enumerate(DATA)", scope = ["TEE-BEHAVIOR"] }
+compatibleMode = "enumerate(arg1, arg2)"
+validKeySize = "enumerate(arg1, arg2)"
+operationUsageCompatible = "enumerate(arg1, arg3)"
+requiredOperationUsage = "enumerate(arg1, arg2)"
+operationDigestLength = "enumerate(ALG)"
+operationInfoKeySet = "enumerate(CLASS)"
+operationInfoInitialized = "enumerate(CLASS)"
+singleInfoKeySize = "enumerate(arg1, arg2)"
+singleInfoKeyUsage = "enumerate(arg1, arg2)"
+typeModeCompatible = "enumerate(arg1, arg2)"
+algorithmObjectTypeCompatible = "enumerate(arg1, arg2)"
+expectsTwoKeys = "enumerate(ALG)"
+twoKeyCompatible = "enumerate(arg1, arg2, arg3, arg5)"
+twoKeyMaterialCompatible = "enumerate(arg1)"
+twoKeyOperationSizeCompatible = "enumerate(arg1, arg2)"
+singleKeyMaterialCompatible = { action = "recurse(sep=_,_, empty=empty)", scope = ["TEE-BEHAVIOR"] }
+extractingState = "enumerate(OS)"
+getReturnCode = "enumerate(arg1, arg2)"
+getReturnCodeOfDigest = "enumerate(arg1, arg2)"
+supportsElement = "enumerate(arg2)"
+# src/data-stream.maude
+isReadable = "recurse(sep=_,_, empty=empty)"
+isWritable = "recurse(sep=_,_, empty=empty)"
+# src/data.maude
+readAux = "drop"
+# src/generic.maude
+capacityFitsAttr = "cond(not (N == 0))"
+# src/handle.maude
+nullHandle = { action = "enumerate(arg1)", scope = ["TEE-BEHAVIOR", "OVERWRITE-INV", "LOST-UPDATE-INV"] }
+# src/objects.maude
+typeCompatible = "cond(not (OBJTYPE1 == OBJTYPE2) and not ((OBJTYPE1 == rsaKeyPair and OBJTYPE2 == rsaPubKey) or (OBJTYPE1 == dsaKeypair and OBJTYPE2 == dsaPubKey) or (OBJTYPE1 == typeEcdsaKeypair and OBJTYPE2 == typeEcdsaPublicKey) or (OBJTYPE1 == typeEcdhKeypair and OBJTYPE2 == typeEcdhPublicKey) or (OBJTYPE1 == typeEd25519Keypair and OBJTYPE2 == typeEd25519PublicKey) or (OBJTYPE1 == typeX25519Keypair and OBJTYPE2 == typeX25519PublicKey) or (OBJTYPE1 == typeSm2DsaKeypair and OBJTYPE2 == typeSm2DsaPublicKey) or (OBJTYPE1 == typeSm2KepKeypair and OBJTYPE2 == typeSm2KepPublicKey) or (OBJTYPE1 == typeSm2PkeKeypair and OBJTYPE2 == typeSm2PkePublicKey)))"
+# src/os-service.maude
+abnormalStorage = "enumerate(STATUS)"
+# src/tee-panic.maude
+operationClassCompatible = { action = "enumerate(arg1, arg2)", scope = ["TEE-BEHAVIOR"] }
+# src/transient.maude
+mandatory = "enumerate(OBJTYPE)"
+allowed = "enumerate(OBJTYPE)"
+validOptionalAttributeGroups = "enumerate(OBJTYPE)"
+noKeyGenParams = "enumerate(OBJTYPE)"
+validKeySizeForGeneration = { action = "enumerate(OBJTYPE)", exclude-ctors = ["dsaKeypair", "typeDhKeypair", "typeEcdsaKeypair", "typeEcdhKeypair"] }
+# lang/c/semantics.maude
+checkPExp = "shapes(sep=_,_, empty=nil, elem=Exp)"
+getSList = { action = "enumerate(S)", scope = ["CRYPTO-C-VALUE-TYPE", "TEE-C-BEHAVIOR", "TEE-BEHAVIOR", "TRANSIENT-OBJECT-TEE-CALL", "DATA-STREAM-OBJECT-TEE-CALL", "ENUMERATOR-OBJECT-TEE-CALL", "GENERIC-OBJECT-TEE-CALL", "OVERWRITE-INV"] }
+labelsOf = { action = "enumerate(S)", scope = ["CRYPTO-C-VALUE-TYPE", "TEE-C-BEHAVIOR", "TEE-BEHAVIOR"] }
+getOffSet = "cond(Y =/= X)"
+# lang/c/tee-support.maude
+mkFunMap = { action = "enumerate(S)", scope = ["TEE-BEHAVIOR"] }
+getParams = { action = "recurse(sep=_,_, empty=nil)", sort-split = "Stmt < K" }
+# lang/c/typing.maude
+declsOf = { action = "enumerate(S)", scope = ["CRYPTO-C-VALUE-TYPE", "TEE-C-BEHAVIOR", "TEE-BEHAVIOR"] }
+collectT = { action = "enumerate(S)", scope = ["CRYPTO-C-VALUE-TYPE", "TEE-C-BEHAVIOR", "TEE-BEHAVIOR"] }
+collectB = { action = "enumerate(S)", scope = ["CRYPTO-C-VALUE-TYPE", "TEE-C-BEHAVIOR", "TEE-BEHAVIOR"] }
+
+[dmc.rules]
+# src/cryptographic.maude
+cipher-update-try-cipher-success = "inline-match"
+cipher-do-final-try-cipher-final-success = "inline-match"
+ae-update-top-level-capacity = "inline-match"
+ae-update-top-level-short-buffer = "inline-match"
+ae-update-top-level-object = "inline-match"
+ae-encrypt-final-top-level-capacity = "inline-match"
+ae-encrypt-final-top-level-short-buffer = "inline-match"
+ae-encrypt-final-top-level-object = "inline-match"
+ae-decrypt-final-top-level-capacity = "inline-match"
+ae-decrypt-final-top-level-short-buffer = "inline-match"
+ae-decrypt-final-top-level-object = "inline-match"
+asymmetric-encrypt-top-level-object = "inline-match"
+asymmetric-decrypt-top-level-capacity = "inline-match"
+asymmetric-decrypt-top-level-short-buffer = "inline-match"
+asymmetric-decrypt-top-level-object = "inline-match"
+# src/persistent.maude
+create-persist-overwrite-check = "split"
+create-persist-pure-new = "inline-match"
+create-persist-transform-new = "inline-match"
+create-persist-persist-new = "inline-match"
+create-persist-pure = "inline-match"
+create-persist-transform = "inline-match"
+create-persist-persist = "inline-match"
+# lang/c/semantics.maude
+op-eq = "restrict(V=Value,V'=Value)"
+# lang/c/tee-support.maude
+tee-api-call = "inline-match"
+
+[dmc.equations]
+# lang/rust/tee-support.maude: a file id of a Rust program, an integer, becomes the file name of its
+# decimal string, fileName(qid(string(I, 10))).  The DMC build closes FileName (its Qid literals are
+# numbered, qid-literals), so a file name made from any integer has no counterpart there; the
+# equation is left out, and a Rust TA that passes a file id does not run in the DMC build.
+convIn = { drop = ["convIn(pkFile, Integer(I, W, S))"] }

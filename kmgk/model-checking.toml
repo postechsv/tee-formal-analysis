@@ -1,0 +1,261 @@
+# KMGK: the Keymaster and Gatekeeper TAs of linaro-swg/kmgk on OP-TEE.
+# An analysis file (tools/build/tee-build.py), standalone: the analyzed system ([spec], [ta.*],
+# [ra.*]) and how it is analyzed (mode, output, and the transforms of the spec build below).
+# make model-checking builds it from this file, core/ and the spec into the output directory.
+#
+# Model checking of the scenarios of core/scenarios, with the invisible-transition reduction: the
+# steps of a TA instance that touch only the instance (C computation, function calls, loops, the
+# TEE API calls of the TA) are equations, so the steps of the other clients interleave only with
+# the visible steps (the requests and the answers of the TrustedOS).  The list is that of MQT-TZ
+# with the function calls, the loops and the clock.
+mode = "plain"
+output = "models/model-checking"       # the directory of the built model
+
+# The specification.
+[spec]
+repo = "https://github.com/postechsv/tee-formal-spec"
+rev  = "a4bf510a13f8be0479e3bdb744851456747b9363"   # main, PR #12 merged
+
+# The Gatekeeper TA, preprocessed from the upstream C sources by tools/lang-preprocess.py (see its
+# docstring).
+[ta.gatekeeper]
+source    = ["core/ta/gatekeeper/ta_gatekeeper.h", "core/ta/gatekeeper/failure_record.h",
+             "core/ta/gatekeeper/failure_record.c", "core/ta/gatekeeper/gatekeeper_ta.c"]
+patches   = ["core/ta/gatekeeper/model.patch"]   # the modeling changes of the C code
+functions = ["TA_Enroll", "TA_Verify"]            # and the functions they call
+structs   = ["password_handle_t", "hw_auth_token_t", "failure_record_t",
+             "gk_enroll_request_t", "gk_enroll_response_t",
+             "gk_verify_request_t", "gk_verify_response_t"]
+globals   = ["failure_record_size", "failure_record_user_id", "failure_record_timestamp",
+             "failure_record_counter"]
+entry     = "TA_InvokeCommandEntryPoint"          # the entry point of the model
+template  = "core/ta/gatekeeper/template.maude"
+output    = "gatekeeper-ta.maude"
+drop-calls = ["EMSG", "DMSG", "TA_MintAuthToken"]
+drop-vars = ["TA_InvokeCommandEntryPoint.param_types"]   # the parameter types are not modeled
+
+# The memory references of the entry point: the request and the response.
+[ta.gatekeeper.memref.TA_InvokeCommandEntryPoint]
+signature = "int cmdId, void * req, void * resp"
+"params[0].memref.buffer" = "req"
+"params[1].memref.buffer" = "resp"
+
+[ta.gatekeeper.c-types]
+uint8_t = "char"
+uint64_t = "int"
+int64_t = "int"
+bool = "bool"
+secure_id_t = "int"
+salt_t = "int"
+
+# The size of the secret data that TA_GetMasterKey reads (the model counts sizes in fragments).
+[ta.gatekeeper.rewrite]
+"sizeof(secretData)" = "SECRET_DATA_SIZE"
+
+[ta.gatekeeper.programs]
+gatekeeperTA = []
+
+# The Keymaster TA, preprocessed the same way: the operation table and the paths of begin,
+# update, finish and abort for HMAC keys (see model.patch).
+[ta.keymaster]
+source    = ["core/ta/keymaster/operations.h", "core/ta/keymaster/operations.c",
+             "core/ta/keymaster/auth.c", "core/ta/keymaster/keystore_ta.c"]
+patches   = ["core/ta/keymaster/model.patch"]
+functions = ["TA_begin", "TA_update", "TA_finish", "TA_abort"]
+structs   = ["hw_auth_token_t", "keymaster_key_blob_t", "keymaster_operation_t",
+             "km_begin_request_t", "km_begin_response_t", "km_update_request_t",
+             "km_update_response_t", "km_finish_request_t", "km_finish_response_t",
+             "km_abort_request_t", "km_abort_response_t"]
+globals   = ["operations_op_handle", "operations_key_material", "operations_key_user_secure_id",
+             "operations_key_user_auth_type", "operations_key_no_auth_required",
+             "operations_key_auth_timeout", "operations_purpose", "operations_last_access",
+             "operations_operation", "operations_min_sec", "operations_do_auth"]
+entry     = "TA_InvokeCommandEntryPoint"
+template  = "core/ta/keymaster/template.maude"
+output    = "keymaster-ta.maude"
+drop-calls = ["EMSG", "DMSG"]
+drop-vars = ["TA_InvokeCommandEntryPoint.param_types", "TA_InvokeCommandEntryPoint.exp_param_types"]
+
+# The memory references of the entry point: the request and the response.
+[ta.keymaster.memref.TA_InvokeCommandEntryPoint]
+signature = "int cmdId, void * req, void * resp"
+"params[0].memref.buffer" = "req"
+"params[1].memref.buffer" = "resp"
+
+[ta.keymaster.c-types]
+uint8_t = "char"
+uint64_t = "int"
+bool = "bool"
+size_t = "int"
+keymaster_error_t = "int"
+keymaster_operation_handle_t = "int"
+keymaster_purpose_t = "int"
+hw_authenticator_type_t = "int"
+
+[ta.keymaster.programs]
+keymasterTA = []
+
+[invisible]
+rules = [
+  # G2
+  "lookup",
+  "lookup-lv",
+  "member-lvalue",
+  "assign",
+  "op-plus",
+  "op-minus",
+  "op-times",
+  "op-div",
+  "op-leq",
+  "op-eq",
+  "op-and-true",
+  "op-and-false",
+  "op-or-true",
+  "op-or-false",
+  "op-not",
+  "skip",
+  "seq",
+  "if-true",
+  "if-false",
+  "allocA",
+  "alloc",
+  "allocObj",
+  "malloc",
+  "fdecl",
+  "sdecl",
+  # function calls, loops and the clock (not in MQT-TZ, whose TA calls no void functions)
+  "bindR",
+  "bindS",
+  "bindV",
+  "fCall",
+  "fExec",
+  "fRetn",
+  "fQuit",
+  "while",
+  "get-system-time",
+  # G3
+  "tee-api-call",
+  "tee-api-call-accept",
+  "tee-api-call-return",
+  # G1: transient.maude
+  "allocate-transient-success",
+  "allocate-transient-out-of-memory-err",
+  "allocate-transient-not-supported-err",
+  "free-transient-not-null-subroutine",
+  "free-transient-not-null-success",
+  "free-transient-null-success",
+  "reset-transient-not-null-subroutine",
+  "reset-transient-not-null-success",
+  "reset-transient-null-success",
+  "populate-transient-subroutine",
+  "populate-transient-success",
+  "init-ref-attribute",
+  "init-value-attribute",
+  "copy-object-attrs-get-attrs",
+  "copy-object-attrs-success",
+  "generate-key-subroutine",
+  "generate-key-success",
+  # G1: persistent.maude
+  "open-persistent-default-private-storage",
+  "open-persistent-request",
+  "open-persistent-storage-id-not-found",
+  "open-persistent-success",
+  "open-persistent-fail",
+  "open-persistent-memory-err",
+  "open-persistent-memory-err-final",
+  "create-persistent-determine-case",
+  "create-persist-success",
+  "create-persist-fail",
+  "create-persist-mem-err",
+  "close-and-delete-persistent-subroutine",
+  "close-and-delete-persistent-success",
+  "close-and-delete-persistent-null-success",
+  "rename-persistent-subroutine",
+  "rename-persistent-success",
+  # G1: data-stream.maude
+  "read-object-data-get-storage-status",
+  "read-object-data-success",
+  "write-object-data-request",
+  "write-object-data-success",
+  "truncate-object-data-request",
+  "truncate-object-data-success",
+  "seek-object-data-request",
+  "seek-object-data-top-level-finish-overflow",
+  "seek-object-data-success",
+  # G1: generic.maude
+  "get-obj-info-subroutine",
+  "restrict-object-usage-request",
+  "restrict-object-usage-success",
+  "get-object-buffer-attribute-request",
+  "get-object-value-attribute-request",
+  "close-object-not-null-subroutine",
+  "close-object-not-null-success",
+  "close-object-null-success",
+  # G1: cryptographic.maude
+  "alloc-oper-success",
+  "alloc-oper-params-err",
+  "alloc-oper-mem-err",
+  "free-operation-not-null-subroutine",
+  "free-operation-not-null-success",
+  "free-operation-null-success",
+  "get-operation-info-subroutine",
+  "get-operation-info-success",
+  "get-operation-info-multiple-subroutine",
+  "get-operation-info-multiple-success",
+  "get-operation-info-multiple-short-buffer",
+  "reset-oper-req-reset",
+  "reset-oper-success",
+  "set-operation-key-subroutine",
+  "set-operation-key-success",
+  "set-operation-key-storage-err-return",
+  "set-operation-key2-storage-err-return",
+  "set-operation-key2-success",
+  "copy-operation-request",
+  "copy-operation-success",
+  "is-algorithm-supported-success",
+  "is-algorithm-supported-fail",
+  "digest-update-subroutine",
+  "digest-update-success",
+  "digest-do-final-subroutine",
+  "digest-do-final-success",
+  "digest-extract-subroutine",
+  "digest-extract-success",
+  "cipher-init-req-cipher-init",
+  "cipher-init-success",
+  "cipher-update-req-cipher",
+  "cipher-update-success",
+  "cipher-do-final-req-cipher-final",
+  "cipher-do-final-success",
+  "mac-init-subroutine",
+  "mac-init-success",
+  "mac-init-initialize-success",
+  "mac-update-subroutine",
+  "mac-update-success",
+  "mac-compute-final-subroutine",
+  "mac-compute-final-success",
+  "mac-compare-final-subroutine",
+  "mac-compare-final-success",
+  "ae-init-subroutine",
+  "ae-init-success",
+  "ae-update-aad-subroutine",
+  "ae-update-aad-success",
+  "ae-update-subroutine",
+  "ae-update-success",
+  "ae-encrypt-final-subroutine",
+  "ae-encrypt-final-success",
+  "ae-decrypt-final-subroutine",
+  "ae-decrypt-final-success",
+  "ae-decrypt-final-mac-invalid",
+  "asymmetric-encrypt-subroutine",
+  "asymmetric-encrypt-success",
+  "asymmetric-decrypt-subroutine",
+  "asymmetric-decrypt-success",
+  "asymmetric-sign-digest-subroutine",
+  "asymmetric-sign-digest-success",
+  "asymmetric-verify-digest-subroutine",
+  "asymmetric-verify-digest-success",
+  "derive-key-subroutine",
+  "derive-key-success",
+  "generate-random-success",
+]
+

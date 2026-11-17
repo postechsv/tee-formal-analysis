@@ -2,7 +2,7 @@
 """drop-class-attribute: drop a class attribute from the left-hand sides of spec rules (rewritten in place).
 
 Usage
-    python3 tools/build/drop-class-attribute.py SRC_DIR CASE.toml
+    python3 tools/build/drop-class-attribute.py [--spec-src SPEC_DIR] SRC_DIR CASE.toml
 
 The [drop-class-attribute] table of CASE.toml says which rules no longer require an attribute value
 on the left-hand side; several are written as [[drop-class-attribute]] (an array of tables):
@@ -17,8 +17,10 @@ The change is syntactic.  In a rule whose label matches `affected-rules` and no 
 `excluded-rules`, and whose left-hand side has an object of the class (or a subclass) with the
 attribute value of `attribute` (possibly sort-qualified: (normal).AppStatus for normal), that
 attribute is removed from the object, with its comma; the rule then fires whatever the value of the
-attribute is.  The label, the ---@dmc directives and the number of rules are unchanged.  Every
-pattern of `affected-rules` and `excluded-rules` must match a rule label.
+attribute is.  The label (which the [rules] entries of the DM-Check directives name) and the number of rules are unchanged.  Every
+pattern of `affected-rules` and `excluded-rules` must match a rule label; with --spec-src (the spec
+checkout, whose rules of every feature give the labels: spec_rule_labels of gen-dmc), a pattern that
+matches only rules of features left out of this build is skipped with a warning.
 
 tools/build/transform.mk runs this on the stage (DROP_ATTR=ANALYSIS.toml) before the ghosts are composed.
 """
@@ -39,6 +41,13 @@ def load_gen():
     gen = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gen)
     return gen
+
+
+def split_spec_src(argv, gen):
+    """argv without --spec-src DIR, and the rule labels of the spec checkout DIR (None without it)."""
+    if argv[:1] == ['--spec-src'] and len(argv) >= 2:
+        return argv[2:], gen.spec_rule_labels(argv[1])
+    return argv, None
 
 
 class DropError(Exception):
@@ -112,7 +121,7 @@ def matches(label, pats):
     return any(fnmatch.fnmatchcase(label, p) for p in pats)
 
 
-def drop(gen, src, e, files, subs):
+def drop(gen, src, e, files, subs, spec_labels=None):
     classes = closure(e['cls'], subs)
     labels, done = set(), []
     val = r'%s\s*:\s*(?:\(\s*%s\s*\)\.[\w\-{},]+|%s)(?![\w\-.(])' % (
@@ -173,20 +182,25 @@ def drop(gen, src, e, files, subs):
                 fh.write(''.join(lines))
     for p in e['rules'] + e['exc']:
         if not any(fnmatch.fnmatchcase(lab, p) for lab in labels):
-            raise DropError('%s: no rule label matches %s' % (e['where'], p))
+            err = gen.unmatched_label(p, spec_labels)
+            if err:
+                raise DropError('%s: %s' % (e['where'], err))
+            print('  drop-class-attribute: warning: %s: %s matches only rules left out of this build'
+                  % (e['where'], p))
     return done
 
 
 def main(argv):
+    gen = load_gen()
+    argv, spec_labels = split_spec_src(argv, gen)
     if len(argv) != 2:
         sys.stderr.write(__doc__)
         return 2
     src, path = argv
-    gen = load_gen()
     try:
         for e in entries(path):
             files, subs = scan(gen, src)
-            done = drop(gen, src, e, files, subs)
+            done = drop(gen, src, e, files, subs, spec_labels)
             print('  drop-class-attribute: %s : %s dropped from %d rules (%s)'
                   % (e['attr'], e['value'], len(done), os.path.relpath(path)))
     except (DropError, gen.GenError) as ex:

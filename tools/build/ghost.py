@@ -2,7 +2,7 @@
 """ghost: compose ghost state with the rules of a spec source tree (rewritten in place).
 
 Usage
-    python3 tools/build/ghost.py SRC_DIR GHOST_FILE [GHOST_FILE ...]
+    python3 tools/build/ghost.py [--spec-src SPEC_DIR] SRC_DIR GHOST_FILE [GHOST_FILE ...]
 
 A GHOST_FILE is either a ghost module (.maude), whose format and composition are described in
 tools/dmc/gen-dmc.py (section "ghost composition"), or a case-study file (.toml) whose [ghost] tables
@@ -28,13 +28,15 @@ Several attributes are written as [[ghost]] (an array of tables), one per attrib
 
 `true-after`/`false-after` are short for `set` entries with the values true/false; the sort is
 `sort = "..."`, else Bool when initial-value is a boolean.  A label must name a rule of SRC_DIR; a
-glob must match at least one.  A rule gets the ghost attribute updates of all patterns that match its
+glob must match at least one (with --spec-src SPEC_DIR, the spec checkout, whose rules of every
+feature give the labels, a pattern that matches only rules of features left out of this build is
+skipped with a warning).  A rule gets the ghost attribute updates of all patterns that match its
 label; its left-hand side must have exactly one object of the class.  A rule whose right-hand side
 has an object of the class that its left-hand side does not have creates it, and gets the initial
 values.
 
-The .toml file is compiled to a ghost module (written to <SRC_DIR>/../../ghost/<name>.maude when that
-is a build stage, for inspection; else to a temporary directory) and composed like a .maude ghost file.
+The .toml file is compiled to a ghost module, written to a temporary directory, and composed like a
+.maude ghost file.
 
 tools/build/transform.mk runs this on the stage (GHOST=...), before the plain copy (DMC=0) or gen-dmc
 (DMC=1).
@@ -47,6 +49,13 @@ import re
 import sys
 import tempfile
 import tomllib
+
+
+def split_spec_src(argv, gen):
+    """argv without --spec-src DIR, and the rule labels of the spec checkout DIR (None without it)."""
+    if argv[:1] == ['--spec-src'] and len(argv) >= 2:
+        return argv[2:], gen.spec_rule_labels(argv[1])
+    return argv, None
 
 
 def load_gen():
@@ -118,7 +127,7 @@ def ghost_entries(data, path):
     return out
 
 
-def compile_toml(gen, src, path):
+def compile_toml(gen, src, path, spec_labels=None):
     """The ghost module text for the [ghost] tables of path, and its file name stem."""
     with open(path, 'rb') as fh:
         data = tomllib.load(fh)
@@ -150,7 +159,11 @@ def compile_toml(gen, src, path):
         for pat, val in sets:
             hit = [lab for lab in labels if fnmatch.fnmatchcase(lab, pat)]
             if not hit:
-                raise gen.GenError('%s: ghost %s.%s: no rule label matches %s' % (path, cls, attr, pat))
+                err = gen.unmatched_label(pat, spec_labels)
+                if err:
+                    raise gen.GenError('%s: ghost %s.%s: %s' % (path, cls, attr, err))
+                print('  ghost: warning: %s: ghost %s.%s: %s matches only rules left out of this build'
+                      % (path, cls, attr, pat))
             for lab in hit:
                 old = updates.setdefault(lab, {}).get((cls, attr))
                 if old is not None and old != val:
@@ -211,25 +224,21 @@ def compile_toml(gen, src, path):
 
 
 def main(argv):
+    gen = load_gen()
+    argv, spec_labels = split_spec_src(argv, gen)
     if len(argv) < 2:
         sys.stderr.write(__doc__)
         return 2
-    gen = load_gen()
     src = argv[0]
     paths = []
     tmp = tempfile.TemporaryDirectory(prefix='ghost-')
     try:
         for p in argv[1:]:
             if p.endswith('.toml'):
-                name, text = compile_toml(gen, src, p)
-                stage = os.path.dirname(os.path.abspath(src))
-                out_dir = (os.path.join(os.path.dirname(stage), 'ghost') if os.path.basename(stage) == '.stage'
-                           else tmp.name)
-                os.makedirs(out_dir, exist_ok=True)
-                out = os.path.join(out_dir, name + '.maude')
+                name, text = compile_toml(gen, src, p, spec_labels)
+                out = os.path.join(tmp.name, name + '.maude')
                 with open(out, 'w', encoding='utf-8') as fh:
                     fh.write(text)
-                print('  ghost: %s -> %s' % (p, out))
                 paths.append(out)
             else:
                 paths.append(p)

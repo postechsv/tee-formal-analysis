@@ -1,0 +1,90 @@
+--- The scenarios of core/scenarios/sessions.maude: the state that a TA instance keeps across its
+--- sessions.  Run from models/model-checking after make model-checking:
+---   maude -no-banner core/cmd/sessions.maude
+--- Each search takes a few seconds (the analysis is built with the invisible-transition reduction).
+load ../../main
+
+--- The outcome of a client is read from its memory: the error of the last Verify of the HAL hal,
+--- in vresp, or of the finish of the keystore client ksA, in fresp.  A search pattern is not reduced,
+--- so the codes are written out: ERROR_INVALID 1, ERROR_RETRY 2 (gatekeeper_ipc.h), KM_ERROR_OK
+--- 0, KM_ERROR_INVALID_OPERATION_HANDLE -28 (ta_ca_defs.h).
+mod SESSIONS-CHECK is
+  pr ANALYSIS-CMD .
+endm
+
+------------------------------------------------------------
+--- 1. Gatekeeper: the throttling is reset with the instance
+------------------------------------------------------------
+
+--- The attacker alone: five wrong guesses start the throttling, but after it closes its session
+--- and opens a new one, a wrong guess gets ERROR_INVALID, not ERROR_RETRY: the instance and its
+--- failure records were destroyed with the last session.
+--- expect: one solution, and no solution for ERROR_RETRY
+search in SESSIONS-CHECK : halRunning(gkAttacker) tee =>!
+  < hal : RichApp | proc : (k(.K) env((vresp |-> LV:Nat) ; ENV:Map{Var,Nat})
+    store((LV:Nat |-> sobj((error |-> LE:Nat) ; SO:Map{Var,Nat})) ; (LE:Nat |-> # 1) ; MEM:Map{Nat,Value?})
+    KS:KConfig), AS:AttributeSet > C:Configuration .
+search in SESSIONS-CHECK : halRunning(gkAttacker) tee =>!
+  < hal : RichApp | proc : (k(.K) env((vresp |-> LV:Nat) ; ENV:Map{Var,Nat})
+    store((LV:Nat |-> sobj((error |-> LE:Nat) ; SO:Map{Var,Nat})) ; (LE:Nat |-> # 2) ; MEM:Map{Nat,Value?})
+    KS:KConfig), AS:AttributeSet > C:Configuration .
+
+--- Another client opens a session: when its session is open at the close of the attacker, the
+--- instance stays and the guess is throttled (ERROR_RETRY); when it opens later, the guess is not.
+--- expect: solutions for both
+search [1] in SESSIONS-CHECK : halRunning(gkAttacker) hal2Running(gkHolder) tee =>!
+  < hal : RichApp | proc : (k(.K) env((vresp |-> LV:Nat) ; ENV:Map{Var,Nat})
+    store((LV:Nat |-> sobj((error |-> LE:Nat) ; SO:Map{Var,Nat})) ; (LE:Nat |-> # 2) ; MEM:Map{Nat,Value?})
+    KS:KConfig), AS:AttributeSet > C:Configuration .
+search [1] in SESSIONS-CHECK : halRunning(gkAttacker) hal2Running(gkHolder) tee =>!
+  < hal : RichApp | proc : (k(.K) env((vresp |-> LV:Nat) ; ENV:Map{Var,Nat})
+    store((LV:Nat |-> sobj((error |-> LE:Nat) ; SO:Map{Var,Nat})) ; (LE:Nat |-> # 1) ; MEM:Map{Nat,Value?})
+    KS:KConfig), AS:AttributeSet > C:Configuration .
+
+------------------------------------------------------------
+--- 2. Keymaster: an operation outlives the session that began it
+------------------------------------------------------------
+
+--- ksA alone: after it closes the session of its operation and opens a new one, the operation is
+--- gone with the instance: KM_ERROR_INVALID_OPERATION_HANDLE.
+--- expect: one solution, and no solution for KM_ERROR_OK
+search in SESSIONS-CHECK : ksRunning(ksA, kmA) tee =>!
+  < ksA : RichApp | proc : (k(.K) env((fresp |-> LV:Nat) ; ENV:Map{Var,Nat})
+    store((LV:Nat |-> sobj((error |-> LE:Nat) ; SO:Map{Var,Nat})) ; (LE:Nat |-> # -28) ; MEM:Map{Nat,Value?})
+    KS:KConfig), AS:AttributeSet > C:Configuration .
+search in SESSIONS-CHECK : ksRunning(ksA, kmA) tee =>!
+  < ksA : RichApp | proc : (k(.K) env((fresp |-> LV:Nat) ; ENV:Map{Var,Nat})
+    store((LV:Nat |-> sobj((error |-> LE:Nat) ; SO:Map{Var,Nat})) ; (LE:Nat |-> # 0) ; MEM:Map{Nat,Value?})
+    KS:KConfig), AS:AttributeSet > C:Configuration .
+
+--- Another client ksB opens a session: when its session is open at the close of ksA, the operation
+--- survives, and ksA finishes it in its new session (KM_ERROR_OK, the HMAC of data(1) data(2)).
+--- expect: solutions for both
+search [1] in SESSIONS-CHECK : ksRunning(ksA, kmA) ksRunning(ksB, kmOpen) tee =>!
+  < ksA : RichApp | proc : (k(.K) env((fresp |-> LV:Nat) ; ENV:Map{Var,Nat})
+    store((LV:Nat |-> sobj((error |-> LE:Nat) ; SO:Map{Var,Nat})) ; (LE:Nat |-> # 0) ; MEM:Map{Nat,Value?})
+    KS:KConfig), AS:AttributeSet > C:Configuration .
+search [1] in SESSIONS-CHECK : ksRunning(ksA, kmA) ksRunning(ksB, kmOpen) tee =>!
+  < ksA : RichApp | proc : (k(.K) env((fresp |-> LV:Nat) ; ENV:Map{Var,Nat})
+    store((LV:Nat |-> sobj((error |-> LE:Nat) ; SO:Map{Var,Nat})) ; (LE:Nat |-> # -28) ; MEM:Map{Nat,Value?})
+    KS:KConfig), AS:AttributeSet > C:Configuration .
+
+------------------------------------------------------------
+--- 3. Gatekeeper: a panic resets the throttling although another session is open
+------------------------------------------------------------
+
+--- hal2 opens a session and keeps it; a teeFault (core/scenarios/panic.maude) panics the instance
+--- during a request.  The attacker was throttled (its sixth guess got ERROR_RETRY, in t6), and
+--- its guess in a new session gets ERROR_INVALID: the panicked instance was destroyed with
+--- its failure records, and the new session is on a new instance.  The session of hal2 is on the
+--- panicked instance, so hal2 opened it before the panic: it did not keep the instance.
+--- expect: a solution
+search [1] in SESSIONS-CHECK : halRunning(gkPanicAttacker) hal2Running(gkHolder) teeFault tee =>!
+  < hal : RichApp | proc : (k(.K) env((vresp |-> LV:Nat) ; (t6 |-> LT:Nat) ; ENV:Map{Var,Nat})
+    store((LV:Nat |-> sobj((error |-> LE:Nat) ; SO:Map{Var,Nat})) ; (LE:Nat |-> # 1) ; (LT:Nat |-> # 2) ;
+      MEM:Map{Nat,Value?})
+    KS:KConfig), AS:AttributeSet >
+  < hal2 : RichApp | proc : (k(.K) KS2:KConfig), AS2:AttributeSet >
+  < SID:SessionId : Session | source : hal2, destination : TI:Oid, SAS:AttributeSet >
+  < TI:Oid : TrustedApp | status : panic, TAAS:AttributeSet >
+  C:Configuration .

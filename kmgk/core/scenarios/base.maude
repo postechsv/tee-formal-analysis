@@ -1,0 +1,56 @@
+--- Initial states: the clients, the TrustedOS that serves the Gatekeeper and the Keymaster TAs,
+--- the instances of the TAs and their storages: the secret object of the master key of the
+--- Gatekeeper TA, and the auth token key of the Keymaster TA.  The TrustedOS creates the storage of
+--- a single-instance TA only with its instance, so the instances are there from the start, with no
+--- session (a TEEC_OpenSession joins the instance: teec-open-session-shared).  idata keeps the
+--- instance data of the TAs (core/kmgk-instance-data.maude).
+
+mod KMGK-SCENARIO is
+  pr GATEKEEPER-HAL-PROGRAM .
+  pr GATEKEEPER-TA-PROGRAM .
+  pr KEYSTORE-PROGRAM .
+  pr KEYMASTER-TA-PROGRAM .
+
+  ops hal osId : -> Oid [ctor] .
+  --- ksA, ksB: two keystore clients.
+  ops ksA ksB : -> Oid [ctor] .
+  var P : Program .
+  var O : Oid .
+
+  --- gkInst, kmInst: the instances of the Gatekeeper and the Keymaster TAs; their storages are
+  --- oid(0, gkInst) and oid(0, kmInst).
+  ops gkInst kmInst : -> Oid .
+  eq gkInst = oid(0, osId) .
+  eq kmInst = oid(1, osId) .
+
+  op tee : -> Configuration .
+  eq tee =
+    < osId : TrustedOS | session-counter : 2,
+        ta-config : ((GATEKEEPER |-> taConfig(gatekeeperTA, true, true)) , (KEYMASTER |-> taConfig(keymasterTA, true, true))),
+        ta-instances : ((GATEKEEPER |-> oid(0, osId)) , (KEYMASTER |-> oid(1, osId))),
+        ta-storages : ((GATEKEEPER |-> oid(0, oid(0, osId))) , (KEYMASTER |-> oid(0, oid(1, osId)))) >
+    < oid(0, osId) : TrustedApp | proc : none, prog : gatekeeperTA, client-service : none,
+        status : (normal).AppStatus, api-call : noCall, counter : 1, storage : oid(0, oid(0, osId)),
+        os-kernel : osId, sessions : 0 >
+    < oid(0, oid(0, osId)) : Storage | status : (normal).StorageStatus, files : SECRET-ID, counter : 2 >
+    < oid(1, oid(0, oid(0, osId))) : PersistObj | type : pureData, usages : empty, max-size : 0,
+        attributes : empty, file-name : SECRET-ID, data-stream : attrContentData(randomAttrVal),
+        open-handles : noHandles >
+    < oid(1, osId) : TrustedApp | proc : none, prog : keymasterTA, client-service : none,
+        status : (normal).AppStatus, api-call : noCall, counter : 1, storage : oid(0, oid(1, osId)),
+        os-kernel : osId, sessions : 0 >
+    < oid(0, oid(1, osId)) : Storage | status : (normal).StorageStatus, files : AUTH-TOKEN-KEY-ID,
+        counter : 2 >
+    < oid(1, oid(0, oid(1, osId))) : PersistObj | type : pureData, usages : empty, max-size : 0,
+        attributes : empty, file-name : AUTH-TOKEN-KEY-ID, data-stream : attrContentData(randomAttrVal),
+        open-handles : noHandles >
+    < idata : InstanceData | instance-data : noStored > .
+
+  --- halRunning(P): the Gatekeeper HAL running the program P, with gkStructs and halDecls.
+  op halRunning : Program -> Configuration .
+  eq halRunning(P) = < hal : RichApp | prog : (gkStructs halDecls P), proc : mkConf(gkStructs halDecls P) > .
+
+  --- ksRunning(O, P): the keystore client O running the program P, with kmStructs and ksDecls.
+  op ksRunning : Oid Program -> Configuration .
+  eq ksRunning(O, P) = < O : RichApp | prog : (kmStructs ksDecls P), proc : mkConf(kmStructs ksDecls P) > .
+endm

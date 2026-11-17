@@ -1,0 +1,48 @@
+--- Scenarios of the state that a TA instance keeps across its sessions.
+---
+--- 1. Gatekeeper: the failure records live in the instance memory of the Gatekeeper TA, which is
+---    single-instance and not kept alive.  A client that closes its session destroys the instance
+---    when no other session is open, and the next session starts on a new instance with no
+---    failure records: the throttling of failed attempts is reset.  With another session open, the
+---    instance and the records stay.
+--- 2. Keymaster: the operation table lives in the instance memory of the Keymaster TA, and
+---    TA_CloseSessionEntryPoint does nothing.  An operation begun in a session survives the close
+---    of that session while another session keeps the instance, and a new session can finish it;
+---    without another session, the instance and the operation are gone.
+
+mod KMGK-SESSIONS is
+  pr KMGK-SCENARIO .
+
+  --- guesses(N): N verifications of the wrong password data(8).
+  op guesses : Nat -> Program .
+  var N : Nat .
+  eq guesses(0) = skip .
+  eq guesses(s N) = verify(data(8)) guesses(N) .
+
+  --- gkAttacker: enrolls data(7), makes five wrong guesses (the fifth starts the throttling), then
+  --- closes its session, opens a new one and guesses again.
+  op gkAttacker : -> Program .
+  eq gkAttacker = open enroll(data(7)) guesses(5) close open verify(data(8)) .
+
+  --- gkOther: another client of the Gatekeeper TA that opens a session and closes it.
+  op gkOther : -> Program .
+  eq gkOther = open close .
+
+  op gkHolder : -> Program .
+  eq gkHolder = open .
+
+  --- kmA: begins a sign operation with an HMAC key that needs no authorization, updates it,
+  --- closes its session, opens a new one and finishes the operation of its first session.
+  op kmA : -> Program .
+  eq kmA = kmOpen noAuthKey(randomAttrVal) kmBegin(KM-PURPOSE-SIGN) kmUpdate(data(1)) kmClose
+           kmOpen kmFinish(data(2)) .
+
+  --- kmB: another client of the Keymaster TA that opens a session and closes it.
+  op kmB : -> Program .
+  eq kmB = kmOpen kmClose .
+
+  ops hal2 : -> Oid [ctor] .
+  op hal2Running : Program -> Configuration .
+  var P : Program .
+  eq hal2Running(P) = < hal2 : RichApp | prog : (gkStructs halDecls P), proc : mkConf(gkStructs halDecls P) > .
+endm

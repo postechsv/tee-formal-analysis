@@ -14,9 +14,11 @@ Usage
   has no built-in ==/=/=, no owise, no membership axioms and no non-equational rule conditions
   (matching conditions are removed with inline-match, see below).
 
-Input: the ORIGINAL spec (src/) with `---@dmc <directive>` comment lines placed immediately before the
-statement (or view header) they affect.  The annotated spec loads unchanged (the directives are
-comments).  Only files reached from main.maude through `load` are transformed; the rest are copied
+Input: the ORIGINAL spec (src/), and the directives of the transform in a directives file
+(--directives: the [dmc] table of an analysis file such as kmgk/dmc.toml; the format is in its header).  The spec carries no
+annotations: an entry of the file names the statements it applies to (an operator for its [owise]
+equations, a label for a rule, a sort, the Qid subsort, a Qid literal operator).  A `---@dmc` comment
+line in a source is an error.  Only files reached from main.maude through `load` are transformed; the rest are copied
 verbatim (e.g. the not-loaded cryptographic.maude).  The test tree (--tests) is not loaded by the
 generator; its derived copy (--tests-out, default <out>/../dmc-tests) has the same layout and the same
 numbering as the build, so the test suites run on the DMC build unchanged.  The source and test trees
@@ -41,94 +43,102 @@ Options
   --cache-dir DIR   bookkeeping directory: reflect.json (reflection cache), ground-*.in and check-build
                     (--check), and manifest.json. Default <out>/.dmc-cache. Only check-build is replaced.
   --maude PATH      Maude binary (default $MAUDE_BIN or the maude-alpha165 path)
+  --directives FILE directives file (repeatable or comma-separated; a later file replaces the entries of an
+                    earlier one).  A file with a [dmc] table (an analysis .toml) is read from that table.
+                    Required.  An entry that matches no statement is a warning
   --ghost FILE      compose the ghost file with the spec rules first (repeatable or comma-separated):
                     the source dir is copied to <cache-dir>/ghost-src and composed there (see "Ghost
                     composition" below and tools/build/ghost.py, which make GHOST=... runs on the stage)
 
-Directives (one per line, before the statement)
-  ---@dmc close-sort(S=C)       (before `sort S .` or `sorts ... S ... .`)  the sort S gets the constructor
+Directives.  Each is written below as the directive string of an entry of the directives file, with the
+entry that gives it: [close-sort] S = "C" gives close-sort(S=C); [owise] f = "A" (or { action = "A", ... })
+gives `owise A` (and scope(...), classes(...), exact-classes(...), sort-split(...), exclude-ctors(...) from
+the keys of the same name) for every [owise] equation of f; [rules] label = "D" gives D for that rule;
+[equations] f = { drop = ["LHS", ...] } gives drop for the equation of f with that left-hand side (white
+space ignored), e.g. an equation that the closed sorts of the DMC build cannot express.
+  close-sort(S=C)       ([close-sort], on `sort S .` or `sorts ... S ... .`)  the sort S gets the constructor
         C : Nat -> S.  Every constant of S (in the scope and in the derived tests) becomes an abbreviation
         `eq c = C(k) .` (its [ctor] attribute is dropped), and the Qid literals of the qid-subsort sort
         become C(k) too.  Numbers are per closed sort: constants (sorted by name), then Qid literals.  The
         table is in the manifest.  Constants are abbreviations because a pattern with a constant never
         matches a normal form, so every equation and rule of the DMC build has its constants and Qid literals
         rewritten (meaning-preserving).  Attribute names (`n :`) and sort names after a colon are left alone.
-  ---@dmc qid-subsort           (before `subsort Qid < S .`)  the subsort is dropped in the DMC build.
-  ---@dmc restrict(V=S,V'=S)    (before a rule or equation)  the variables of this statement are restricted to
+  qid-subsort           (qid-subsort = "S", on `subsort Qid < S .`)  the subsort is dropped in the DMC build.
+  qid-literals(S)       (qid-literals = ["op"], on `op op : Qid -> S .`)  the operator is dropped; its
+        literals are numbered with the constants of the closed sort S.
+  restrict(V=S,V'=S)    ([rules])  the variables of this statement are restricted to
         the sort S (V:S on the left-hand side; the right-hand side is rewritten).  Used for k({ V == V' }) over
-        Value? in imp.maude: the K-level comparison is only reached with Value operands (the program path
+        Value? in lang/c/semantics.maude: the K-level comparison is only reached with Value operands (the program path
         requires them), so the restriction is not observable from executions.  Counted in the manifest.
-  ---@dmc owise drop
+  owise drop
         remove [owise]; the other equations already cover the case.
-  ---@dmc owise cond(<C>)
+  owise cond(<C>)
         the owise equation becomes `ceq ... if <C>` (the complement written by the author), e.g.
         `owise cond(not $hasMapping(LM, LB))` or `owise cond(not (FILE in FL))`.
-  ---@dmc owise enumerate(VAR)        (or enumerate(argN))
+  owise enumerate(VAR)        (or enumerate(argN))
         single-argument enumeration: VAR is a whole argument (its sort's constructors and constants
         are enumerated), or a variable nested inside an argument such as `< S > SL`.  Constructor
         cases that sibling equations cover are skipped; conditional siblings become guards `not (C)`.
-  ---@dmc owise enumerate(arg1, arg2, ...)
+  owise enumerate(arg1, arg2, ...)
         cell engine (below) over the listed arguments: each is split into constructor cases on demand.
-  ---@dmc owise recurse(sep=<op>, empty=<const>)
+  owise recurse(sep=<op>, empty=<const>)
         cell engine over the last argument, a collection built with the AC constructor <op> (`__`
         or `_,_`), given as a variable (`FL`) or as `Elem Rest` (`OBJ HS`).  Elements are constructor
         cases; a sibling that names a constant, a constructor shape or an attribute of an element splits
         that element on demand.  The cell right-hand side is the owise value on the rest, with the
         element put back when the owise right-hand side rebuilds the collection.
-  The cell engine (enumerate, enumerate(...), recurse, shapes) takes these directives before the owise
-  equation (the generator does not infer them; the target check of --check finds a missing one):
-  ---@dmc scope(M1, M2, ...)
+  The cell engine (enumerate, enumerate(...), recurse, shapes) takes these keys of the [owise] entry
+  (the generator does not infer them; the target check of --check finds a missing one):
+  scope(M1, M2, ...)
         [owise] is relative to the module in which a term is reduced: the cells are also made over the
         constructors of each listed module that the build has and that sees the operator (modules of
         another configuration are skipped).  The cells that hold a constructor or an attribute the owise's
         module does not see go into Mi before its end line, with the owise module's variables written with
         sorts, and Mi adds the equations of the dmc-no-<attr> / dmc-is-<K> / dmc-out-<Sp>-<S> predicates
         for what it adds.  Without scope, the cells are those of the owise's module.
-  ---@dmc classes(K1, K2, ...)       ---@dmc exact-classes(K1, ...)
+  classes(K1, K2, ...)       exact-classes(K1, ...)
         the cells of an Object element whose class a sibling names: a class variable V:K per class of
         classes (K and its subclasses), and V:K with the guard dmc-is-K(V) per class of exact-classes (an
         object written with K itself).  Each module writes the listed classes it sees.  A class cell that a
         sibling's class cuts (they share subclasses, and the cell has some outside them) is an error.
-  ---@dmc sort-split(Sp < S)
+  sort-split(Sp < S)
         a sibling variable of sort Sp at a position of sort S splits the cell into the terms of Sp
         (decided by the sibling) and V:S with the guard dmc-out-<Sp>-<S>(V), a predicate defined by
         constructor equations over the least sort of a term (out_pred_eqs: subsort-overloaded constructors
         recurse on their arguments, assoc sequences with an identity are matched with two elements fixed).
         Without the directive, such a sibling is an error.
-  ---@dmc owise shapes(sep=<op>, empty=<const>, elem=<sort>)
+  owise shapes(sep=<op>, empty=<const>, elem=<sort>)
         cell engine over a list argument with the shapes  <empty> | <one element> | (<element>, <rest>).
-  ---@dmc exclude-ctors(c1,c2,...)
+  exclude-ctors(c1,c2,...)
         leave these constructors out of enumerate / recurse (siblings for them are then ignored).
-  ---@dmc keep-builtin
-        keep the statement's `==` / `=/=` as written.  Used for the IMP expression constructor `_==_`
-        (Exp Exp -> Exp), which is not Maude's built-in equality.
-  ---@dmc split                 (before a rule)  one rule per branch of the if ... fi terms of the right-hand
+  Built-in `==` / `=/=` is replaced by the generated equality everywhere.  A spec operator written `==`
+        (the C expression constructor `_==_ : Exp Exp -> Exp`) is told apart by its slot (is_user_eq): the
+        comparison is the only argument of an operator whose domain takes the spec operator's range but not
+        Bool, as in `{ E1 == E2 }`; `# (V == V')` takes Bool (`#_ : Bool -> Value`) and is built-in.
+  split                 ([rules])  one rule per branch of the if ... fi terms of the right-hand
         side: the condition B of an if term is added to the rule condition (/\\ B and /\\ not B), the if terms
         with that condition are resolved, and this repeats until no if term is left.  Labels get -then / -else.
-  ---@dmc split(B)              (before a rule)  two rules, with /\\ B and with /\\ not B; the if terms with
+  split(B)              ([rules])  two rules, with /\\ B and with /\\ not B; the if terms with
         condition B are resolved.  Several split directives apply in order.  Meaning-preserving when B
         reduces to true or false on ground terms.
-  ---@dmc inline-match          (before a rule or a conditional equation)  its matching conditions P := t are
+  inline-match          ([rules])  its matching conditions P := t are
         removed.  A variable pattern V (or V:S) is replaced by t in the right-hand side and the later
         conditions.  A constructor pattern whose arguments are variables, such as [X] or f(X, Y), becomes
         the equational condition t = P' where P' is P with each argument X replaced by dmc-matchN-i(t),
         a projection declared right before the statement (eq dmc-matchN-i(P) = X); so do the occurrences of
         X.  Meaning-preserving when t reduces to a term of the variable's sort (variable pattern).
-  ---@dmc pattern(V=P)          (before a conditional rule or equation)  the author asserts that the condition
+  pattern(V=P)          ([rules], a conditional rule)  the author asserts that the condition
         holds exactly when V has the shape P: V is replaced by (P) and the condition is dropped.  The
         variables of P carry their sorts (S1:Stmt).  Sibling owise enumerations see the new pattern.  E.g.
         `getSList(S) =/= < S >` holds exactly for a juxtaposition: pattern(S=S1:Stmt S2:Stmt).
-  ---@dmc shape-cond(T =/= C => P)   (before a conditional rule or equation)  the author asserts that the
+  shape-cond(T =/= C => P)   ([rules], a conditional rule)  the author asserts that the
         condition T =/= C holds exactly when T has the shape P (variables of P carry their sorts).  The
         condition becomes dmc-shapeN(T) = true, declared right before the statement with the one equation
         dmc-shapeN(P) = true.  E.g. a TEE API has a stub (getStub(TF) =/= skip) exactly when its stub body
         starts with the signature: shape-cond(getStub(TF) =/= skip => $sig(I:ExpList, O:ExpList) ~> R:K).
-  ---@dmc drop                  (before a rule or equation)  the statement is left out of the DMC build (and
+  drop                  ([rules])  the statement is left out of the DMC build (and
         is no sibling of owise equations).  For a case DM-Check cannot express that the analysis does not
         reach, e.g. the illTyped result of mkConf (wellTyped is only defined as true).  Counted in the manifest.
-  ---@dmc replace  ...  ---@dmc end
-        generator escape hatch (a block `---(` ... `---)` uncommented into the output).  The
-        annotated tree uses no replace block; the count is reported.
 
 Equality of the DMC build (plan)
   * A sort gets `_.=._` (variant equations, Bool results True/False) when its constructors (dmc_ctors:
@@ -197,7 +207,7 @@ Automatic rules (no annotation)
     sort given constructors by a spec module (Oid) is handled as a sort of its view's target module.
   * owise equation whose siblings with the same LHS are all conditional -> ceq with the negated
     conditions; owise with two variables that siblings identify -> guard `not (A .=. B)`.
-  * owise equations with a single sibling pattern constant are reported as errors unless annotated.
+  * owise equations with a single sibling pattern constant are reported as errors unless the directives file has an [owise] entry.
 Anything else raises an error at file:line asking for an annotation.
 
 Ghost composition (--ghost, tools/build/ghost.py, make GHOST=...)
@@ -216,7 +226,7 @@ Cell engine (owise enumerate(...)/recurse/shapes).  A cell is a combination of a
 argument is split only when a sibling equation has a constructor, constant, attribute or non-variable
 pattern at that position, so cells no sibling constrains stay merged.  A cell covered completely by
 a sibling is dropped; a cell covered in part gets the guard `not (<sibling pattern equalities and
-condition>)`.  Built-in `==` appears only in guards on sorts marked keep-builtin.  Attribute sets are
+condition>)`.  Attribute sets are
 split only at the attributes that the siblings name, one attribute at a time into present (`a : X, REST`)
 and absent (`REST` with the guard `dmc-no-a(REST)`, a predicate declared next to the cells); a sibling
 written without a rest variable is approximated by its named attributes (documented limitation).
@@ -229,6 +239,11 @@ Reflection and the ground checks write only under <cache-dir> (default <out-dir>
 
 Two passes: pass A is permissive and records what needs equality, which views to upgrade and which
 modules need DM-INT; pass B generates the output with the plan computed from pass A.
+
+Files outside the source dir: a file that main.maude loads by a relative path out of the source dir
+(load ../lang/c/semantics, the language files of a spec next to its src/) is transformed like the others
+and written at the same path relative to <out-dir> (<out-dir>/../lang/c/semantics.maude).  Loads are
+resolved relative to the loading file, as Maude does.
 
 Output: all files of the source dir are copied to <out-dir>; main.maude gets `load aux` before its
 first load line and, when there are equation modules, `load dm-eq` after its last load line; aux.maude
@@ -247,10 +262,13 @@ except ImportError:  # pragma: no cover
     resource = None
 import json
 import os
+import posixpath
 import re
 import shutil
 import subprocess
 import sys
+import fnmatch
+import tomllib
 
 TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 DMC_LIB = os.path.join(TOOLS_DIR, 'lib')
@@ -455,6 +473,23 @@ STMT_START_KW = {'eq', 'ceq', 'rl', 'crl', 'op', 'ops', 'var', 'vars', 'sort', '
                  'msgs', 'class', 'subclass'} | HEAD_KW | END_KW | CMD_KW
 
 
+VAR_DECL_RE = re.compile(r'vars?\s+([^:.]+?)\s*:\s*(\S+)\s*\.(?=\s|$)')
+
+
+def var_decls(text):
+    """[(names, sort)] of text made only of var/vars declarations (one or more), else None."""
+    out, pos, text = [], 0, text.strip()
+    while pos < len(text):
+        m = VAR_DECL_RE.match(text, pos)
+        if not m:
+            return None
+        out.append((m.group(1).split(), m.group(2)))
+        pos = m.end()
+        while pos < len(text) and text[pos].isspace():
+            pos += 1
+    return out or None
+
+
 def stmt_end_follows(masked, kinds, j, endcol):
     """A standalone '.' ends a statement only when the next code token starts a new unit (Maude
     struct access such as `E1 . E2` also uses a standalone dot)."""
@@ -571,7 +606,14 @@ def scan_units(lines, fname):
             raise GenError('%s:%d: unterminated %s' % (fname, i + 1, kind))
         last, endcol = found
         if masked[last][endcol:].strip():
-            raise GenError('%s:%d: more than one statement on a line is not supported' % (fname, last + 1))
+            # var declarations may share a line (var A : S . var B : T .): one unit for the line,
+            # which no transform rewrites (var_decls reads every declaration of it)
+            head = ' '.join(masked[k] for k in range(i, last + 1) if kinds[k] == 'code')
+            if (kind == 'stmt' and var_decls(norm(head[:len(head) - len(masked[last]) + endcol]))
+                    and var_decls(norm(masked[last][endcol:]))):
+                endcol = len(codes[last])
+            else:
+                raise GenError('%s:%d: more than one statement on a line is not supported' % (fname, last + 1))
         pieces = []
         for k in range(i, last + 1):
             if kinds[k] == 'code':
@@ -707,7 +749,7 @@ def neg_cond(c):
 
 def parse_directive(d):
     """Return (key, value) for a directive string."""
-    if d in ('keep-builtin', 'replace', 'end', 'qid-subsort'):
+    if d in ('replace', 'end', 'qid-subsort'):
         return d, None
     m = re.match(r"^restrict\((.*)\)$", d)
     if m:
@@ -774,7 +816,170 @@ def parse_directive(d):
     m = re.match(r'^split\((.+)\)$', d)
     if m:
         return 'split', m.group(1).strip()
-    raise GenError('unknown directive: ---@dmc %s' % d)
+    raise GenError('unknown directive: %s' % d)
+
+
+# ---------------------------------------------------------------- directives file
+
+SPEC_RULE_RE = re.compile(r'\bc?rl\s*\[([^\]\s]+)\]\s*:')
+
+
+def spec_rule_labels(spec_dir):
+    """The labels of the rules of a spec checkout, every feature included (SPEC_DIR/src and
+    SPEC_DIR/lang).  The transforms of a feature build (tools/build: drop-class-attribute, ghost,
+    gen-invisible) use them for the patterns that match no rule of the build: see
+    unmatched_label."""
+    out = set()
+    for d in (os.path.join(spec_dir, 'src'), os.path.join(spec_dir, 'lang')):
+        for root, _, files in os.walk(d):
+            for f in files:
+                if f.endswith('.maude'):
+                    with open(os.path.join(root, f), encoding='utf-8') as fh:
+                        for line in fh:
+                            out.update(SPEC_RULE_RE.findall(line.split('---', 1)[0]))
+    return out
+
+
+def unmatched_label(pattern, spec_labels):
+    """For a rule-label pattern (a glob) that matches no rule of a build: None when it matches a
+    label of the full spec, spec_rule_labels (its rules are left out by the feature selection of
+    the build), else the error text (a typo, or a label the spec no longer has)."""
+    if spec_labels is not None and any(fnmatch.fnmatchcase(lab, pattern) for lab in spec_labels):
+        return None
+    return 'no rule label matches %s' % pattern
+
+
+DIRECTIVE_TABLES = ('qid-subsort', 'qid-literals', 'close-sort', 'owise', 'rules', 'equations')
+OWISE_KEYS = ('action', 'scope', 'classes', 'exact-classes', 'sort-split', 'exclude-ctors')
+
+
+def load_directives(path):
+    """The directives of a directives file: a dict with qid-subsort (a sort or None), qid-literals
+    (operator names), close-sort (sort -> constructor), owise (operator -> directive strings) and
+    rules (label -> directive strings).  A file with a top-level [dmc] table (an analysis file of a
+    case study, or build/C-A/A.toml written from it) is read from that table."""
+    path = os.path.abspath(path)
+    try:
+        with open(path, 'rb') as fh:
+            data = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError) as ex:
+        raise GenError('%s: %s' % (path, ex))
+    if 'dmc' in data and isinstance(data['dmc'], dict):
+        data = data['dmc']
+    bad = [k for k in data if k not in DIRECTIVE_TABLES]
+    if bad:
+        raise GenError('%s: unknown key(s) %s (expected %s)' % (path, ', '.join(bad), ', '.join(DIRECTIVE_TABLES)))
+    res = {'qid-subsort': None, 'qid-literals': [], 'close-sort': {}, 'owise': {}, 'rules': {}, 'equations': {}}
+    if 'qid-subsort' in data:
+        res['qid-subsort'] = data['qid-subsort']
+    res['qid-literals'] += [n for n in data.get('qid-literals', []) if n not in res['qid-literals']]
+    res['close-sort'].update(data.get('close-sort', {}))
+    for fn, v in data.get('owise', {}).items():
+        if isinstance(v, str):
+            v = {'action': v}
+        bad = [k for k in v if k not in OWISE_KEYS]
+        if bad or 'action' not in v:
+            raise GenError('%s: [owise] %s: needs action, and only %s' % (path, fn, ', '.join(OWISE_KEYS)))
+        ds = []
+        for k in ('scope', 'classes', 'exact-classes', 'exclude-ctors'):
+            if k in v:
+                ds.append('%s(%s)' % (k, ', '.join(v[k])))
+        if 'sort-split' in v:
+            ds.append('sort-split(%s)' % v['sort-split'])
+        ds.append('owise ' + v['action'])
+        res['owise'][fn] = ds
+    for lab, v in data.get('rules', {}).items():
+        res['rules'][lab] = [v] if isinstance(v, str) else list(v)
+    for fn, v in data.get('equations', {}).items():
+        if not isinstance(v, dict) or set(v) != {'drop'} or not isinstance(v['drop'], list):
+            raise GenError('%s: [equations] %s: needs drop = ["LHS", ...], and nothing else' % (path, fn))
+        res['equations'][fn] = [eq_key(lhs) for lhs in v['drop']]
+    for ds in list(res['owise'].values()) + list(res['rules'].values()):
+        for d in ds:
+            parse_directive(d)
+    return res
+
+
+def eq_key(lhs):
+    """The left-hand side of an equation as an [equations] entry matches it: white space removed."""
+    return re.sub(r'\s+', '', lhs)
+
+
+def directives_of_unit(dirs, u):
+    """[(table, key)] matched and the directive strings of a unit from a directives dict."""
+    t = u.text
+    hits, ds = [], []
+    m = re.match(r'^c?rl\s+\[([^\]]+)\]\s*:', t)
+    if m:
+        lab = m.group(1).strip()
+        if lab in dirs['rules']:
+            hits.append(('rules', lab))
+            ds += dirs['rules'][lab]
+        return hits, ds
+    if re.match(r'^c?eq\s', t):
+        e = parse_eq(t)
+        if e is not None and e['owise'] and e['fn'] in dirs['owise']:
+            hits.append(('owise', e['fn']))
+            ds += dirs['owise'][e['fn']]
+        if e is not None and eq_key(e['lhs']) in dirs['equations'].get(e['fn'], []):
+            hits.append(('equations', (e['fn'], eq_key(e['lhs']))))
+            ds.append('drop')
+        return hits, ds
+    m = re.match(r'^subsort\s+Qid\s*<\s*(\S+)\s*\.$', t)
+    if m:
+        if m.group(1) == dirs['qid-subsort']:
+            hits.append(('qid-subsort', m.group(1)))
+            ds.append('qid-subsort')
+        return hits, ds
+    m = re.match(r'^sorts?\s+(.*?)\s*\.$', t)
+    if m:
+        for s in m.group(1).split():
+            if s in dirs['close-sort']:
+                hits.append(('close-sort', s))
+                ds.append('close-sort(%s=%s)' % (s, dirs['close-sort'][s]))
+        return hits, ds
+    if t.startswith('op '):
+        for nm, doms, rng in parse_op_decl(t):
+            if nm in dirs['qid-literals']:
+                hits.append(('qid-literals', nm))
+                ds.append('qid-literals(%s)' % rng)
+    return hits, ds
+
+
+def kept_text(fi):
+    """The text of a file without the statements that a drop directive removes."""
+    gone = set()
+    for u in fi.units:
+        if u.kind == 'stmt' and any(parse_directive(d)[0] == 'drop' for d in u.dmc):
+            gone.update(range(u.start, u.end + 1))
+    return '\n'.join(t for i, (t, _) in enumerate(fi.lines) if i not in gone)
+
+
+def attach_directives(dirs, fis, files):
+    """Set the directives of the units of files from dirs.  A ---@dmc comment in a source is an error:
+    the directives of the spec are in the directives file.  Returns (errors, unmatched entries)."""
+    errors, used = [], set()
+    for f in files:
+        in_view = False
+        for u in fis[f].units:
+            if u.dmc:
+                errors.append('%s:%d: ---@dmc comment (directives are given by the directives file, '
+                              'the [dmc] table of the analysis)' % (f, u.line))
+            if u.kind == 'head':
+                in_view = u.text.split()[0] == 'view'
+            elif u.kind == 'end':
+                in_view = False
+            if u.kind != 'stmt' or in_view:
+                u.dmc = []
+                continue
+            hits, ds = directives_of_unit(dirs, u)
+            used.update(hits)
+            u.dmc = ds
+    entries = ([('qid-subsort', dirs['qid-subsort'])] if dirs['qid-subsort'] else []) + \
+        [('qid-literals', n) for n in dirs['qid-literals']] + \
+        [(k, n) for k in ('close-sort', 'owise', 'rules') for n in dirs[k]] + \
+        [('equations', (fn, lhs)) for fn in dirs['equations'] for lhs in dirs['equations'][fn]]
+    return errors, [e for e in entries if e not in used]
 
 
 # ---------------------------------------------------------------- reflection
@@ -841,6 +1046,14 @@ class Reflection(object):
                 res.add(c['rng'])
         return res
 
+    def op_doms(self, m, name, arity):
+        """Domain lists of the operators named `name` with `arity` arguments visible in module m."""
+        res = []
+        for f in self.mods.get(m, {}).get('ops', []) + self.ctors(m):
+            if f['name'] == name and len(f['doms']) == arity and f['doms'] not in res:
+                res.append(f['doms'])
+        return res
+
     def drop_ops(self, names):
         """Remove the operators named in names (the qid-literals operators, dropped from the DMC build)."""
         for d in self.mods.values():
@@ -882,10 +1095,9 @@ def run_reflection(src, cache_dir, mods, maude, fresh):
     h = hashlib.sha256()
     h.update(GEN_VERSION.encode())
     h.update(','.join(sorted(mods)).encode())
-    for fn in sorted(os.listdir(src)):
-        if fn.endswith('.maude'):
-            with open(os.path.join(src, fn), 'rb') as f:
-                h.update(fn.encode() + f.read())
+    for fn in spec_files(src):
+        with open(os.path.join(src, fn), 'rb') as f:
+            h.update(fn.encode() + f.read())
     with open(DUMP_MAUDE, 'rb') as f:
         h.update(f.read())
     key = h.hexdigest()
@@ -1072,13 +1284,7 @@ def pass1(gen, fname, fi):
                 cur_view = m.group(1)
                 cur_mod = None
                 info = {'from': m.group(2), 'to': m.group(3), 'elt': None, 'file': fname,
-                        'line': u.line, 'keep': False}
-                for d in u.dmc:
-                    key, val = parse_directive(d)
-                    if key == 'keep-builtin':
-                        info['keep'] = True
-                    else:
-                        raise GenError('%s:%d: directive %s not allowed on a view' % (fname, u.line, d))
+                        'line': u.line}
                 gen.views[cur_view] = info
             else:
                 cur_mod = mod_name_of_head(u.text)
@@ -1112,10 +1318,9 @@ def pass1(gen, fname, fi):
                                            % (fname, u.line, val, val))
                         gen.qid_ops[decl[0][0]] = val
             elif re.match(r'^vars?\s', t):
-                m = re.match(r'^vars?\s+(.*?)\s*:\s*(\S+)\s*\.$', t)
-                if m:
-                    for nm in m.group(1).split():
-                        gen.mod_vars[cur_mod][nm] = m.group(2)
+                for names, sort in var_decls(t) or []:
+                    for nm in names:
+                        gen.mod_vars[cur_mod][nm] = sort
             elif re.match(r'^subsort\s+Qid\s*<\s*(\S+)\s*\.$', t) and any(k == 'qid-subsort' for k, _ in map(parse_directive, u.dmc)):
                 gen.qid_sort = re.match(r'^subsort\s+Qid\s*<\s*(\S+)\s*\.$', t).group(1)
             elif re.match(r'^sorts?\s', t):
@@ -1412,8 +1617,8 @@ LIST_EXP = ('ExpList', 'VarList')
 
 # Element sorts of an ExpList: Value and Var (LExp) are subsorts of Exp, and PExp (T X) and FExp (F(EL) and
 # F()) are constructor sorts.  Each kind has its own equality: the `.=.` of its parts.
-EXP_ELEM_SORTS = ('Value', 'Var', 'ImpType', 'FuncId')
-EXP_CTOR_MOD = 'IMP-EXP'     # declares the PExp constructor (ImpType Var) and the FExp ones (FuncId ...)
+EXP_ELEM_SORTS = ('Value', 'Var', 'CType', 'FuncId')
+EXP_CTOR_MOD = 'C-EXP'     # declares the PExp constructor (CType Var) and the FExp ones (FuncId ...)
 # (kind, left pattern, right pattern) of each element kind: Value, Var, PExp (T X), FExp call F(EL), FExp F()
 EXP_KINDS = [
     ('V', 'VA', 'VB'),
@@ -1468,11 +1673,11 @@ def aux_module(gen):
             # `.=.` of the element parts; the same profiles as the sort modules, so the declarations merge
             '  op _.=._ : Value Value -> Bool .',
             '  op _.=._ : Var Var -> Bool .',
-            '  op _.=._ : ImpType ImpType -> Bool .',
+            '  op _.=._ : CType CType -> Bool .',
             '  op _.=._ : FuncId FuncId -> Bool .',
             '  vars VA VB : Value .',
             '  vars XA XB : Var .',
-            '  vars TA TB : ImpType .',
+            '  vars TA TB : CType .',
             '  vars FA FB : FuncId .',
             '  vars EA EB : ExpList .',
             '  vars E E\' : Exp .',
@@ -1642,24 +1847,75 @@ def eq_text(gen, mod, a, b, S, neg, keep, where):
         elif keep:
             return '(%s =/= %s)' % (a, b) if neg else '(%s == %s)' % (a, b)
         else:
-            raise GenError('%s: no equality on sort %s for built-in comparison; annotate keep-builtin'
+            raise GenError('%s: no equality on sort %s for built-in comparison'
                            % (where, S))
     return ('not ' + core) if neg else core
 
 
+IDENT_RE = re.compile(r"[A-Za-z$][\w\-'$]*")
+
+
+def slot_doms(gen, mod, toks, lo, hi):
+    """The argument sorts expected at the term toks[lo..hi]: the domains of the operator whose only
+    argument it is, through grouping parentheses (`f(t)`, `g t` written `g (t)`, `{ t }`, `[ t ]`).
+    None when the term is not the only argument of an operator (an operand of an infix operator,
+    a condition, a side of an equation): those positions are left to the built-in reading."""
+    while True:
+        j, k = lo - 1, hi + 1
+        if j < 0 or k >= len(toks) or OPEN.get(toks[j][2]) != toks[k][2]:
+            return None
+        o, c = toks[j][2], toks[k][2]
+        if o != '(':
+            return gen.refl.op_doms(mod, o + '_' + c, 1) or None
+        p = j - 1
+        if p >= 0 and toks[p][2] not in STOP and toks[p][2] not in OPEN and toks[p][2] not in CLOSE \
+                and toks[p][2] != ',':
+            name = toks[p][2]
+            if toks[p][1] == toks[j][0] and IDENT_RE.fullmatch(name):
+                return gen.refl.op_doms(mod, name, 1) or None
+            doms = gen.refl.op_doms(mod, name + '_', 1)
+            if doms:
+                return doms
+        lo, hi = j, k
+
+
+def is_user_eq(gen, mod, toks, i, lo, hi):
+    """The `==` / `=/=` at toks[i] (operands toks[lo..hi]) is an operator of the spec, not the built-in
+    one: the module sees a spec operator `_==_` (such as the C expression `_==_ : Exp Exp -> Exp`),
+    and the slot of the comparison takes its range but not Bool (`{ E1 == E2 }`, whereas
+    `# (V == V')` takes Bool through `#_ : Bool -> Value`)."""
+    name = '_%s_' % toks[i][2]
+    rngs = [f['rng'] for f in gen.refl.mods.get(mod, {}).get('ops', []) + gen.refl.ctors(mod)
+            if f['name'] == name and len(f['doms']) == 2 and f['rng'] != 'Bool']
+    if not rngs:
+        return False
+    doms = slot_doms(gen, mod, toks, lo, hi)
+    if doms is None:
+        return False
+    ds = [d[0] for d in doms]
+    return any(gen.leq(mod, r, d) for r in rngs for d in ds) and not any(gen.leq(mod, 'Bool', d) for d in ds)
+
+
 def rewrite_text(ctx, text, where, keep=False):
-    """Replace built-in == and =/= by generated equality terms (unless keep)."""
+    """Replace built-in == and =/= by generated equality terms (unless keep).  A spec operator written
+    `==` (is_user_eq) is left alone."""
     if keep:
         return text
     gen = ctx.gen
+    pos = 0
     while True:
         toks = tokenize(text)
-        idx = [i for i, t in enumerate(toks) if t[2] in ('==', '=/=')]
+        idx = [i for i, t in enumerate(toks) if t[2] in ('==', '=/=') and t[0] >= pos]
         if not idx:
             return text
         i = idx[0]
         ll, lh = left_bounds(toks, i)
         rl, rh = right_bounds(toks, i)
+        if is_user_eq(gen, ctx.mod, toks, i, ll, rh):
+            gen.count(ctx.fname, 'user-eq-op')
+            pos = toks[i][1]
+            continue
+        pos = toks[ll][0]
         a = text[toks[ll][0]:toks[lh][1]].strip()
         b = text[toks[rl][0]:toks[rh][1]].strip()
         S = infer_sort(gen, ctx.mod, a)
@@ -1881,7 +2137,7 @@ def collection_stmts(ctx, u, e, sibs, action, excl, keep):
                     disjoint = True       # different constructors at the same position
                     break
                 raise GenError('%s: sibling equation differs in a non-collection argument; '
-                               'annotate or use replace' % where)
+                               'give an [owise] entry in the directives file' % where)
         if disjoint:
             continue
         whole = strip_parens(norm(s_['args'][N - 1]))
@@ -1950,7 +2206,7 @@ def collection_stmts(ctx, u, e, sibs, action, excl, keep):
                     unbound = [t for t in re.findall(r"[A-Za-z][\w\-']*", a)
                                if t in gen.mod_vars.get(mod, {}) and t not in shared]
                     if unbound:
-                        raise GenError('%s: sibling argument %s has variables %s; annotate or use replace'
+                        raise GenError('%s: sibling argument %s has variables %s; give an [owise] entry in the directives file'
                                        % (where, a, unbound))
                     pieces.append(eq_text(gen, mod, vtxt[idx], a, c['doms'][idx], False, keep, where))
                 if cond is not None:
@@ -2105,8 +2361,8 @@ def auto_owise(ctx, u, e, sibs):
                 raise GenError('%s: unknown sort for owise guard' % where)
             texts.append(eq_text(gen, mod, a, b, srt, True, False, where))
         return 'guard', ' /\\ '.join(texts)
-    raise GenError('%s: cannot transform owise equation automatically; add ---@dmc owise '
-                   'drop | cond(<C>) | enumerate(VAR) | recurse(sep=<op>, empty=<const>)' % where)
+    raise GenError('%s: cannot transform owise equation automatically; give an [owise] entry in the directives file, '
+                   'action = drop | cond(<C>) | enumerate(VAR) | recurse(sep=<op>, empty=<const>)' % where)
 
 
 def owise_stmts(ctx, u, e, dirs):
@@ -2125,8 +2381,6 @@ def owise_stmts(ctx, u, e, dirs):
             action = val
         elif key == 'exclude':
             excl += val
-        elif key == 'keep-builtin':
-            keep = True
         elif key == 'sort-split':
             ann[key].add(val)
         elif key in ann:
@@ -2535,7 +2789,7 @@ def m_match(gen, mod, cx, P, N):
             return ('no',)                  # no term of the node's sort has the variable's sort
         if N[0] == 'v' and N[3]:
             if (P[2], ns) not in cx.sort_split:
-                raise GenError('%s: the sibling variable %s:%s covers only part of %s; add ---@dmc sort-split(%s < %s)'
+                raise GenError('%s: the sibling variable %s:%s covers only part of %s; add sort-split = "%s < %s" to its [owise] entry'
                                % (cx.where, name, P[2], ns, P[2], ns))
             return ('maybe', (), P, ('sort', P[2]))
         if N[0] == 'c' and not any(o['name'] == N[1] and len(o['doms']) == len(N[2]) and gleq(gen, o['rng'], P[2])
@@ -2560,7 +2814,7 @@ def m_match(gen, mod, cx, P, N):
                     return ('yes', [], [])
                 if gleq(gen, rng, N[3]):
                     raise GenError('%s: the cell for class %s also matches the objects of its subclass %s, '
-                                   'which a sibling equation handles; list the cells with ---@dmc classes(...)'
+                                   'which a sibling equation handles; list the cells with classes = [...] in its [owise] entry'
                                    % (cx.where, N[1], name))
                 return ('no',)
             if N[1] != name or len(N[2]) != len(kids):
@@ -2684,8 +2938,8 @@ def class_options(gen, mod, cx, sort):
     each class K of exact-classes(...) (an object written with K itself).  A module writes the cells of the
     classes it sees; a listed class it does not see (a class of another configuration) is skipped."""
     if not cx.classes and not cx.exact:
-        raise GenError('%s: a sibling splits a class position (%s); list its cells with ---@dmc classes(...) '
-                       '(and exact-classes(...))' % (cx.where, sort))
+        raise GenError('%s: a sibling splits a class position (%s); list its cells with classes = [...] '
+                       '(and exact-classes = [...]) in its [owise] entry' % (cx.where, sort))
     rng = dict((c['name'], c['rng']) for c in vops(gen, mod) if is_class_const(gen, c))
     opts = []
     for ks, exact in ((cx.classes, False), (cx.exact, True)):
@@ -2906,8 +3160,8 @@ def expand(gen, mod, cx, nodes):
     root = first[1][0]
     path = first[1][1:]
     if root not in cx.refine:
-        raise GenError('%s: a sibling equation needs argument %d split; annotate the owise equation '
-                       'with enumerate(...) for that argument' % (cx.where, root + 1))
+        raise GenError('%s: a sibling equation needs argument %d split; give its [owise] entry '
+                       'enumerate(...) for that argument' % (cx.where, root + 1))
     N = child_of_path(nodes[root], path)
     for opt in refine_options(gen, mod, cx, N, first[2], first[3]):
         new_root = set_path(nodes[root], path, opt)
@@ -3455,7 +3709,7 @@ def wrapper_lines(S, kind):
 
 def ctor_doms(gen, X):
     """Argument sorts of the constructors (not AC) that can build a term of sort X, over all modules
-    (a constructor of a subsort of X builds an X term, e.g. struct_ : ImpType -> SType builds an ImpType)."""
+    (a constructor of a subsort of X builds an X term, e.g. struct_ : CType -> SType builds an CType)."""
     edges = getattr(gen, 'dep_edges', None)
     if edges is None:
         edges = {}
@@ -3484,7 +3738,7 @@ def reach_sorts(gen, X):
 
 def eq_rep(gen, S, cyc):
     """Sort whose `.=.` serves S: the top sort of the constructor cycle through S, or the cycle sort
-    above S (a subsort of a cyclic sort such as SType < ImpType), or S itself."""
+    above S (a subsort of a cyclic sort such as SType < CType), or S itself."""
     if S in cyc:
         rs = reach_sorts(gen, S)
         members = [X for X in cyc if X == S or (X in rs and S in reach_sorts(gen, X))]
@@ -3623,7 +3877,7 @@ def subsort_mods(gen, R, S):
 
 def visible_decl(gen, srt):
     """The first source module (load order) that sees an operator of result sort srt: the module that
-    imports the library instantiation declaring the sort (e.g. Map{Var,Nat} is imported by imp)."""
+    imports the library instantiation declaring the sort (e.g. Map{Var,Nat} is imported by c)."""
     for m in sorted(gen.mod_order, key=lambda m: gen.mod_order[m]):
         if m in gen.main_mods:
             continue
@@ -3812,7 +4066,6 @@ def bundle_groups(gen, mods, tag='', dm=None):
 def build_plan(gen):
     """Equality kinds, header insertions and view upgrades from the collected needs."""
     coll = gen.coll
-    forced = set()
     need = set(coll.needs)
     view_sorts = {}
     for vname in coll.view_needs:
@@ -3826,8 +4079,6 @@ def build_plan(gen):
             # a prelude sort (Oid of CONFIGURATION) given constructors by a spec module: its equality is
             # declared in the view's target, like a sort of the spec
             gen.sort_mod[v['elt']] = v['to']
-        if v['keep']:
-            forced.add(v['elt'])
         need.add(v['elt'])
     cyc = set(X for X in gen.sort_mod if X in reach_sorts(gen, X))
     gen.cyc = cyc
@@ -3836,18 +4087,16 @@ def build_plan(gen):
     def skind(S, stack):
         if S in memo:
             return memo[S]
-        if S.startswith('List{') and S.endswith('}') and S not in forced:
+        if S.startswith('List{') and S.endswith('}'):
             inner = S[5:-1]
             ok = inner in gen.sort_mod and skind(inner, stack | {S}) != 'builtin'
             memo[S] = 'structural' if ok else 'builtin'
             if ok:
                 gen.list_eq.add(inner)
             return memo[S]
-        if S not in forced and S not in stack and ac_built_sort(gen, S):
+        if S not in stack and ac_built_sort(gen, S):
             memo[S] = 'builtin'          # an AC constructor into S (a soup or multiset): no ctor-based equality
             return memo[S]
-        if S in forced:
-            return 'builtin'
         if S not in gen.sort_mod and not dmc_ctors(gen, S):
             return 'builtin'                 # a prelude sort (e.g. Oid of CONFIGURATION) without constructors
         if S in stack:
@@ -4017,13 +4266,19 @@ def list_eq_block(gen, a, upgraded, users):
     # The identity axiom of the juxtaposition makes (EX LX) match every non-empty list (and a one-element
     # list, with LX = nil), so only the shapes nil and (EX LX) are written.  An equation with a bare
     # element pattern or with a (nil LX) pattern would overlap with these and give conflicting results.
+    e = LIST_EMPTY.get(a, 'nil')
     lines += ['  vars EX EY : %s .' % a, '  vars LX LY : %s .' % S,
-              '  eq %s(nil, nil) = true .' % f,
-              '  eq %s(nil, (EY LY)) = false .' % f,
-              '  eq %s((EX LX), nil) = false .' % f,
+              '  eq %s(%s, %s) = true .' % (f, e, e),
+              '  eq %s(%s, (EY LY)) = false .' % (f, e),
+              '  eq %s((EX LX), %s) = false .' % (f, e),
               '  eq %s((EX LX), (EY LY)) = %s and %s(LX, LY) .' % (f, arg_eq(gen, 'EX', 'EY', a), f),
               'endfm', '']
     return lines
+
+
+# The empty list of List{a} when the spec renames the nil of LIST (none at present: List{Arg} and
+# CList share the constant nil, see C-EXP-LIST).
+LIST_EMPTY = {}
 
 
 def list_inst(a, upgraded):
@@ -4135,18 +4390,20 @@ def owise_recurse_args(args):
 def rule_stmt(ctx, t, dirs, where):
     """Text of the rule t after restrict(...) and the built-in equality rewriting, or None (unchanged)."""
     gen = ctx.gen
-    keep = any(k == 'keep-builtin' for k, v in dirs)
     rs = [v for k, v in dirs if k == 'restrict']
     if rs:
         for v, srt in rs[0]:
             t = re.sub(r"(?<![\w\-'$#%%:])%s(?![\w\-'$#%%:])" % re.escape(v), '%s:%s' % (v, srt), t)
         gen.count(ctx.fname, 'restrict')
-        # the left-hand side keeps the IMP constructor (V:Value == V':Value); the right side is rewritten
+        # the left-hand side keeps the C constructor (V:Value == V':Value); the right side is rewritten
         i = t.index(' => ') + len(' => ')
-        return t[:i] + rewrite_text(ctx, t[i:], where, keep)
+        return t[:i] + rewrite_text(ctx, t[i:], where)
     if '==' in t or '=/=' in t:
+        new = rewrite_text(ctx, t, where)
+        if new == t:
+            return None
         gen.count(ctx.fname, 'auto-builtin-rule')
-        return rewrite_text(ctx, t, where, keep) if not keep else None
+        return new
     return None
 
 
@@ -4193,7 +4450,7 @@ def join_stmt(kind, p):
 
 
 def apply_pattern(t, var, pat, where):
-    """---@dmc pattern(V=P): V becomes (P) and the condition is dropped."""
+    """pattern(V=P): V becomes (P) and the condition is dropped."""
     kind, p = split_stmt(t)
     if kind is None or not p['cond']:
         raise GenError('%s: pattern(%s=...) needs a conditional rule or equation' % (where, var))
@@ -4502,7 +4759,7 @@ def transform_unit(ctx, u, raw):
     where = '%s:%d' % (ctx.fname, u.line)
     if u.kind == 'head':
         if u.text.split()[0] == 'view':
-            if dirs and [k for k, v in dirs] != ['keep-builtin']:
+            if dirs:
                 raise GenError('%s: directive not allowed on a view header' % where)
             m = re.match(r'^view\s+(\S+)\s+from\s+(\S+)\s+to\s+(\S+)\s+is$', u.text)
             ctx.view = m.group(1)
@@ -4612,10 +4869,9 @@ def transform_unit(ctx, u, raw):
         gen.count(ctx.fname, 'restrict')
         sep = ' => ' if t.startswith(('rl ', 'crl ')) else ' = '
         if sep in t:
-            # the left-hand side keeps the IMP constructor (V:Value == V':Value); the right side is rewritten
+            # the left-hand side keeps the C constructor (V:Value == V':Value); the right side is rewritten
             i = t.index(sep) + len(sep)
-            keep = any(k == 'keep-builtin' for k, v in dirs)
-            return [ctx.indent + t[:i] + rewrite_text(ctx, t[i:], where, keep)]
+            return [ctx.indent + t[:i] + rewrite_text(ctx, t[i:], where)]
     e = parse_eq(t)
     if e is not None:
         if e['owise']:
@@ -4626,15 +4882,14 @@ def transform_unit(ctx, u, raw):
             else:
                 gen.count(ctx.fname, 'owise-' + kind)
             return [ctx.indent + x for x in stmts]
-        keep = any(k == 'keep-builtin' for k, v in dirs)
-        if dirs and [k for k, v in dirs] != ['keep-builtin']:
+        if dirs:
             raise GenError('%s: directive on a non-owise equation: %s' % (where, [v for k, v in dirs]))
         if '==' in t or '=/=' in t:
-            if keep:
-                gen.count(ctx.fname, 'keep-builtin-eq')
+            new = rewrite_text(ctx, t, where)
+            if new == t:
                 return None
             gen.count(ctx.fname, 'auto-builtin')
-            return [ctx.indent + rewrite_text(ctx, t, where)]
+            return [ctx.indent + new]
         return None
     if dirs:
         raise GenError('%s: directive on an unsupported statement' % where)
@@ -4784,11 +5039,8 @@ def load_positions(src, fis):
         path = os.path.join(src, f)
         if not os.path.exists(path):
             return
-        with open(path, encoding='utf-8') as fh:
-            for ln in fh:
-                mm = re.match(r'^load\s+(\S+?)(?:\.maude)?\s*$', ln)
-                if mm:
-                    visit(mm.group(1) + '.maude')
+        for n in load_names(path):
+            visit(load_target(f, n))
         if f in fis:
             order.extend(mod_names_in(fis[f]))
     visit('main.maude')
@@ -5404,23 +5656,58 @@ def check_import_safety(gen):
     return errors
 
 
+def load_target(f, name):
+    """The file that `load name` in file f reads, relative to the source dir: Maude resolves a load
+    relative to the directory of the loading file (src/main.maude: load ../lang/c/semantics reads
+    ../lang/c/semantics.maude)."""
+    p = posixpath.normpath(posixpath.join(posixpath.dirname(f), name))
+    return p if p.endswith('.maude') else p + '.maude'
+
+
+def load_names(path):
+    """The names of the uncommented `load` lines of a file (a comment after the name is allowed:
+    load constants   --- ...)."""
+    with open(path, encoding='utf-8') as fh:
+        return [mm.group(1) for mm in (re.match(r'^load\s+(\S+?)(?:\.maude)?\s*$', re.split(r'---|\*\*\*', ln, maxsplit=1)[0])
+                                       for ln in fh) if mm]
+
+
 def loaded_files(src):
-    """Files reached from main.maude through uncommented `load` lines (transitively)."""
-    seen, todo = set(), ['main']
+    """Files reached from main.maude through uncommented `load` lines (transitively), relative to src."""
+    seen, todo = set(), ['main.maude']
     while todo:
-        m = todo.pop()
-        if m in seen:
+        f = todo.pop()
+        if f in seen:
             continue
-        seen.add(m)
-        path = os.path.join(src, m + '.maude')
-        if not os.path.exists(path):
-            continue
-        with open(path, encoding='utf-8') as fh:
-            for ln in fh:
-                mm = re.match(r'^load\s+(\S+?)(?:\.maude)?\s*$', ln)
-                if mm:
-                    todo.append(mm.group(1))
-    return set(x + '.maude' for x in seen if x != 'main') | {'main.maude'}
+        seen.add(f)
+        path = os.path.join(src, f)
+        if os.path.exists(path):
+            todo.extend(load_target(f, n) for n in load_names(path))
+    return seen
+
+
+def spec_files(src):
+    """The .maude files of the source dir, then the loaded files outside it (paths with a directory part,
+    such as ../lang/c/semantics.maude), all relative to src."""
+    files = sorted(f for f in os.listdir(src) if f.endswith('.maude'))
+    return files + sorted(f for f in loaded_files(src) if '/' in f and os.path.isfile(os.path.join(src, f)))
+
+
+def copy_spec_tree(src, dst):
+    """Copy the source dir to dst, and the loaded files outside it to the same paths relative to dst."""
+    shutil.copytree(src, dst)
+    for f in spec_files(src):
+        if '/' in f:
+            os.makedirs(os.path.dirname(os.path.join(dst, f)), exist_ok=True)
+            shutil.copy2(os.path.join(src, f), os.path.join(dst, f))
+
+
+def write_file(out, f, text):
+    """Write file f (relative to out, possibly outside it) with text."""
+    path = os.path.join(out, f)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8', newline='') as fh:
+        fh.write(text)
 
 
 def in_scope(f, only, loaded):
@@ -5461,20 +5748,17 @@ def load_order(src):
     """Loaded files in the order Maude reads their modules (a file after the files it loads)."""
     order, seen = [], set()
 
-    def visit(m):
-        if m in seen:
+    def visit(f):
+        if f in seen:
             return
-        seen.add(m)
-        path = os.path.join(src, m + '.maude')
+        seen.add(f)
+        path = os.path.join(src, f)
         if not os.path.exists(path):
             return
-        with open(path, encoding='utf-8') as fh:
-            for ln in fh:
-                mm = re.match(r'^load\s+(\S+?)(?:\.maude)?\s*$', ln)
-                if mm:
-                    visit(mm.group(1))
-        order.append(m + '.maude')
-    visit('main')
+        for n in load_names(path):
+            visit(load_target(f, n))
+        order.append(f)
+    visit('main.maude')
     return order
 
 
@@ -5770,7 +6054,7 @@ def module_info(fi, units, head):
 
 def seq_sort(sort):
     """A sort whose terms are sequences (a variable of it may match several `#`/`,` separated items)."""
-    return sort in ('ArgList', 'Configuration', 'AttributeSet', 'KConfig', 'K') or \
+    return sort in ('Configuration', 'AttributeSet', 'KConfig', 'K') or \
         re.match(r'^(Ne)?(List|Set|Map)\b', sort) is not None
 
 
@@ -6045,12 +6329,12 @@ def compose_ghost_file(src, path):
             raise GenError('%s: no rule matches the labels %s' % (gr.where, ' '.join(gr.globs)))
     # the ghost module goes before the first target module; its imports must be read before that point
     fx0, f0, h0 = min(targets_mods.values(), key=lambda x: (x[0], x[2].start))
-    for imp in gm.imports:
-        if imp in targets_mods:
-            raise GenError('%s: the ghost module imports %s, a module with a target rule' % (path, imp))
-        if imp in heads and (heads[imp][0], heads[imp][2].start) > (fx0, h0.start):
+    for c in gm.imports:
+        if c in targets_mods:
+            raise GenError('%s: the ghost module imports %s, a module with a target rule' % (path, c))
+        if c in heads and (heads[c][0], heads[c][2].start) > (fx0, h0.start):
             raise GenError('%s: the ghost module imports %s, which is read after %s (%s)'
-                           % (path, imp, mod_name_of_head(h0.text), f0))
+                           % (path, c, mod_name_of_head(h0.text), f0))
     lines0 = fis[f0].lines
     at = h0.start
     while at > 0 and lines0[at - 1][0].strip().startswith(('---', '***')) and fis[f0].kinds[at - 1] != 'dmc':
@@ -6125,6 +6409,9 @@ def main(argv=None):
                     help='reflection cache, ground-check inputs and manifest.json (default: <out>/.dmc-cache)')
     ap.add_argument('--target', action='append', default=[],
                     help='extra target module of the --check owise comparison (repeatable, or comma-separated)')
+    ap.add_argument('--directives', action='append', default=[],
+                    help='directives file, or an analysis file with a [dmc] table (repeatable, or '
+                         'comma-separated; later files override earlier entries); required')
     ap.add_argument('--ghost', action='append', default=[],
                     help='ghost file to compose with the spec rules (repeatable, or comma-separated)')
     args = ap.parse_args(argv)
@@ -6133,10 +6420,11 @@ def main(argv=None):
     cache_dir = os.path.abspath(args.cache_dir) if args.cache_dir else os.path.join(out, '.dmc-cache')
     ghosts = [os.path.abspath(p) for g in args.ghost for p in g.split(',') if p.strip()]
     if ghosts:
-        staged = os.path.join(cache_dir, 'ghost-src')
-        if os.path.exists(staged):
-            shutil.rmtree(staged)
-        shutil.copytree(src, staged)
+        staged_root = os.path.join(cache_dir, 'ghost-src')
+        if os.path.exists(staged_root):
+            shutil.rmtree(staged_root)
+        staged = os.path.join(staged_root, os.path.basename(src))
+        copy_spec_tree(src, staged)
         try:
             ghost_report = compose_ghosts(staged, ghosts)
         except GenError as ex:
@@ -6153,7 +6441,7 @@ def main(argv=None):
         with open(mpath) as f:
             prev_manifest = json.load(f)
 
-    files = sorted(f for f in os.listdir(src) if f.endswith('.maude'))
+    files = spec_files(src)
     loaded = loaded_files(src)
     fis = {}
     gen = Gen(None)
@@ -6174,6 +6462,24 @@ def main(argv=None):
             fi.units, fi.kinds = [], []
         fis[f] = fi
     scoped = [f for f in files if in_scope(f, only, loaded) and fis[f].kinds]
+    dpaths = [p for d in args.directives for p in d.split(',') if p.strip()]
+    if not dpaths:
+        raise GenError('no directives: give --directives FILE (the [dmc] table of an analysis file)')
+    dirs = {'qid-subsort': None, 'qid-literals': [], 'close-sort': {}, 'owise': {}, 'rules': {}, 'equations': {}}
+    try:
+        for p in dpaths:
+            d = load_directives(p)
+            dirs['qid-subsort'] = d['qid-subsort'] or dirs['qid-subsort']
+            dirs['qid-literals'] += [n for n in d['qid-literals'] if n not in dirs['qid-literals']]
+            for k in ('close-sort', 'owise', 'rules', 'equations'):
+                dirs[k].update(d[k])
+    except GenError as ex:
+        gen.errors.append(str(ex))
+    derrs, unmatched = attach_directives(dirs, fis, scoped)
+    gen.errors += derrs
+    for k, n in unmatched:
+        # an entry of a feature group that the build leaves out (CRYPTO=0), or a stale entry
+        gen.warnings.append('directives: [%s] %s matches no statement of the build' % (k, n))
     for f in scoped:
         try:
             pass1(gen, f, fis[f])
@@ -6198,7 +6504,8 @@ def main(argv=None):
         gen.mod_ops[m] = dict(refl.own_ops(m))
     gen.cache_dir = cache_dir
     gen.mod_order = load_positions(src, fis)
-    gen.src_texts = [fis[f].raw for f in scoped]
+    # the texts of the scope as the DMC build has them: without the statements that a directive drops
+    gen.src_texts = [kept_text(fis[f]) for f in scoped]
     test_texts, tests_src = [], None
     if args.tests:
         tests_src = os.path.abspath(args.tests)
@@ -6297,8 +6604,7 @@ def main(argv=None):
             text = new_text[f]
         else:
             text = fis[f].raw
-        with open(os.path.join(out, f), 'w', encoding='utf-8', newline='') as fh:
-            fh.write(text)
+        write_file(out, f, text)
     if dm_eq_text is not None:
         with open(os.path.join(out, DM_EQ_FILE), 'w', encoding='utf-8', newline='') as fh:
             fh.write(dm_eq_text)
@@ -6334,9 +6640,10 @@ def main(argv=None):
     for d in drift:
         print('  DRIFT %s' % d)
     if args.check:
-        check_build = os.path.join(cache_dir, 'check-build')
-        if os.path.exists(check_build):
-            shutil.rmtree(check_build)
+        check_root = os.path.join(cache_dir, 'check-build')
+        if os.path.exists(check_root):
+            shutil.rmtree(check_root)
+        check_build = os.path.join(check_root, os.path.basename(out))
         os.makedirs(check_build)
         base = os.path.abspath(args.dmc_base) if args.dmc_base else out
         for f in os.listdir(base):
@@ -6345,6 +6652,10 @@ def main(argv=None):
         for f in os.listdir(out):
             if os.path.isfile(os.path.join(out, f)) and f.endswith('.maude'):
                 shutil.copy2(os.path.join(out, f), os.path.join(check_build, f))
+        for f in files:
+            if '/' in f:
+                with open(os.path.join(out, f), encoding='utf-8', newline='') as fh:
+                    write_file(check_build, f, fh.read())
         total, mism, skipped = ground_check(gen, src, check_build, args.maude)
         print('  ground check: %d tests, %d mismatch(es); functions skipped (no ground terms): %s'
               % (total, len(mism), skipped))

@@ -1,0 +1,58 @@
+--- This file defines the basic behaviors for subscribers and publishers.
+
+omod SUBSCRIBER-BEHAVIOR is 
+  pr SUBSCRIBER .
+endom
+
+omod SUBSCRIBER-BEHAVIOR-INVISIBLE is 
+  pr SUBSCRIBER-BEHAVIOR .
+endom
+
+--- This module defines the basic behaviors for publishers.
+
+omod PUBLISHER-BEHAVIOR is
+  pr PUBLISHER .
+  pr BROKER .
+  pr MQTTZ-MSG-BASE .
+  pr MQTTZ-CONSTANTS .
+  pr ALGORITHM-IDENTIFIER .
+  pr MQTTZ-CRYPTO-KEY-VALUE .
+  pr ENCRYPTION .
+
+  var N M : Nat .
+  var TOPIC : Topic .
+  var CLIENT : Oid .
+  vars DATA RAND-DATA : Data .
+  var BI PUB : Oid .
+  var DATALIST : List{Data} .
+  vars IN-BUFFER OUT-BUFFER : List{MqttzMsg} .
+  var MSG : Msg .
+
+--- MQT-TZ only uses one algorithm (TEE_ALG_AES_CBC_NOPAD) to encrypt messages.
+
+  op mkRandomEncData : Oid Nat -> Data .
+  eq mkRandomEncData(PUB, N) = encrypted(data(N), algAesCbcNopad, 
+                                         attr(secretValue , keyAttrValue(PUB))) .
+
+  op mkPubMsg : Data Topic Nat Oid Oid -> Msg .
+  eq mkPubMsg(RAND-DATA, TOPIC, N, PUB, BI)
+   = (msg mqttz[reqArg(RAND-DATA) reqArg(TOPIC) reqArg(N)] from PUB to BI) .
+
+--- The following two rules define how the publisher creates an encrypted message and sends it to the broker.
+
+  crl [pub-make-message]:
+      < PUB : Publisher | cur-data : N, max-data : M, out-buffer : OUT-BUFFER, topic : TOPIC, broker : BI >
+      => 
+      < PUB : Publisher | cur-data : N + 1, out-buffer : OUT-BUFFER [MSG] >
+  if N < M /\ RAND-DATA := mkRandomEncData(PUB, N + 1) 
+  /\ MSG := mkPubMsg(RAND-DATA, TOPIC, N + 1, PUB, BI) .
+
+  rl [pub-send-message]:
+     < PUB : Publisher | out-buffer : [MSG] OUT-BUFFER, broker : BI > < BI : Broker | in-buffer : IN-BUFFER >
+     => 
+     < PUB : Publisher | out-buffer : OUT-BUFFER > < BI : Broker | in-buffer : IN-BUFFER [MSG] > .
+endom
+
+omod PUBLISHER-BEHAVIOR-INVISIBLE is
+  pr PUBLISHER-BEHAVIOR .
+endom

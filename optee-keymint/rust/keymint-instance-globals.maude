@@ -1,0 +1,84 @@
+--- The instance data of a Rust TA: the values of its globals, kept by its instance from one
+--- command to the next.  This is an extension of the model for the analysis, not a GP API; it is
+--- the Rust counterpart of kmgk/core/kmgk-instance-data.maude.
+---
+--- A TA service runs from mkConf (a fresh frame) at each command, so the globals of a Rust TA are
+--- locals of each service, initialized to their initial values.  GP keeps the writable data of an
+--- instance for its whole life, shared by all its sessions ([Internal Core] 4.5), and the state of
+--- the KeyMint TA (in_early_boot, boot_info, use_count) relies on it.  A service therefore loads
+--- its globals with loadGlobals(&mut G) when it starts and stores them with storeGlobals(&G) when
+--- it ends, G being one value that holds all the globals (an array).
+---
+--- The values are kept by the object idata, by instance: stored(TI, VL) says that the instance
+--- TI has stored the values VL.  An instance that has stored nothing (a first command) loads
+--- nothing, so G keeps its initial value.  The TrustedOS gives a new instance a new oid, so the
+--- entry of a destroyed instance is never read again and the next instance starts from the
+--- initial values.  A command that panics stores nothing.  The values are stored as they are,
+--- without conversion (pkModel), so G must not hold a reference into the memory of a command.
+---
+--- Load it with rust2maude --ext keymint-instance-globals.maude: the program imports its modules, and
+--- rustExtObjects puts idata in the initial configuration.
+
+--- @kind program
+mod RUST-INSTANCE-VALUES is
+  pr TEE-ARG-LIST .
+  pr CONFIGURATION .
+  sorts InstEntry InstEntries .
+  subsort InstEntry < InstEntries .
+  op stored : Oid List{Arg} -> InstEntry [ctor] .
+  op noStored : -> InstEntries [ctor] .
+  op _&_ : InstEntries InstEntries -> InstEntries [ctor assoc comm id: noStored] .
+endm
+
+--- @kind program
+omod RUST-INSTANCE-DATA is
+  pr TEE-BEHAVIOR .
+  pr TEE-RUST-BEHAVIOR .
+  pr RUST-INSTANCE-VALUES .
+
+  --- idata: the instance data of the TAs, by instance.
+  class InstanceData | instance-data : InstEntries .
+  op idata : -> Oid [ctor] .
+  eq rustExtObjects = < idata : InstanceData | instance-data : noStored > .
+
+  --- The calls, and their Rust signatures (rustApi, rustSig of lang/rust/tee-support.maude):
+  ---   loadGlobals(g: *mut G)    the stored value, written to *g (nothing for a first command)
+  ---   storeGlobals(g: *const G) the value *g, stored for the instance
+  ops LoadGlobals StoreGlobals : -> TeeApi [ctor] .
+  eq rustApi("loadGlobals") = LoadGlobals .
+  eq rustSig(LoadGlobals) = sig(noResult, outP(pkModel)) .
+  eq rustApi("storeGlobals") = StoreGlobals .
+  eq rustSig(StoreGlobals) = sig(noResult, readP(pkModel)) .
+
+  var TI : Oid .
+  vars VL VL' : List{Arg} .
+  var IDM : InstEntries .
+
+  --- dataOf(TI, IDM): the values that the instance TI has stored (nil: none).
+  op dataOf : Oid InstEntries -> List{Arg} .
+  eq dataOf(TI, stored(TI, VL) & IDM) = VL .
+  eq dataOf(TI, IDM) = nil [owise] .
+
+  --- putStored(TI, VL, IDM): IDM with the values VL for TI.
+  op putStored : Oid List{Arg} InstEntries -> InstEntries .
+  eq putStored(TI, VL, stored(TI, VL') & IDM) = stored(TI, VL) & IDM .
+  eq putStored(TI, VL, IDM) = stored(TI, VL) & IDM [owise] .
+
+  --- store-globals: idata keeps the values VL for the instance TI.
+  rl [store-globals] :
+    < TI : TrustedApp | status : (normal).AppStatus , api-call : init(StoreGlobals[VL]) >
+    < idata : InstanceData | instance-data : IDM >
+    =>
+    < TI : TrustedApp | api-call : return(StoreGlobals[# noReturnCode]) >
+    < idata : InstanceData | instance-data : putStored(TI, VL, IDM) >
+  .
+
+  --- load-globals: the instance TI gets back the values that idata keeps for it.
+  rl [load-globals] :
+    < TI : TrustedApp | status : (normal).AppStatus , api-call : init(LoadGlobals[nil]) >
+    < idata : InstanceData | instance-data : IDM >
+    =>
+    < TI : TrustedApp | api-call : return(LoadGlobals[# noReturnCode dataOf(TI, IDM)]) >
+    < idata : InstanceData | >
+  .
+endom

@@ -1,0 +1,83 @@
+load propositions
+
+--- This module defines various MQT-TZ requirements as LTL properties.
+
+mod LTL-PROPERTIES is
+  pr PROPOSITION .
+  pr MODEL-CHECKER .
+  pr SCENARIO-TOPICS .
+
+
+  ops p1 p2 p3 p4 p5 p6 : -> Formula .
+  ops p1n p2n p3n p4n : -> Formula .
+  ops p1-unused p2-unused p3-unused : -> Formula .
+
+--- P1: If no memory error occurs in brokers, subscribers should receive them in the near future.
+
+  eq p1 =
+    ([] ~ memErr.TA) -> 
+    ([] (send.P(1,1) -> <> recv.S(2,1,pub(1)))) .
+
+  eq p1-unused =
+    ([] ~ memErr.TA) -> 
+    ([] (
+         ((send.P(1,1) /\ topic.P(1,sub(1))) -> <> recv.S(1,1,pub(1)))
+      /\ ((send.P(1,1) /\ topic.P(1,sub(2))) -> <> recv.S(2,1,pub(1)))
+      /\ ((send.P(2,1) /\ topic.P(2,sub(2))) -> <> recv.S(2,1,pub(2)))
+      /\ ((send.P(2,2) /\ topic.P(2,sub(2))) -> <> recv.S(2,2,pub(2))))  
+    ) .
+
+  eq p1n = 
+    ([] (~ memErr.TA /\ ~ panic.TA)) -> 
+    ([] (send.P(1,1) -> <> recv.S(2,1,pub(1)))) .
+
+--- P2: If TAs panicked, subscribers should not receive any messages.
+
+  eq p2 =
+    [] (panic.TA -> [] (~ recv.S(2,1,pub(1)))) .
+
+  eq p2n =
+    [] ((panic.TA /\ ~ recv.S(2,1,pub(1))) -> [] (~ recv.S(2,1,pub(1)))) .
+
+  eq p2-unused =
+    [] (panic.TA -> 
+      [] (
+         (reEncReq(1) -> [] ~ reEncSucc(1))
+      /\ (reEncReq(2) -> [] ~ reEncSucc(2))
+      /\ (reEncReq(3) -> [] ~ reEncSucc(3))
+      /\ (reEncReq(4) -> [] ~ reEncSucc(4)))) .
+
+--- P3: If any resource error occurs in brokers, subscribers should not receive any messages.
+
+  eq p3 =
+    [] (memErr.TA -> [] (~ recv.S(2,1,pub(1)))) .
+
+  eq p3n =
+    [] ((memErr.TA /\ send.P(1,1)) -> [] (~ recv.S(2,1,pub(1)))) .
+
+  eq p3-unused =
+    [] ((memErr.TA /\ running.TA) -> 
+      [] ((reEncReq(1) -> [] ~ reEncSucc(1))
+       /\ (reEncReq(2) -> [] ~ reEncSucc(2))
+       /\ (reEncReq(3) -> [] ~ reEncSucc(3))
+       /\ (reEncReq(4) -> [] ~ reEncSucc(4)))) .
+    
+--- P4: Once the TA starts running, it should eventually terminate (paper Table 8).
+
+  eq p4 =
+    [] (running.TA -> <> ~ running.TA) .
+
+  --- P4N (paper Table 12): without a panic, every run of the TA eventually terminates.
+  eq p4n =
+    ([] ~ panic.TA) -> [] (running.TA -> <> ~ running.TA) .
+
+--- P5: If subscribers receive messages from publishers, messages sent from each publisher are in order.
+
+  eq p5 =
+    [] (topic.P(1,sub(2)) -> [] (inOrderQueue.S(2,pub(1)))) .
+
+--- P6: The number of tasks handled by each TA cannot exceed five.
+
+  eq p6 = 
+    [] ~ numTaskExceed.TA(5) .
+endm

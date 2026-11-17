@@ -1,0 +1,105 @@
+--- The instance data of the TAs: the values of the global variables of a TA program, kept by its
+--- instance from one command to the next.  This is an extension of the model for KMGK, not a GP
+--- API.
+---
+--- In the spec, an instance runs every command from the top level of its program (mkConf), so its
+--- globals start from their initial values at each command.  GP keeps the writable data of an
+--- instance for its whole life, shared by all its sessions (see gpd.ta.instanceKeepAlive in
+--- [Internal Core] 4.5), and the failure records of the Gatekeeper TA and the operation table of
+--- the Keymaster TA are globals that rely on it.  The entry point of a TA (TA_InvokeCommandEntryPoint,
+--- as tools/lang-preprocess.py makes it) therefore loads its globals with loadGlobals(X1, ..., Xn)
+--- when a command starts, and stores them with storeGlobals(X1, ..., Xn) when it ends: X1, ..., Xn
+--- are the globals, and the elements of the global arrays, always in the same order.
+---
+--- The values are kept by the object idata of the TEE (in the initial state, see
+--- core/scenarios/base.maude), by instance: its attribute instance-data has stored(TI, VL) for an
+--- instance TI that has stored the values VL.  An instance that has stored nothing (a first
+--- command) loads nothing, so its globals keep their initial values.  The TrustedOS gives a new
+--- instance a new oid, so the entry of a destroyed instance is never read again, and the next
+--- instance starts with nothing.  A command that panics stores nothing, and its instance is
+--- destroyed.  The values are stored as they are, so a global that points into the memory of a
+--- command must not be kept (the globals of KMGK are integers, booleans, data and handles).
+
+--- The instance data of the TAs, by instance: stored(TI, VL) says that the instance TI has stored
+--- the values VL.
+mod KMGK-INSTANCE-VALUES is
+  pr C-ARG-LIST .
+  pr CONFIGURATION .
+  sorts InstEntry InstEntries .
+  subsort InstEntry < InstEntries .
+  op stored : Oid List{Arg} -> InstEntry [ctor] .
+  op noStored : -> InstEntries [ctor] .
+  op _&_ : InstEntries InstEntries -> InstEntries [ctor assoc comm id: noStored] .
+endm
+
+omod KMGK-INSTANCE-DATA is
+  pr TEE-BEHAVIOR .
+  pr TEE-C-BEHAVIOR .
+  pr KMGK-INSTANCE-VALUES .
+
+  --- idata: the instance data of the TAs, by instance.
+  class InstanceData | instance-data : InstEntries .
+  op idata : -> Oid [ctor] .
+
+  --- The calls, and their C expressions; their value is 0.
+  ops LoadGlobals StoreGlobals : -> TeeApi [ctor] .
+  op loadGlobals : ExpList -> Exp [ctor] .
+  op storeGlobals : ExpList -> Exp [ctor] .
+
+  var TI : Oid .
+  var E : Exp .
+  var EL : ExpList .
+  var K : K .
+  var T : CType .
+  var V : Value .
+  vars VL VL' : List{Arg} .
+  var IDM : InstEntries .
+
+  --- storeGlobals(EL) evaluates EL and sends the values; loadGlobals(EL) assigns the values it
+  --- gets to the lvalues EL (none for a first command: assign-list-short).  They are calls of the
+  --- TA (tee-api-call-accept and tee-api-call-return of the spec): the first output $result gets
+  --- the return code, success, as the value of the call, and the values that follow it are
+  --- assigned to the other outputs (assign of TEE-API-C-CALL).
+  eq k({ storeGlobals(EL) } ~> K) = k($inH(nil, EL) ~> $wait(StoreGlobals) ~> $out($result) ~> K) .
+  eq k({ loadGlobals(EL) } ~> K) = k($inH(nil, nil) ~> $wait(LoadGlobals) ~> $out(($result, EL)) ~> K) .
+
+  --- dataOf(TI, IDM): the values that the instance TI has stored (nil: none).
+  op dataOf : Oid InstEntries -> List{Arg} .
+  eq dataOf(TI, stored(TI, VL) & IDM) = VL .
+  eq dataOf(TI, IDM) = nil [owise] .
+
+  --- putStored(TI, VL, IDM): IDM with the values VL for TI.
+  op putStored : Oid List{Arg} InstEntries -> InstEntries .
+  eq putStored(TI, VL, stored(TI, VL') & IDM) = stored(TI, VL) & IDM .
+  eq putStored(TI, VL, IDM) = stored(TI, VL) & IDM [owise] .
+
+  --- store-globals: idata keeps the values VL for the instance TI.
+  rl [store-globals] :
+    < TI : TrustedApp | status : (normal).AppStatus , api-call : init(StoreGlobals[VL]) >
+    < idata : InstanceData | instance-data : IDM >
+    =>
+    < TI : TrustedApp | api-call : return(StoreGlobals[# success]) >
+    < idata : InstanceData | instance-data : putStored(TI, VL, IDM) >
+  .
+
+  --- load-globals: the instance TI gets back the values that idata keeps for it.
+  rl [load-globals] :
+    < TI : TrustedApp | status : (normal).AppStatus , api-call : init(LoadGlobals[nil]) >
+    < idata : InstanceData | instance-data : IDM >
+    =>
+    < TI : TrustedApp | api-call : return(LoadGlobals[# success dataOf(TI, IDM)]) >
+    < idata : InstanceData | >
+  .
+
+  --- Typing: the arguments of storeGlobals are expressions and those of loadGlobals lvalues, of
+  --- any type; the value is an int.
+  ops $tanyL $tlvalL : ExpList -> TItem [ctor] .
+  op $tany : -> TItem [ctor] .
+  eq tk($te(storeGlobals(EL)) ~> K) = tk($tanyL(EL) ~> $tres(int) ~> K) .
+  eq tk($te(loadGlobals(EL)) ~> K) = tk($tlvalL(EL) ~> $tres(int) ~> K) .
+  eq tk($tanyL((E, EL)) ~> K) = tk($te(E) ~> $tany ~> $tanyL(EL) ~> K) .
+  eq tk($tanyL(nil) ~> K) = tk(K) .
+  eq tk($tlvalL((E, EL)) ~> K) = tk($tl(E) ~> $tany ~> $tlvalL(EL) ~> K) .
+  eq tk($tlvalL(nil) ~> K) = tk(K) .
+  eq tk(ty(T) ~> $tany ~> K) = tk(K) .
+endom

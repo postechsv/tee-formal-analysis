@@ -1,0 +1,95 @@
+--- This module defines the initialization functions used to construct MQT-TZ scenarios.
+
+omod SCENARIO-AUX is
+  pr MQTTZ .
+  pr ID-GEN .
+  pr RICH-APP .
+  pr TRUST-APP .
+  pr MQTTZ-DATA .
+  pr MQTTZ-CONSTANTS .
+  pr CLIENT .
+
+  vars N M : Nat .
+  var ID : Oid .
+  var IL : List{SubId} .
+  var TOPIC : Topic .
+  var P : Program .
+  var BI : Oid .
+
+  ops keyObj streamId : Oid -> Oid [ctor] . 
+
+  op keyIds : List{SubId} -> Set{FileName} .
+  eq keyIds({ID} IL) = (fileName(ID) , keyIds(IL)) .
+  eq keyIds(nil) = empty .
+
+  op osId : -> Oid .
+  
+  --- The broker has opened its session with the TA before the scenario starts: the state after
+  --- teec-open-session-storage for the RA ra, the TA mqttzTa (a single-instance TA with one
+  --- session at a time, taConfig(P, true, false)) and its storage oid(0, ta), which holds the
+  --- keys of the clients.  The instance is ta and the session is sessionId(0), which the RA
+  --- program uses (core/ra/main.imp).
+  op mqttzTa : -> AppId [ctor] .
+  op initTrustedOS : Program -> Configuration .
+  eq initTrustedOS(P)
+  = < osId : TrustedOS | session-counter : 1 ,
+                         service-request-ta-inst : noOid ,
+                         service-in : nil , service-out : nil ,
+                         ta-config : (mqttzTa |-> taConfig(P, true, false)) ,
+                         ta-instances : (mqttzTa |-> ta) ,
+                         ta-storages : (mqttzTa |-> oid(0, ta)) >
+    < sessionId(0) : Session | source : ra , destination : ta , is-smc : true , state : idle > .
+
+  op initStorage : List{SubId} -> Configuration .
+  eq initStorage(IL) 
+  = < oid(0, ta) : Storage | status : (normal).StorageStatus, files : keyIds(IL), counter : 0 > .
+
+  op initRa : Program -> Configuration .
+  eq initRa(P) = < ra : RichApp | proc : none , prog : P > .
+
+  op initTa : Program -> Configuration .
+  --- The TA instance as teec-open-session-storage creates it (counter 1: oid(0, ta) is its
+  --- storage), with one session, and the ghost attribute running (model-checking.ghost).
+  eq initTa(P) = < ta : TrustedApp | proc : none , prog : P ,
+                                     status : (normal).AppStatus , api-call : noCall ,
+                                     counter : 1 , storage : oid(0, ta) , os-kernel : osId ,
+                                     client-service : none , sessions : 1 , running : false > .
+
+--- Clients (publishers and subscribers) share symmetric keys with brokers.
+
+  --- The key of each client is a persistent object of the storage oid(0, ta), numbered from 1.
+  op shareKeys : List{SubId} -> Configuration .
+  eq shareKeys(IL) = shareKeysFrom(1, IL) .
+
+  op shareKeysFrom : Nat List{SubId} -> Configuration .
+  eq shareKeysFrom(N, {ID} IL) = sharedKey(N, ID) shareKeysFrom(N + 1, IL) .
+  eq shareKeysFrom(N, nil) = none .
+
+  op sharedKey : Nat Oid -> Configuration .
+  eq sharedKey(N, ID) =
+    < oid(N, oid(0, ta)) : PersistObj | type : pureData , usages : empty , max-size : 0 , attributes : empty ,
+                                file-name : fileName(ID) , data-stream : attrContentData(keyAttrValue(ID)) ,
+                                open-handles : noHandles >
+  .
+
+  --- op initTa : List{ClientId} -> Configuration .
+  --- eq initTa(IL) = makeTa(1) makeTeeOs(IL) makeKey(IL) .
+
+  op initPub : Nat Nat Topic Oid -> Configuration .
+  eq initPub(N, M, TOPIC, BI)
+   = < pub(N) : Publisher | out-buffer : nil, in-buffer : nil, cur-data : 0, max-data : M, topic : TOPIC, broker : BI > .
+
+  op initSub : Nat Oid -> Configuration .
+  eq initSub(N, BI)
+   = < sub(N) : Subscriber | in-buffer : nil, out-buffer : nil, broker : BI > .
+
+endom
+
+--- This module defines the topics the broker manages and subscribers subscribe to.
+
+mod SCENARIO-TOPICS is
+  pr TOPIC .
+  pr NAT .
+
+  op topic : Nat -> Topic [ctor] .
+endm

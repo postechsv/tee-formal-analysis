@@ -1,0 +1,62 @@
+--- The Gatekeeper HAL of linaro-swg/kmgk (gatekeeper/optee_gatekeeper_device.cpp and optee_ipc.cpp,
+--- C++), written in the model's syntax: it opens a session with the Gatekeeper TA and calls Enroll
+--- and Verify with request and response structs, as the TA of the model takes them (model.patch of
+--- the TA, 6).  The structs are those of the TA program.
+
+mod GATEKEEPER-HAL-PROGRAM is
+  pr GATEKEEPER-TA-PROGRAM-DECL .
+
+  op GATEKEEPER : -> AppId [ctor] .
+  ops s r taRes ereq eresp vreq vresp handle pwd guess : -> Var [ctor] .
+
+  --- gkStructs: the structs of the requests and the responses (gatekeeper_ta.c with model.patch).
+  op gkStructs : -> Program .
+  eq gkStructs =
+    struct PasswordHandleT { int version ; int userId ; int flags ; int salt ; char signature ;
+                             bool hardwareBacked ; } ;
+    struct HwAuthTokenT { int version ; int challenge ; int userId ; int authenticatorId ;
+                          int authenticatorType ; int timestamp ; char hmac ; } ;
+    struct GkEnrollRequestT { int uid ; char * desiredPassword ; char * currentPassword ;
+                              (struct PasswordHandleT) * currentPasswordHandle ; } ;
+    struct GkEnrollResponseT { int error ; int retryTimeout ; struct PasswordHandleT passwordHandle ; } ;
+    struct GkVerifyRequestT { int uid ; int challenge ;
+                              (struct PasswordHandleT) * enrolledPasswordHandle ;
+                              char * providedPassword ; } ;
+    struct GkVerifyResponseT { int error ; int retryTimeout ; struct HwAuthTokenT authToken ;
+                               bool requestReenroll ; } ; .
+
+  --- halDecls: the session, the requests and responses, the enrolled handle and the passwords.
+  op halDecls : -> Program .
+  eq halDecls =
+    TEEC-Session s ; TEE-Result r ; TEE-Result taRes ;
+    struct GkEnrollRequestT ereq ; struct GkEnrollResponseT eresp ;
+    struct GkVerifyRequestT vreq ; struct GkVerifyResponseT vresp ;
+    struct PasswordHandleT handle ; char pwd ; char guess ; .
+
+  --- enroll(P): Enroll the password P for the user 1, with no current password; the handle is the
+  --- enrolled password handle.
+  op enroll : Data -> Program .
+  var D : Data .
+  eq enroll(D) =
+    pwd := # D ;
+    ereq . uid := # 1 ; ereq . desiredPassword := addr(pwd) ; ereq . currentPassword := nullptr ;
+    ereq . currentPasswordHandle := nullptr ;
+    r := teecInvokeCommand(s, # main, (# GK-ENROLL, addr(ereq), addr(eresp), addr(taRes))) ;
+    handle := eresp . passwordHandle ; .
+
+  --- verify(P): Verify the password P against the enrolled handle, for the user 1.
+  op verify : Data -> Program .
+  eq verify(D) =
+    guess := # D ;
+    vreq . uid := # 1 ; vreq . challenge := # 0 ; vreq . enrolledPasswordHandle := addr(handle) ;
+    vreq . providedPassword := addr(guess) ;
+    r := teecInvokeCommand(s, # main, (# GK-VERIFY, addr(vreq), addr(vresp), addr(taRes))) ; .
+
+  --- open: TEEC_OpenSession with the Gatekeeper TA (OpteeIPC::connect).
+  op open : -> Program .
+  eq open = r := teecOpenSession(# GATEKEEPER, s) ; .
+
+  --- close: TEEC_CloseSession of the session (OpteeIPC::disconnect).
+  op close : -> Program .
+  eq close = r := teecCloseSession(s) ; .
+endm

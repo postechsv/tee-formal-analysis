@@ -1,0 +1,15 @@
+Code-level patch of the MQT-TZ RA: a message whose re-encryption failed, because the TA is out of
+memory or panicked, is discarded (the 404 of the original artifact; Fig. 21, discardMsg) instead of
+being forwarded with the content of the destination buffer.
+
+--- a/main.c
++++ b/main.c
+@@ -298,6 +298,8 @@
+     // Results are stored in dest
+     if (res == TEEC_SUCCESS)
+         res = ta_res;
++    if (res == TEE_ERROR_OUT_OF_MEMORY || res == TEEC_ERROR_TARGET_DEAD)
++        *dest->data = DISCARDED;
+     return res;
+ }
+ 

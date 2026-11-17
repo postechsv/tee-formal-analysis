@@ -1,0 +1,50 @@
+--- Scenarios of the KeyMint TA instance (keymint-instance.maude).  Run from the analysis
+--- directory:  maude -no-banner keymint-scenarios.maude
+---
+--- Goal of the attacker: an instance whose boot info is the attacker's value (attV) and whose
+--- earlier boot info, set by boot, was lost with a destroyed instance (D = true).
+--- Sessions: ss(boot, hal, att).
+load keymint-instance
+
+--- S1. boot alone: nobody but boot holds a session.  boot provisions and closes its session (the
+--- last one), so the instance with the legitimate boot info is destroyed.  att then opens and sets
+--- its own value.  Expect a solution.  No HAL restart or crash is needed.
+search [1] in KM-INST : sys(noInst, ss(false, false, false), hist(false, false, false))
+    =>* sys(inst(E:Bool, attV), ss(B1:Bool, H1:Bool, A1:Bool), hist(L:Bool, true, P:Bool)) .
+show path 1 .
+
+--- S2. the HAL holds a session from the start, and the HAL never closes (KM-INST has no hal close).
+--- boot provisions and closes; the HAL's session keeps the instance alive, so the boot info stays.
+--- Expect NO solution.
+search [1] in KM-INST : sys(inst(true, unset), ss(false, true, false), hist(false, false, false))
+    =>* sys(inst(E:Bool, attV), ss(B1:Bool, H1:Bool, A1:Bool), hist(L:Bool, true, P:Bool)) .
+
+--- S3. the same as S2, but the HAL may close its session as the last one (KM-HAL: an HAL restart
+--- or crash).  Expect a solution.
+search [1] in KM-HAL : sys(inst(true, unset), ss(false, true, false), hist(false, false, false))
+    =>* sys(inst(E:Bool, attV), ss(B1:Bool, H1:Bool, A1:Bool), hist(L:Bool, true, P:Bool)) .
+show path 1 .
+
+--- S4. att holds a session from the start (it opened the instance before boot).  boot provisions and
+--- closes (att keeps the instance alive); then att closes its own session as the last one, which
+--- destroys the instance with the legitimate boot info; att reopens and sets its value.
+--- Expect a solution: the attack needs no HAL cooperation.
+search [1] in KM-INST : sys(inst(true, unset), ss(false, false, true), hist(false, false, false))
+    =>* sys(inst(E:Bool, attV), ss(B1:Bool, H1:Bool, A1:Bool), hist(L:Bool, true, P:Bool)) .
+show path 1 .
+
+--- S5. race before boot: att opens the TA first and sets its value; the legitimate boot info is then
+--- refused (lib.rs:564-580).  Expect a solution (it needs att to open the TA before boot does).
+search [1] in KM-INST : sys(noInst, ss(false, false, false), hist(false, false, false))
+    =>* sys(inst(E:Bool, attV), ss(B1:Bool, H1:Bool, A1:Bool), hist(L:Bool, D:Bool, false)) .
+show path 1 .
+
+
+--- S6. the HAL holds its session (as kmgk's HAL does), and boot provisions.  Without a TA panic the
+--- HAL's session protects the boot info (S2).  With a panic (module KM-PANIC), the instance is destroyed
+--- despite the HAL's session; the HAL reconnects to a fresh instance, and att sets its value.
+--- Expect a solution: the protection of S2 holds only while the instance never dies.
+search [1] in KM-PANIC : sys(inst(true, unset), ss(false, true, false), hist(false, false, false))
+    =>* sys(inst(E:Bool, attV), ss(B1:Bool, H1:Bool, A1:Bool), hist(L:Bool, true, P:Bool)) .
+
+quit .

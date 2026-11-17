@@ -1,0 +1,142 @@
+load model-checker
+
+--- This module defines the propositions used to construct LTL properties.
+
+omod PROPOSITION is
+  pr SATISFACTION .
+  pr MQTTZ-MSG .
+  pr MQTTZ-BROKER-BEHAVIOR .
+  pr TA-KERNEL .
+  pr ENCRYPTION .
+  pr MQTTZ-CRYPTO-KEY-VALUE .
+  pr MQTTZ-RA-BEHAVIOR .
+  pr SUBSCRIBER .
+  pr PUBLISHER .
+  pr CLIENT .
+  pr MQTTZ-CONSTANTS .
+  pr MQTTZ-MSG-AUX .
+  pr INTRUDER .
+  pr ALGORITHM-IDENTIFIER .
+
+  --- vars N M : Nat .
+  --- var BI KI : Oid .
+  --- vars RI TI OI : Oid .
+  --- var TK : TaInstId .
+  --- vars D D1 D2 : Data . 
+  --- vars DATA DATA1 DATA2 : List{Data} .
+  --- var REQ : List{RaRequest} .
+  --- vars PUB SUB : ClientId .
+  --- var TOPIC : Topic .
+  --- vars LQ RQ MQ1 MQ2 MQ : List{MqttMsg} .
+  --- vars CF REE TEE REST : Configuration .
+  --- var MSG : MqttMsg .
+  --- var STATUS : StorageStatus .
+  --- var TN : AppId .
+  --- var SMAP : Map{AppId,StorageStatus} .
+  var ALGO : Algorithm .
+  --- var SESI : SessionId .
+  --- var FUNC : FuncId .
+  --- var VL : ValueList .
+  --- vars CLI CLI1 CLI2 : ClientId .
+  --- var RC : ReturnCode .
+  --- var PROC : KConfig .
+  --- var TASK : Task? .
+
+  vars N M I J K : Nat .
+  vars PREV-MSG-INDEX CUR-MSG-INDEX : Nat .
+  vars PUB SUB TI BI AI : Oid .
+  vars TEE REE CF : Configuration .
+  var MSG : Msg .
+  var TOPIC : Topic .
+  var SUBSC : Map{Topic,List{SubId}} .
+  var BUFFER BUFFER-HEAD BUFFER-TAIL : List{MqttzMsg} .
+  var PUB-I-MSGS : List{MqttzMsg} .
+  var DATA : Data .
+
+------------------------------------------------------------
+--- Propositions
+------------------------------------------------------------
+
+  subsort Configuration < State .
+
+--- True if TA has panicked.
+  op panic.TA : -> Prop .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | status : (panic).AppStatus > TEE} > CF |= panic.TA = true .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= panic.TA = false [owise] .
+
+--- True if TA is out of memory.
+  op memErr.TA : -> Prop .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | status : outOfMemory > TEE} > CF |= memErr.TA = true .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= memErr.TA = false [owise] .
+
+--- True if TA is executing a program.
+  op running.TA : -> Prop .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | running : true > TEE} > CF |= running.TA = true .
+  eq < BI : Broker | infra : {REE} | {< TI : TrustedApp | > TEE} > CF |= running.TA = false [owise] .
+
+--- True if publisher 'I' will send the 'K'th message.
+  op send.P : Nat Nat -> Prop .
+  ceq < pub(I) : Publisher | out-buffer : BUFFER-HEAD [MSG] BUFFER-TAIL > CF |= send.P(I,K) = true
+   if pub(I) == getSender(MSG) /\ K == getMsgIndex(MSG) .
+  eq < pub(I) : Publisher | > CF |= send.P(I,K) = false [owise] .
+
+--- True if subscriber 'J' has received the 'K'th message from publisher 'I'.
+  op recv.S : Nat Nat Oid -> Prop .
+  ceq < sub(J) : Subscriber | in-buffer : BUFFER-HEAD [MSG] BUFFER-TAIL > CF |= recv.S(J,K,pub(I)) = true
+   if sub(J) == getReceiver(MSG) /\ K == getMsgIndex(MSG) /\ pub(I) == getPublisher(MSG) .
+  eq < sub(J) : Subscriber | > CF |= recv.S(J,K,pub(I)) = false [owise] .
+
+--- True if publisher 'I' can send a message with a topic that subscriber 'J' is subscribed to.
+  op topic.P : Nat Oid -> Prop .
+  ceq < pub(I) : Publisher | topic : TOPIC, broker : BI >
+      < BI : Broker | subscriptions : SUBSC > CF |= topic.P(I,sub(J)) = true
+   if occurs({sub(J)}, getSubscribers(TOPIC, SUBSC)) .
+  eq < pub(I) : Publisher | broker : BI > < BI : Broker | > CF |= topic.P(I,sub(J)) = false [owise] .
+
+--- True if broker has sent a re-encryption request to MQT-TZ RA.
+  op reEncReq : Nat -> Prop .
+  eq < BI : Broker | infra : {REE reqRA(reEncReq(DATA, PUB, SUB, MSG, N))} | {TEE} > CF |= reEncReq(N) = true .
+  eq < BI : Broker | > CF |= reEncReq(N) = false [owise] .
+  
+--- True if re-encryption was successful.
+  op reEncSucc : Nat -> Prop .
+  eq < BI : Broker | infra : {REE retRA(reEncReq(DATA, PUB, SUB, MSG, N))} | {TEE} > CF |= reEncSucc(N) = true .
+  eq < BI : Broker | > CF |= reEncSucc(N) = false [owise] .
+
+--- True if messages received by subscriber 'J' from publisher 'I' is in order that 'I' sent them.
+  op inOrderQueue.S : Nat Oid -> Prop .
+  ceq < sub(J) : Subscriber | in-buffer : BUFFER > CF |= inOrderQueue.S(J,pub(I)) = true
+   if PUB-I-MSGS := filter(BUFFER, pub(I)) /\ isOrdered(PUB-I-MSGS, 0) == true .
+  eq < sub(J) : Subscriber | > CF |= inOrderQueue.S(J,pub(I)) = false [owise] .
+
+--- True if the number of tasks (re-encryption) handled by TA, 'N' has exceeded 'M'.
+  op numTaskExceed.TA : Nat -> Prop .
+  ceq < BI : Broker | counter : N > CF |= numTaskExceed.TA(M) = true if N > M .
+   eq < BI : Broker | > CF |= numTaskExceed.TA(M) = false [owise] .
+
+------------------------------------------------------------
+--- Auxilary Functions
+------------------------------------------------------------
+
+  op filter : List{MqttzMsg} Oid -> List{MqttzMsg} .
+  ceq filter([MSG] BUFFER, PUB) = [MSG] filter(BUFFER, PUB) if PUB == getPublisher(MSG)  .
+  eq filter([MSG] BUFFER, PUB) = filter(BUFFER, PUB) [owise] .
+  eq filter(nil, PUB) = nil .
+
+  op isOrdered : List{MqttzMsg} Nat -> Bool .
+  ceq isOrdered([MSG] BUFFER, PREV-MSG-INDEX) = 
+   if PREV-MSG-INDEX > CUR-MSG-INDEX then false 
+   else isOrdered(BUFFER, CUR-MSG-INDEX) fi if CUR-MSG-INDEX := getMsgIndex(MSG) .
+  eq isOrdered(nil, N) = true .
+
+  --- Patch
+
+  op noMsgAttack : -> Prop .
+  eq < AI : Intruder | subs-list : empty > CF |= noMsgAttack = true .
+  eq < AI : Intruder | > CF |= noMsgAttack = false [owise] .
+
+  op msgAttackExist : -> Prop .
+  eq < AI : Intruder | > CF |= msgAttackExist = true .
+  eq CF |= msgAttackExist = false [owise] .
+
+endom

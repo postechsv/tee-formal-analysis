@@ -1,0 +1,15 @@
+--- The entry module of the analyses of KMGK (loaded after the model by models/<analysis>/main.maude).
+load ../ra/hal
+load ../ra/keystore
+load ../scenarios/base
+load ../scenarios/sessions
+load ../scenarios/panic
+
+--- The analysis model-checking is built with the invisible-transition reduction (model-checking.toml):
+--- its modules turn the invisible rules into equations.
+mod ANALYSIS-CMD is
+  pr KMGK-PANIC .
+  pr INVISIBLE-REDUCTION .
+  pr C-INVISIBLE-REDUCTION .
+  pr TEE-API-CALL-INVISIBLE-REDUCTION .
+endm

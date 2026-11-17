@@ -1,0 +1,694 @@
+Modeling changes of the Gatekeeper TA of linaro-swg/kmgk (gatekeeper/ta: ta_gatekeeper.h,
+failure_record.h, failure_record.c and gatekeeper_ta.c as published, concatenated in this order),
+applied before tools/lang-preprocess.py preprocesses it.  Everything the model leaves out or changes
+is here, as C; the [ta.gatekeeper] table of the analysis files only says what to preprocess.
+
+1. A byte array of the model is one char object that holds its whole content (a buffer): the
+   signature of a password handle and the HMAC of an auth token are uint8_t buffers, and the structs
+   are not __packed (the model has no layout).
+2. The failure record table (a static struct of failure_record_t records and a size) is one static
+   array per field of a record and a size, as the model has no arrays of structs: GetFailureRecord
+   and WriteFailureRecord read and write the fields of a record in the three arrays.  The table has
+   two records instead of 32: the scenarios have one user.  The table is a global of the TA, so the
+   model keeps it from one command to the next as the instance memory of the TA, and loses it with
+   the instance, as upstream does.  ~0ULL (no oldest timestamp yet) is UINT64_MAX.
+3. ComputeRetryTimeout: FAILURE_TIMEOUT_MS and DAY_IN_MS are constants of the model (static const
+   locals upstream), and FAILURE_TIMEOUT_MS << n is ShiftLeft, a loop, as the model has no shift.
+4. The master key: the file name of the secret object is SECRET_ID, a constant of the model, in a
+   buffer (secret_ID[] upstream); the key data are one buffer, and one attribute is populated.  A
+   short read is not checked (the model has no sizes).
+5. Signatures: the HMAC goes to one buffer, which is the signature (no truncation to the size of
+   the signature).  The signed message of a password handle is the password: upstream signs the
+   salt, the metadata of the handle and the password, concatenated, which the model cannot build
+   (it has no byte concatenation).  So two handles of the same password have the same signature
+   whatever their salt.  memcmp of two signatures is the equality of the buffers.  An empty
+   password is not refused by TA_DoVerify (the model has no lengths).
+6. Requests and responses: the HAL passes a request struct and a response struct (gk_*_request_t,
+   gk_*_response_t, the fields that upstream serializes, in the same order) instead of the
+   serialized buffers, so the deserialization, the checks of the buffer sizes and the serialization
+   go.  An absent current password handle (length 0 upstream) is NULL.  TA_InvokeCommandEntryPoint,
+   the entry point of the model, passes the request (params[0]) and the response (params[1]); its
+   unreachable end, after the switch, goes.
+7. The lengths of passwords, messages and signatures are not parameters (the model has no sizes).
+
+The entry points TA_CreateEntryPoint (which creates the secret object when it is missing) and the
+session entry points are not modeled: the secret object is in the storage of the TA in the initial
+state of a scenario.
+
+--- a/gatekeeper_ta.c
++++ b/gatekeeper_ta.c
+@@ -33,13 +33,13 @@
+ typedef uint64_t secure_id_t;
+ typedef uint64_t salt_t;
+ 
+-typedef struct __packed {
+-	uint8_t version;
++typedef struct {
++	uint32_t version;
+ 	secure_id_t user_id;
+ 	uint64_t flags;
+ 
+ 	salt_t salt;
+-	uint8_t signature[32];
++	uint8_t signature;
+ 
+ 	bool hardware_backed;
+ } password_handle_t;
+@@ -63,14 +63,14 @@
+ /*
+  * Data format for an authentication record used to prove successful authentication.
+  */
+-typedef struct __packed {
+-	uint8_t version;
++typedef struct {
++	uint32_t version;
+ 	uint64_t challenge;
+ 	uint64_t user_id;             // secure user ID, not Android user ID
+ 	uint64_t authenticator_id;    // secure authenticator ID
+ 	uint32_t authenticator_type;  // hw_authenticator_type_t, in network order
+ 	uint64_t timestamp;           // in network order
+-	uint8_t hmac[32];
++	uint8_t hmac;
+ } hw_auth_token_t;
+ 
+ 
+@@ -204,14 +204,12 @@
+ #include <tee_internal_api.h>
+ #include "failure_record.h"
+ 
+-#define MAX_FAILURE_RECORDS 32
+-
+-typedef struct {
+-	uint32_t size;
+-	failure_record_t records[MAX_FAILURE_RECORDS];
+-} failure_record_table_t;
++#define MAX_FAILURE_RECORDS 2
+ 
+-static failure_record_table_t failureRecordTable;
++static uint32_t failure_record_size;
++static secure_id_t failure_record_user_id[MAX_FAILURE_RECORDS];
++static uint64_t failure_record_timestamp[MAX_FAILURE_RECORDS];
++static uint32_t failure_record_counter[MAX_FAILURE_RECORDS];
+ 
+ 
+ void InitFailureRecords(void)
+@@ -223,12 +221,13 @@
+ void GetFailureRecord(secure_id_t user_id, failure_record_t *record)
+ {
+ 	uint32_t i;
+-	failure_record_t *records = failureRecordTable.records;
+-	uint32_t tableSize = failureRecordTable.size;
++	uint32_t tableSize = failure_record_size;
+ 
+ 	for (i = 0; i < tableSize; i++) {
+-		if (records[i].secure_user_id == user_id) {
+-			*record = records[i];
++		if (failure_record_user_id[i] == user_id) {
++			record->secure_user_id = failure_record_user_id[i];
++			record->last_checked_timestamp = failure_record_timestamp[i];
++			record->failure_counter = failure_record_counter[i];
+ 			return;
+ 		}
+ 	}
+@@ -242,18 +241,17 @@
+ void WriteFailureRecord(const failure_record_t *record)
+ {
+ 	uint32_t i;
+-	failure_record_t *records = failureRecordTable.records;
+ 
+ 	int min_idx = 0;
+-	uint64_t min_timestamp = ~0ULL;
++	uint64_t min_timestamp = UINT64_MAX;
+ 
+-	for (i = 0; i < failureRecordTable.size; i++) {
+-		if (records[i].secure_user_id == record->secure_user_id) {
++	for (i = 0; i < failure_record_size; i++) {
++		if (failure_record_user_id[i] == record->secure_user_id) {
+ 			break;
+ 		}
+ 
+-		if (records[i].last_checked_timestamp <= min_timestamp) {
+-			min_timestamp = records[i].last_checked_timestamp;
++		if (failure_record_timestamp[i] <= min_timestamp) {
++			min_timestamp = failure_record_timestamp[i];
+ 			min_idx = i;
+ 		}
+ 	}
+@@ -261,11 +259,13 @@
+ 	if (i >= MAX_FAILURE_RECORDS) {
+ 		// replace the oldest element if all records are in use
+ 		i = min_idx;
+-	} else if (i == failureRecordTable.size) {
+-		failureRecordTable.size++;
++	} else if (i == failure_record_size) {
++		failure_record_size++;
+ 	}
+ 
+-	records[i] = *record;
++	failure_record_user_id[i] = record->secure_user_id;
++	failure_record_timestamp[i] = record->last_checked_timestamp;
++	failure_record_counter[i] = record->failure_counter;
+ }
+ 
+ 
+@@ -290,11 +290,17 @@
+ }
+ 
+ 
+-uint32_t ComputeRetryTimeout(const failure_record_t *record)
++static uint32_t ShiftLeft(uint32_t value, uint32_t bits)
+ {
+-	static const int FAILURE_TIMEOUT_MS = 30000;
+-	static const int DAY_IN_MS = 1000 * 60 * 60 * 24;
++	while (bits > 0) {
++		value = value * 2;
++		bits--;
++	}
++	return value;
++}
+ 
++uint32_t ComputeRetryTimeout(const failure_record_t *record)
++{
+ 	uint32_t failure_counter = record->failure_counter;
+ 
+ 	if (failure_counter == 0) {
+@@ -310,7 +316,7 @@
+ 	} else if (failure_counter < 30) {
+ 		return FAILURE_TIMEOUT_MS;
+ 	} else if (failure_counter < 140) {
+-		return FAILURE_TIMEOUT_MS << ((failure_counter - 30)/10);
++		return ShiftLeft(FAILURE_TIMEOUT_MS, (failure_counter - 30)/10);
+ 	}
+ 	return DAY_IN_MS;
+ }
+@@ -444,30 +450,30 @@
+ static TEE_Result TA_GetMasterKey(TEE_ObjectHandle masterKey)
+ {
+ 	TEE_Result		res;
+-	TEE_Attribute		attrs[1];
+-	uint8_t			secretData[HMAC_SHA256_KEY_SIZE_BYTE];
++	TEE_Attribute		attrs;
++	uint8_t			secretData;
+ 	TEE_ObjectHandle	secretObj = TEE_HANDLE_NULL;
+ 	uint32_t		readSize = 0;
++	uint8_t			secret_id = SECRET_ID;
+ 
+-	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, secret_ID,
+-		sizeof(secret_ID), TEE_DATA_FLAG_ACCESS_READ, &secretObj);
++	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, &secret_id,
++		sizeof(secret_id), TEE_DATA_FLAG_ACCESS_READ, &secretObj);
+ 	if (res != TEE_SUCCESS) {
+ 		EMSG("Failed to open secret, error=%X", res);
+ 		goto exit;
+ 	}
+ 
+-	res = TEE_ReadObjectData(secretObj, secretData, sizeof(secretData),
++	res = TEE_ReadObjectData(secretObj, &secretData, sizeof(secretData),
+ 			&readSize);
+-	if (res != TEE_SUCCESS || sizeof(secretData) != readSize) {
++	if (res != TEE_SUCCESS) {
+ 		EMSG("Failed to read secret data, bytes = %u", readSize);
+ 		goto close_obj;
+ 	}
+ 
+-	TEE_InitRefAttribute(&attrs[0], TEE_ATTR_SECRET_VALUE, secretData,
++	TEE_InitRefAttribute(&attrs, TEE_ATTR_SECRET_VALUE, &secretData,
+ 			sizeof(secretData));
+ 
+-	res = TEE_PopulateTransientObject(masterKey, attrs,
+-			sizeof(attrs)/sizeof(attrs[0]));
++	res = TEE_PopulateTransientObject(masterKey, &attrs, 1);
+ 	if (res != TEE_SUCCESS) {
+ 		EMSG("Failed to set master key attributes");
+ 		goto close_obj;
+@@ -479,14 +485,13 @@
+ 	return res;
+ }
+ 
+-static TEE_Result TA_ComputeSignature(uint8_t *signature, size_t signature_length,
+-		TEE_ObjectHandle key, const uint8_t *message, size_t length)
++static TEE_Result TA_ComputeSignature(uint8_t *signature,
++		TEE_ObjectHandle key, const uint8_t *message)
+ {
+ 	uint32_t buf_length = HMAC_SHA256_KEY_SIZE_BYTE;
+-	uint8_t buf[buf_length];
++	uint8_t buf;
+ 	TEE_OperationHandle op = TEE_HANDLE_NULL;
+ 	TEE_Result res;
+-	uint32_t to_write;
+ 
+ 	res = TEE_AllocateOperation(&op, TEE_ALG_HMAC_SHA256, TEE_MODE_MAC,
+ 			HMAC_SHA256_KEY_SIZE_BIT);
+@@ -503,18 +508,13 @@
+ 
+ 	TEE_MACInit(op, NULL, 0);
+ 
+-	TEE_MACComputeFinal(op, (void *)message, length, buf, &buf_length);
++	TEE_MACComputeFinal(op, (void *)message, 0, &buf, &buf_length);
+ 	if (res != TEE_SUCCESS) {
+ 		EMSG("Failed to compute HMAC");
+ 		goto free_op;
+ 	}
+ 
+-	to_write = buf_length;
+-	if (buf_length > signature_length)
+-		to_write = signature_length;
+-
+-	memset(signature, 0, signature_length);
+-	memcpy(signature, buf, to_write);
++	*signature = buf;
+ 
+ free_op:
+ 	TEE_FreeOperation(op);
+@@ -523,27 +523,18 @@
+ }
+ 
+ static TEE_Result TA_ComputePasswordSignature(
+-		uint8_t *signature, size_t signature_length,
++		uint8_t *signature,
+ 		TEE_ObjectHandle key,
+-		const uint8_t *password, size_t password_length, salt_t salt)
++		const uint8_t *password, salt_t salt)
+ {
+-	uint8_t salted_password[password_length + sizeof(salt)];
+-	memcpy(salted_password, &salt, sizeof(salt));
+-	memcpy(salted_password + sizeof(salt), password, password_length);
+-	return TA_ComputeSignature(signature, signature_length, key,
+-			salted_password, sizeof(salted_password));
++	return TA_ComputeSignature(signature, key, password);
+ }
+ 
+ static TEE_Result TA_CreatePasswordHandle(password_handle_t *password_handle,
+ 		salt_t salt, secure_id_t user_id, uint64_t flags,
+-		uint64_t handle_version, const uint8_t *password,
+-		uint32_t password_length)
++		uint64_t handle_version, const uint8_t *password)
+ {
+ 	password_handle_t pw_handle;
+-	const uint32_t metadata_length = sizeof(pw_handle.user_id) +
+-		sizeof(pw_handle.flags) +
+-		sizeof(pw_handle.version);
+-	uint8_t to_sign[password_length + metadata_length];
+ 
+ 	TEE_ObjectHandle masterKey = TEE_HANDLE_NULL;
+ 	TEE_Result res;
+@@ -561,24 +552,20 @@
+ 	pw_handle.flags = flags;
+ 	pw_handle.hardware_backed = true;
+ 
+-	memcpy(to_sign, &pw_handle, metadata_length);
+-	memcpy(to_sign + metadata_length, password, password_length);
+-
+ 	res = TA_GetMasterKey(masterKey);
+ 	if (res != TEE_SUCCESS) {
+ 		EMSG("Failed to get master key");
+ 		goto free_key;
+ 	}
+ 
+-	res = TA_ComputePasswordSignature(pw_handle.signature,
+-			sizeof(pw_handle.signature), masterKey,
+-			to_sign, sizeof(to_sign), salt);
++	res = TA_ComputePasswordSignature(&pw_handle.signature, masterKey,
++			password, salt);
+ 	if (res != TEE_SUCCESS) {
+ 		EMSG("Failed to compute password signature");
+ 		goto free_key;
+ 	}
+ 
+-	memcpy(password_handle, &pw_handle, sizeof(pw_handle));
++	*password_handle = pw_handle;
+ 
+ free_key:
+ 	TEE_FreeTransientObject(masterKey);
+@@ -703,26 +690,20 @@
+ }
+ 
+ static TEE_Result TA_DoVerify(const password_handle_t *expected_handle,
+-		const uint8_t *password, uint32_t password_length)
++		const uint8_t *password)
+ {
+ 	TEE_Result res;
+ 	password_handle_t password_handle;
+ 
+-	if (!password_length) {
+-		res = TEE_FALSE;
+-		goto exit;
+-	}
+-
+ 	res = TA_CreatePasswordHandle(&password_handle, expected_handle->salt,
+ 			expected_handle->user_id, expected_handle->flags,
+-			expected_handle->version, password, password_length);
++			expected_handle->version, password);
+ 	if (res != TEE_SUCCESS) {
+ 		EMSG("Failed to create password handle");
+ 		goto exit;
+ 	}
+ 
+-	if (memcmp(password_handle.signature, expected_handle->signature,
+-			sizeof(expected_handle->signature)) == 0) {
++	if (password_handle.signature == expected_handle->signature) {
+ 		res = TEE_TRUE;
+ 	} else {
+ 		res = TEE_FALSE;
+@@ -732,92 +713,56 @@
+ 	return res;
+ }
+ 
+-static TEE_Result TA_Enroll(TEE_Param params[TEE_NUM_PARAMS])
++typedef struct {
++	uint32_t uid;
++	uint8_t *desired_password;
++	uint8_t *current_password;
++	password_handle_t *current_password_handle;
++} gk_enroll_request_t;
++
++typedef struct {
++	uint32_t error;
++	uint32_t retry_timeout;
++	password_handle_t password_handle;
++} gk_enroll_response_t;
++
++typedef struct {
++	uint32_t uid;
++	uint64_t challenge;
++	password_handle_t *enrolled_password_handle;
++	uint8_t *provided_password;
++} gk_verify_request_t;
++
++typedef struct {
++	uint32_t error;
++	uint32_t retry_timeout;
++	hw_auth_token_t auth_token;
++	bool request_reenroll;
++} gk_verify_response_t;
++
++static TEE_Result TA_Enroll(gk_enroll_request_t *req, gk_enroll_response_t *resp)
+ {
+ 	TEE_Result res = TEE_SUCCESS;
+ 
+-	/*
+-	 * Enroll request layout
+-	 * +--------------------------------+---------------------------------+
+-	 * | Name                           | Number of bytes                 |
+-	 * +--------------------------------+---------------------------------+
+-	 * | uid                            | 4                               |
+-	 * | desired_password_length        | 4                               |
+-	 * | desired_password               | #desired_password_length        |
+-	 * | current_password_length        | 4                               |
+-	 * | current_password               | #current_password_length        |
+-	 * | current_password_handle_length | 4                               |
+-	 * | current_password_handle        | #current_password_handle_length |
+-	 * +--------------------------------+---------------------------------+
+-	 */
+ 	uint32_t uid;
+-	uint32_t desired_password_length;
+ 	const uint8_t *desired_password;
+-	uint32_t current_password_length;
+ 	const uint8_t *current_password;
+-	uint32_t current_password_handle_length;
+-	const uint8_t *current_password_handle;
+-
+-	const uint8_t *request = (const uint8_t *)params[0].memref.buffer;
+-	const uint8_t *i_req = request;
++	password_handle_t *current_password_handle;
+ 
+-	/*
+-	 * Enroll response layout
+-	 * +--------------------------------+---------------------------------+
+-	 * | Name                           | Number of bytes                 |
+-	 * +--------------------------------+---------------------------------+
+-	 * | error                          | 4                               |
+-	 * +--------------------------------+---------------------------------+
+-	 * | timeout                        | 4                               |
+-	 * +------------------------------ OR --------------------------------+
+-	 * | password_handle_length         | 4                               |
+-	 * | password_handle                | #password_handle_length         |
+-	 * +--------------------------------+---------------------------------+
+-	 */
+ 	uint32_t error = ERROR_NONE;
+ 	uint32_t timeout = 0;
+ 	password_handle_t password_handle;
+ 
+-	uint8_t *response = params[1].memref.buffer;
+-	uint8_t *i_resp = response;
+-
+-	const uint32_t max_response_size = sizeof(uint32_t) +
+-		sizeof(uint32_t) +
+-		sizeof(password_handle_t);
+-
+ 	secure_id_t user_id = 0;
+ 	uint64_t flags = 0;
+ 	salt_t salt;
+ 
+-	deserialize_int(&i_req, &uid);
+-	deserialize_blob(&i_req, &desired_password, &desired_password_length);
+-	deserialize_blob(&i_req, &current_password, &current_password_length);
+-	deserialize_blob(&i_req, &current_password_handle,
+-			&current_password_handle_length);
+-
+-	// Check request buffer size
+-	if (get_size(request, i_req) > params[0].memref.size) {
+-		EMSG("Wrong request buffer size");
+-		res = TEE_ERROR_BAD_PARAMETERS;
+-		goto exit;
+-	}
+-
+-	// Check response buffer size
+-	if (max_response_size > params[1].memref.size) {
+-		EMSG("Wrong response buffer size");
+-		res = TEE_ERROR_BAD_PARAMETERS;
+-		goto exit;
+-	}
+-
+-	// Check password handle length
+-	if (current_password_handle_length != 0 &&
+-			current_password_handle_length != sizeof(password_handle_t)) {
+-		EMSG("Wrong password handle size");
+-		res = TEE_ERROR_BAD_PARAMETERS;
+-		goto exit;
+-	}
++	uid = req->uid;
++	desired_password = req->desired_password;
++	current_password = req->current_password;
++	current_password_handle = req->current_password_handle;
+ 
+-	if (!current_password_handle_length) {
++	if (current_password_handle == NULL) {
+ 		// Password handle does not match what is stored, generate new
+ 		// secure user_id
+ 		TEE_GenerateRandom(&user_id, sizeof(user_id));
+@@ -840,7 +785,7 @@
+ 		throttle = (pw_handle->version >= HANDLE_VERSION_THROTTLE);
+ 		if (throttle) {
+ 			failure_record_t record;
+-			flags |= HANDLE_FLAG_THROTTLE_SECURE;
++			flags = HANDLE_FLAG_THROTTLE_SECURE;
+ 			GetFailureRecord(user_id, &record);
+ 
+ 			if (ThrottleRequest(&record, timestamp, &timeout)) {
+@@ -851,8 +796,7 @@
+ 			IncrementFailureRecord(&record, timestamp);
+ 		}
+ 
+-		res = TA_DoVerify(pw_handle, current_password,
+-				current_password_length);
++		res = TA_DoVerify(pw_handle, current_password);
+ 		switch (res) {
+ 		case TEE_TRUE:
+ 			break;
+@@ -873,90 +817,47 @@
+ 
+ 	TEE_GenerateRandom(&salt, sizeof(salt));
+ 	res = TA_CreatePasswordHandle(&password_handle, salt, user_id, flags,
+-			HANDLE_VERSION, desired_password,
+-			desired_password_length);
++			HANDLE_VERSION, desired_password);
+ 	if (res != TEE_SUCCESS) {
+ 		EMSG("Failed to create password handle");
+ 		goto exit;
+ 	}
+ 
+ serialize_response:
+-	serialize_int(&i_resp, error);
++	resp->error = error;
+ 	switch (error) {
+ 	case ERROR_INVALID:
+ 	case ERROR_UNKNOWN:
+ 		break;
+ 	case ERROR_RETRY:
+-		serialize_int(&i_resp, timeout);
++		resp->retry_timeout = timeout;
+ 		break;
+ 	case ERROR_NONE:
+-		serialize_blob(&i_resp, (const uint8_t *)&password_handle,
+-				sizeof(password_handle));
++		resp->password_handle = password_handle;
+ 		break;
+ 	default:
+ 		EMSG("Unknown error message!");
+ 		res = TEE_ERROR_GENERIC;
+ 	}
+-	params[1].memref.size = get_size(response, i_resp);
+ exit:
+ 	DMSG("Enroll returns 0x%08X, error = %d", res, error);
+ 	return res;
+ }
+ 
+-static TEE_Result TA_Verify(TEE_Param params[TEE_NUM_PARAMS])
++static TEE_Result TA_Verify(gk_verify_request_t *req, gk_verify_response_t *resp)
+ {
+ 	TEE_Result res = TEE_SUCCESS;
+ 
+-	/*
+-	 * Verify request layout
+-	 * +---------------------------------+----------------------------------+
+-	 * | Name                            | Number of bytes                  |
+-	 * +---------------------------------+----------------------------------+
+-	 * | uid                             | 4                                |
+-	 * | challenge                       | 8                                |
+-	 * | enrolled_password_handle_length | 4                                |
+-	 * | enrolled_password_handle        | #enrolled_password_handle_length |
+-	 * | provided_password_length        | 4                                |
+-	 * | provided_password               | #provided_password_length        |
+-	 * +---------------------------------+----------------------------------+
+-	 */
+ 	uint32_t uid;
+ 	uint64_t challenge;
+-	uint32_t enrolled_password_handle_length;
+-	const uint8_t *enrolled_password_handle;
+-	uint32_t provided_password_length;
++	password_handle_t *enrolled_password_handle;
+ 	const uint8_t *provided_password;
+ 
+-	const uint8_t *request = (const uint8_t *)params[0].memref.buffer;
+-	const uint8_t *i_req = request;
+-
+-	/*
+-	 * Verify response layout
+-	 * +--------------------------------+---------------------------------+
+-	 * | Name                           | Number of bytes                 |
+-	 * +--------------------------------+---------------------------------+
+-	 * | error                          | 4                               |
+-	 * +--------------------------------+---------------------------------+
+-	 * | retry_timeout                  | 4                               |
+-	 * +------------------------------ OR --------------------------------+
+-	 * | response_auth_token_length     | 4                               |
+-	 * | response_auth_token            | #response_handle_length         |
+-	 * | response_request_reenroll      | 4                               |
+-	 * +--------------------------------+---------------------------------+
+-	 */
+ 	uint32_t error = ERROR_NONE;
+ 	uint32_t timeout = 0;
+ 	hw_auth_token_t auth_token;
+ 	bool request_reenroll = false;
+ 
+-	uint8_t *response = params[1].memref.buffer;
+-	uint8_t *i_resp = response;
+-
+-	const uint32_t max_response_size = sizeof(uint32_t) +
+-		sizeof(uint32_t) +
+-		sizeof(password_handle_t) +
+-		sizeof(uint32_t);
+-
+ 	password_handle_t *password_handle;
+ 	secure_id_t user_id;
+ 	secure_id_t authenticator_id = 0;
+@@ -964,36 +865,19 @@
+ 	uint64_t timestamp = GetTimestamp();
+ 	bool throttle;
+ 
+-	deserialize_int(&i_req, &uid);
+-	deserialize_int64(&i_req, &challenge);
+-	deserialize_blob(&i_req, &enrolled_password_handle,
+-			&enrolled_password_handle_length);
+-	deserialize_blob(&i_req, &provided_password,
+-			&provided_password_length);
+-
+-	// Check request buffer size
+-	if (get_size(request, i_req) > params[0].memref.size) {
+-		EMSG("Wrong request buffer size");
+-		res = TEE_ERROR_BAD_PARAMETERS;
+-		goto exit;
+-	}
++	uid = req->uid;
++	challenge = req->challenge;
++	enrolled_password_handle = req->enrolled_password_handle;
++	provided_password = req->provided_password;
+ 
+-	// Check response buffer size
+-	if (max_response_size > params[1].memref.size) {
+-		EMSG("Wrong response buffer size");
+-		res = TEE_ERROR_BAD_PARAMETERS;
+-		goto exit;
+-	}
+-
+-	// Check password handle length
+-	if (enrolled_password_handle_length == 0 ||
+-			enrolled_password_handle_length != sizeof(password_handle_t)) {
++	// Check password handle
++	if (enrolled_password_handle == NULL) {
+ 		EMSG("Wrong password handle size");
+ 		res = TEE_ERROR_BAD_PARAMETERS;
+ 		goto exit;
+ 	}
+ 
+-	password_handle = (password_handle_t *)enrolled_password_handle;
++	password_handle = enrolled_password_handle;
+ 
+ 	if (password_handle->version > HANDLE_VERSION) {
+ 		EMSG("Wrong handle version %u, required version is %u",
+@@ -1019,8 +903,7 @@
+ 		request_reenroll = true;
+ 	}
+ 
+-	res = TA_DoVerify(password_handle, provided_password,
+-			provided_password_length);
++	res = TA_DoVerify(password_handle, provided_password);
+ 	switch (res) {
+ 	case TEE_TRUE:
+ 		TA_MintAuthToken(&auth_token, timestamp, user_id,
+@@ -1042,23 +925,22 @@
+ 	}
+ 
+ serialize_response:
+-	serialize_int(&i_resp, error);
++	resp->error = error;
+ 	switch (error) {
+ 	case ERROR_INVALID:
+ 	case ERROR_UNKNOWN:
+ 		break;
+ 	case ERROR_RETRY:
+-		serialize_int(&i_resp, timeout);
++		resp->retry_timeout = timeout;
+ 		break;
+ 	case ERROR_NONE:
+-		serialize_blob(&i_resp, (uint8_t *)&auth_token, sizeof(auth_token));
+-		serialize_int(&i_resp, (uint32_t) request_reenroll);
++		resp->auth_token = auth_token;
++		resp->request_reenroll = request_reenroll;
+ 		break;
+ 	default:
+ 		EMSG("Unknown error message!");
+ 		res = TEE_ERROR_GENERIC;
+ 	}
+-	params[1].memref.size = get_size(response, i_resp);
+ exit:
+ 	DMSG("Verify returns 0x%08X, error = %d", res, error);
+ 	return res;
+@@ -1078,14 +960,10 @@
+ 
+ 	switch (cmd_id) {
+ 	case GK_ENROLL:
+-		return TA_Enroll(params);
++		return TA_Enroll(params[0].memref.buffer, params[1].memref.buffer);
+ 	case GK_VERIFY:
+-		return TA_Verify(params);
++		return TA_Verify(params[0].memref.buffer, params[1].memref.buffer);
+ 	default:
+ 		return TEE_ERROR_BAD_PARAMETERS;
+ 	}
+-
+-	(void)&sess_ctx; /* Unused parameter */
+-
+-	return TEE_ERROR_BAD_PARAMETERS;
+ }

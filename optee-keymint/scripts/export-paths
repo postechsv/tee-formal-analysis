@@ -1,0 +1,31 @@
+#!/bin/sh
+# Export the solution paths of the KeyMint instance scenarios: BFS traces (scripts/path-trace.py),
+# each step checked by Maude (one-step search), then converted for ce-viewer (tools/ce-viewer/path2ce.py).
+# Run from the analysis directory:  sh scripts/export-paths
+set -e
+HERE=$(cd "$(dirname "$0")/.." && pwd)
+TOOLS=$HERE/../tools
+MAUDE=${MAUDE:-$HOME/sv-comp-maude/Maude-3.5.1-linux-x86_64/maude}
+OUT=$HERE/output/paths
+mkdir -p "$OUT"
+for pair in "kminst s1 KM-INST" "khal s3 KM-HAL" "kminst s4 KM-INST" "kminst s5 KM-INST" "kpanic s6 KM-PANIC"; do
+  set -- $pair
+  python3 "$HERE/scripts/path-trace.py" "$1" "$2" > "$OUT/$2.trace"
+  # one-step check of every transition of the trace
+  python3 - "$OUT/$2.trace" "$3" "$2" "$HERE" > "$OUT/$2.check.maude" <<'PY'
+import re, sys
+lines = [l.rstrip('\n') for l in open(sys.argv[1])]
+mod, name, here = sys.argv[2], sys.argv[3], sys.argv[4]
+states = [re.sub(r'^state \d+, Sys: ', '', l) for l in lines if l.startswith('state ')]
+print('load %s/keymint-instance' % here)
+print('set show command off .')
+for i in range(len(states) - 1):
+    print('search [1] in %s : %s =>1 %s .' % (mod, states[i], states[i + 1]))
+print('quit .')
+PY
+  "$MAUDE" -no-banner "$OUT/$2.check.maude" > "$OUT/$2.check.log" 2>&1 || true
+  n=$(grep -c '^Solution' "$OUT/$2.check.log" || true)
+  steps=$(grep -c '^state' "$OUT/$2.trace" || true)
+  echo "$2: $n of $((steps - 1)) transitions confirmed by Maude"
+  python3 "$TOOLS/ce-viewer/path2ce.py" "$OUT/$2.trace" --title "KeyMint instance $2" > "$OUT/$2.ce.log"
+done

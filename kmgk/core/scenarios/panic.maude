@@ -1,0 +1,46 @@
+--- A panic of the Gatekeeper TA while another client keeps a session open on its instance.
+---
+--- The Gatekeeper TA of upstream has no panic that a client causes (it checks the sizes of the
+--- serialized requests).  A TA also panics on a failure of the TEE, though: the Internal Core API
+--- lists for most functions a panic for a hardware or cryptographic algorithm failure.  teeFault
+--- is one such failure, which the model places at the start of the service of a request (a
+--- throttled Verify calls no TEE function but TEE_GetSystemTime): the instance panics, and the
+--- client of the request gets TEE_ERROR_TARGET_DEAD with its memory unchanged.  A panicked instance
+--- is destroyed at once, see [Internal Core] 2.3.3, with its instance memory, even while other
+--- sessions are open on it, so the next TEEC_OpenSession creates a new instance with no failure
+--- records: the throttling is reset although another client kept a session open.
+
+mod KMGK-PANIC is
+  pr KMGK-SESSIONS .
+
+  --- teeFault: one failure of the TEE, which panics the TA instance TI when it starts to serve the
+  --- request of the session SID of the RA RI.  Like return-smc-request-panic of the spec, the
+  --- instance is removed from ta-instances, the session is target-dead, and the RA gets
+  --- TEE_ERROR_TARGET_DEAD with no values, so its memory is unchanged.
+  op teeFault : -> Msg [ctor] .
+
+  vars TI OS RI : Oid .  var SID : SessionId .  var FID : APIFuncId .  var VL : List{Arg} .
+  var IM : Map{AppId,Oid} .
+  vars AS SAS OAS : AttributeSet .
+
+  rl [tee-fault-panic] :
+    teeFault
+    (msg invkTa[FID VL] from SID to TI)
+    < TI : TrustedApp | status : (normal).AppStatus, client-service : none, AS >
+    < SID : Session | source : RI, destination : TI, is-smc : true, state : invoking, SAS >
+    < OS : TrustedOS | ta-instances : IM, OAS >
+    =>
+    < TI : TrustedApp | status : panic, client-service : none, AS >
+    < SID : Session | source : RI, destination : TI, is-smc : true, state : targetDead, SAS >
+    < OS : TrustedOS | ta-instances : dropInstance(TI, IM), OAS >
+    smcRet(RI, # errorTargetDead) .
+
+  --- gkPanicAttacker: enrolls data(7) and makes six wrong guesses: the fifth starts the
+  --- throttling, so the sixth is throttled (ERROR_RETRY), and its error is recorded in t6.  Then
+  --- it guesses again, closes its session, opens a new one and guesses once more.  A teeFault
+  --- during the seventh guess panics the instance: that guess gets TEE_ERROR_TARGET_DEAD.
+  op t6 : -> Var [ctor] .
+  op gkPanicAttacker : -> Program .
+  eq gkPanicAttacker = int t6 ; open enroll(data(7)) guesses(6) t6 := vresp . error ;
+                       verify(data(8)) close open verify(data(8)) .
+endm

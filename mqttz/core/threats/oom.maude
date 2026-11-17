@@ -1,0 +1,18 @@
+--- This module defines the out-of-memory threat.
+
+omod OOM-THREAT is
+  pr BASE-SCENARIO .
+
+  vars TI : Oid .
+  var CALL : Call .
+  var N : Nat .
+
+--- When a TA is executing a TEE API function (api-call exec), its status may change from normal to
+--- outOfMemory (the paper, E.1.3).
+  rl [out-of-memory-threat] :
+    < TI : TAKernel | status : (normal).AppStatus , api-call : exec(CALL, N) >
+    => 
+    < TI : TAKernel | status : outOfMemory >
+  .
+
+endom

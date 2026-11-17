@@ -1,0 +1,18 @@
+    void main (char oriCliId, char oriCliData, char destCliId, TEE-Result & ret, char & destCliData) {
+      TEEC-Session sess ;
+      sess := # sessionId(0) ;
+
+      char oriCliIv ;
+      oriCliIv := # randomData ;
+      char destCliIv ;
+      struct MqttzClient origin ;
+      origin . cliId := addr(oriCliId) ;
+      origin . iv := addr(oriCliIv) ;
+      origin . data := addr(oriCliData) ;
+      struct MqttzClient dest ;
+      dest . cliId := addr(destCliId) ;
+      dest . iv := addr(destCliIv) ;
+      dest . data := addr(destCliData) ;
+
+      ret := payloadReencryption(sess, addr(origin), addr(dest)) ;
+    }

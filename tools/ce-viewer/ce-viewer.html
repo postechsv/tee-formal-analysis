@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Counterexample Viewer</title>
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #ffffff; --fg: #1d1d1b; --muted: #6b6b66; --line: #e2e1dc;
+  --accent: #2f6fdb; --chg: #fff3c4; --chg-line: #e0b400; --add: #dff5e1; --add-fg: #1b6b2a;
+  --del: #fbe1e1; --del-fg: #9c1c1c; --cls: #7a3db8; --attr: #1f6f72; --sel: #e6eefc; --hid: #c9c8c2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181a; --panel: #1f2023; --fg: #e6e6e3; --muted: #9a9a94; --line: #34363a;
+    --accent: #6ea0ff; --chg: #3d3518; --chg-line: #c9a227; --add: #17361d; --add-fg: #8fdc9c;
+    --del: #3e1c1c; --del-fg: #f0a0a0; --cls: #c29bf0; --attr: #6cc6c9; --sel: #23324d; --hid: #4a4b4f;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181a; --panel: #1f2023; --fg: #e6e6e3; --muted: #9a9a94; --line: #34363a;
+  --accent: #6ea0ff; --chg: #3d3518; --chg-line: #c9a227; --add: #17361d; --add-fg: #8fdc9c;
+  --del: #3e1c1c; --del-fg: #f0a0a0; --cls: #c29bf0; --attr: #6cc6c9; --sel: #23324d; --hid: #4a4b4f;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; flex-direction: column; }
+code, .mono, pre { font-family: ui-monospace, "JetBrains Mono", "Cascadia Code", Consolas, monospace; font-size: 12px; }
+button, select, input { font: inherit; color: inherit; }
+button { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+input[type=text] { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 3px 8px; }
+header { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+header h1 { font-size: 14px; margin: 0 8px 0 0; font-weight: 600; }
+header .info { color: var(--muted); font-size: 12px; min-width: 0; flex: 0 1 auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+header { flex-wrap: nowrap; }
+header > * { flex: none; }
+header .spacer { flex: 1 1 0; }
+header label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; user-select: none; }
+.spacer { flex: 1; }
+main { flex: 1; display: flex; min-height: 0; }
+#steps { width: 290px; border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+#steps .tools { padding: 6px 8px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+#stepList { overflow-y: auto; overflow-x: hidden; flex: 1; }
+.step { padding: 3px 8px; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; gap: 6px; align-items: baseline; }
+.step:hover { background: var(--sel); }
+.step.cur { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }
+.step .n { color: var(--muted); width: 40px; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
+.step .r { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.step .chips { flex: 1 1 0; min-width: 0; color: var(--muted); font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.step.cycle .n::after { content: "↻"; color: var(--accent); margin-left: 2px; }
+.gap { padding: 1px 8px 1px 54px; color: var(--hid); font-size: 11px; border-bottom: 1px solid var(--line); cursor: pointer; }
+#view { flex: 1; overflow-y: auto; padding: 12px 16px 60px; min-width: 0; }
+#filters { width: 280px; border-left: 1px solid var(--line); overflow-y: auto; background: var(--panel); padding: 8px 10px; }
+#filters h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 12px 0 4px; }
+.fcls { margin: 2px 0; }
+.fcls > .row { display: flex; align-items: center; gap: 4px; }
+.fcls .tw { cursor: pointer; width: 14px; color: var(--muted); user-select: none; }
+.fcls .attrs { margin-left: 22px; display: none; }
+.fcls.open .attrs { display: block; }
+.fcls .cnt { color: var(--muted); font-size: 11px; margin-left: auto; }
+.fcls label, .frule label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
+.frule { display: flex; align-items: center; }
+.frule .cnt { color: var(--muted); font-size: 11px; margin-left: auto; }
+.cls { color: var(--cls); }
+.attrn { color: var(--attr); }
+.stephead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.stephead h2 { font-size: 15px; margin: 0; }
+.stephead .muted { color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; margin: 0 0 10px; }
+.card.changed { border-color: var(--chg-line); }
+.card.added { border-color: var(--add-fg); }
+.card.removed { border-color: var(--del-fg); opacity: .75; }
+.card > .hd { padding: 5px 10px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: baseline; cursor: pointer; user-select: none; }
+.card.collapsed > .hd { border-bottom: none; }
+.card.collapsed > .bd { display: none; }
+.card > .hd .badge { font-size: 11px; padding: 0 6px; border-radius: 8px; }
+.badge.chg { background: var(--chg); }
+.badge.add { background: var(--add); color: var(--add-fg); }
+.badge.del { background: var(--del); color: var(--del-fg); }
+.card > .hd .hidn { color: var(--muted); font-size: 11px; margin-left: auto; }
+.card .card { margin: 6px 0 4px; }
+.attr { display: grid; grid-template-columns: minmax(90px, max-content) 1fr auto; gap: 8px; padding: 2px 10px; border-bottom: 1px dashed var(--line); align-items: start; }
+.attr:last-child { border-bottom: none; }
+.attr.changed { background: var(--chg); }
+.attr .k { white-space: nowrap; padding-top: 1px; }
+.attr .v { min-width: 0; }
+.attr .v .one { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.attr .v pre { margin: 0; white-space: pre-wrap; word-break: break-word; cursor: text; }
+.attr .acts { display: flex; gap: 2px; opacity: .25; }
+.attr:hover .acts { opacity: 1; }
+.attr .acts button { padding: 0 5px; font-size: 11px; }
+.old { color: var(--del-fg); }
+.old::before { content: "was: "; color: var(--muted); }
+mark.d { background: var(--chg-line); color: #000; border-radius: 2px; }
+.ln-add { background: var(--add); color: var(--add-fg); display: block; }
+.ln-del { background: var(--del); color: var(--del-fg); display: block; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--del-fg) 40%, transparent); }
+.ln { display: block; }
+.msgs .msg { padding: 2px 10px; border-bottom: 1px dashed var(--line); }
+.msgs .msg.add { background: var(--add); }
+.msgs .msg.del { background: var(--del); text-decoration: line-through; }
+.nested-ph { color: var(--cls); }
+#drop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: color-mix(in srgb, var(--accent) 20%, transparent); font-size: 20px; z-index: 10; pointer-events: none; }
+body.dragging #drop { display: flex; }
+#empty { margin: 60px auto; max-width: 560px; color: var(--muted); }
+#empty code { color: var(--fg); }
+#hist { position: fixed; right: 300px; top: 60px; bottom: 20px; width: min(640px, 60vw); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.25); display: none; flex-direction: column; z-index: 5; }
+#hist.on { display: flex; }
+#hist .hd { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+#hist .bd { overflow-y: auto; padding: 4px 0; }
+#hist .it { padding: 4px 12px; border-bottom: 1px dashed var(--line); cursor: pointer; }
+#hist .it:hover { background: var(--sel); }
+#hist .it .one { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hl { outline: 2px solid var(--accent); border-radius: 2px; }
+.kbd { font-size: 11px; color: var(--muted); }
+#progress { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Counterexample Viewer</h1>
+  <button id="openBtn">Open log…</button>
+  <input type="file" id="file" hidden>
+  <span class="info" id="fileInfo"></span>
+  <span id="progress"></span>
+  <span class="spacer"></span>
+  <input type="text" id="search" placeholder="Filter objects (oid / text)" size="24">
+  <label title="Hide attributes and objects that did not change"><input type="checkbox" id="onlyChanged"> only changed</label>
+  <label title="Show previous value under changed attributes"><input type="checkbox" id="showOld" checked> show was</label>
+  <label title="Diff against previous visible step instead of the immediate predecessor"><input type="checkbox" id="diffVisible" checked> diff vs prev visible</label>
+  <button id="themeBtn" title="Toggle theme">◐</button>
+</header>
+<main>
+  <section id="steps">
+    <div class="tools">
+      <label title="Hide steps that change nothing visible under the current class/attribute filters"><input type="checkbox" id="hideQuiet"> hide steps with no visible change</label>
+      <span class="kbd">j/k or ↓/↑: step · n/p: next/prev visible change · Home/End</span>
+    </div>
+    <div id="stepList"></div>
+  </section>
+  <section id="view">
+    <div id="empty">
+      <p>Open a Maude log containing <code>result ModelCheckResult: counterexample(…)</code> — use the button above or drop the file onto this window.</p>
+      <p>The file is read locally in the browser; nothing is uploaded.</p>
+    </div>
+  </section>
+  <aside id="filters"></aside>
+</main>
+<div id="hist"><div class="hd"><b id="histTitle"></b><span class="spacer"></span><button id="histClose">✕</button></div><div class="bd" id="histBody"></div></div>
+<div id="drop">Drop log file</div>
+<script>
+//PARSER-BEGIN
+// ---------- Maude counterexample parser ----------
+// Joins Maude's 4-space continuation lines. Maude never prints a space right
+// after an opening bracket, so a break there is joined without a space.
+function unwrap(t) {
+  return t.replace(/\r/g, '').replace(/([([{])?\n {4}/g, (m, b) => b ? b : ' ');
+}
+
+const OPEN = { '(': 1, '[': 1, '{': 1 }, CLOSE = { ')': 1, ']': 1, '}': 1 };
+const IDENT_COLON = /[A-Za-z][\w-]*\s:\s/y;
+
+// Is s[i] the start of an object  "< OID : Class | " ?
+function objectHeaderAt(s, i) {
+  if (s[i] !== '<' || s[i + 1] !== ' ') return null;
+  if (i > 0 && !/[\s([{,|]/.test(s[i - 1])) return null;
+  // oid: up to " : " at depth 0
+  let d = 0, j = i + 2;
+  for (; j < s.length; j++) {
+    const c = s[j];
+    if (OPEN[c]) d++;
+    else if (CLOSE[c]) { if (--d < 0) return null; }
+    else if (d === 0 && c === ' ' && s[j + 1] === ':' && s[j + 2] === ' ') break;
+    else if (d === 0 && (c === '>' || c === '|' || c === '<')) return null;
+    if (j - i > 400) return null;
+  }
+  if (j >= s.length) return null;
+  const oid = s.slice(i + 2, j);
+  const m = /^([A-Za-z][\w-]*(?:\{[^}]*\})?) \|/.exec(s.slice(j + 3, j + 3 + 200));
+  if (!m) return null;
+  return { oid, cls: m[1], bodyStart: j + 3 + m[0].length };
+}
+
+function closeAt(s, i) { // " >" closing an object
+  if (s[i] !== ' ' || s[i + 1] !== '>') return false;
+  const n = s[i + 2];
+  return n === undefined || /[\s,)\]}]/.test(n);
+}
+
+// Parse object starting at i. Returns {obj, end}
+function parseObject(s, i, hdr) {
+  const obj = { oid: hdr.oid, cls: hdr.cls, attrs: [] };
+  let j = hdr.bodyStart;
+  if (closeAt(s, j)) return { obj, end: j + 2 };
+  if (s[j] === ' ') j++;
+  while (j < s.length) {
+    IDENT_COLON.lastIndex = j;
+    const m = IDENT_COLON.exec(s);
+    if (!m) throw new Error('attr name expected at ' + j + ': ' + s.slice(j, j + 60));
+    const name = m[0].replace(/\s:\s$/, '');
+    j += m[0].length;
+    const r = parseValue(s, j, false);
+    obj.attrs.push({ name, text: r.text, children: r.children });
+    j = r.end;
+    if (r.stop === 'close') return { obj, end: j + 2 };
+    j += 2; // ", "
+  }
+  throw new Error('unterminated object ' + hdr.oid);
+}
+
+// Scan a value until an attribute separator / object close at depth 0
+// (or until end of string when top === true). Nested objects are pulled out
+// into `children` and replaced by a placeholder in `text`.
+function parseValue(s, j, top) {
+  let d = 0, segStart = j, text = '', children = [];
+  for (; j < s.length; j++) {
+    const c = s[j];
+    if (c === '"') { j++; while (j < s.length && s[j] !== '"') { if (s[j] === '\\') j++; j++; } continue; }
+    if (c === '<') {
+      const h = objectHeaderAt(s, j);
+      if (h) {
+        text += s.slice(segStart, j);
+        const r = parseObject(s, j, h);
+        children.push(r.obj);
+        text += '\u27EA' + h.oid + ' : ' + h.cls + '\u27EB';
+        j = r.end - 1; segStart = r.end;
+        continue;
+      }
+    }
+    if (OPEN[c]) d++;
+    else if (CLOSE[c]) d--;
+    else if (!top && d === 0) {
+      if (c === ',' && s[j + 1] === ' ') {
+        IDENT_COLON.lastIndex = j + 2;
+        if (IDENT_COLON.test(s)) { text += s.slice(segStart, j); return { text, children, end: j, stop: 'sep' }; }
+      } else if (closeAt(s, j)) { text += s.slice(segStart, j); return { text, children, end: j, stop: 'close' }; }
+    }
+  }
+  text += s.slice(segStart, j);
+  return { text, children, end: j, stop: 'eof' };
+}
+
+// Top-level configuration: objects + "other" items (messages etc.)
+function parseConfig(s) {
+  const r = parseValue(s, 0, true);
+  // the leftover text holds placeholders for objects; split the rest into items
+  const rest = r.text.replace(/\u27EA[^\u27EB]*\u27EB/g, '\u0000');
+  const msgs = splitJuxt(rest).filter(x => x && x !== '\u0000');
+  return { objects: r.children, msgs };
+}
+
+// Split a juxtaposition at depth-0 spaces (only between complete groups).
+function splitJuxt(s) {
+  const out = []; let d = 0, st = 0;
+  for (let j = 0; j < s.length; j++) {
+    const c = s[j];
+    if (c === '\u0000') { push(st, j); out.push('\u0000'); st = j + 1; continue; }
+    if (OPEN[c]) d++; else if (CLOSE[c]) { d--; if (d === 0 && c === ']') { push(st, j + 1); st = j + 1; } }
+  }
+  push(st, s.length);
+  function push(a, b) { const x = s.slice(a, b).trim(); if (x) out.push(x); }
+  return out;
+}
+
+// Split the counterexample(...) into transitions {State, Rule}
+function parseCounterexample(raw) {
+  const k = raw.indexOf('counterexample(');
+  if (k < 0) throw new Error('no "counterexample(" found in file');
+  const header = raw.slice(Math.max(0, raw.lastIndexOf('\nreduce', k)), k).split('\n').filter(l => /^(reduce|search|rewrites|ModelChecker|result)/.test(l.trim())).map(l => l.trim());
+  const s = unwrap(raw.slice(k));
+  const steps = []; let d = 0, st = -1, cycleStart = -1;
+  for (let j = 'counterexample('.length; j < s.length; j++) {
+    const c = s[j];
+    if (OPEN[c]) { if (d === 0 && c === '{') st = j; d++; }
+    else if (CLOSE[c]) {
+      d--;
+      if (d === 0 && c === '}') {
+        const body = s.slice(st + 1, j);
+        const m = /,\s*([^,]*)$/.exec(body);
+        steps.push({ stateText: body.slice(0, m.index), rule: m[1].trim() });
+      }
+      if (d < 0) break;
+    } else if (d === 0 && c === ',') cycleStart = steps.length;
+  }
+  return { header, steps, cycleStart };
+}
+
+// Build per-state flat index: key -> {obj, cls, depth, parentKey}
+function indexState(cfg) {
+  const map = new Map(), order = [];
+  function walk(objs, prefix, depth, parent) {
+    const seen = {};
+    for (const o of objs) {
+      let key = prefix + o.oid;
+      if (seen[key]) key += '#' + (seen[key]++); else seen[key] = 1;
+      o.key = key; o.depth = depth; o.parent = parent;
+      o.amap = new Map(o.attrs.map(a => [a.name, a]));
+      map.set(key, o); order.push(key);
+      for (const a of o.attrs) if (a.children.length) walk(a.children, key + '/' + a.name + '/', depth + 1, key);
+    }
+  }
+  walk(cfg.objects, '', 0, null);
+  cfg.index = map; cfg.order = order;
+  return cfg;
+}
+
+// Changes between two indexed configs
+function diffStates(A, B) {
+  const ch = []; // {key, cls, attr|null, kind}
+  if (A) {
+    for (const [key, o] of B.index) {
+      const p = A.index.get(key);
+      if (!p) { ch.push({ key, cls: o.cls, attr: null, kind: 'add' }); continue; }
+      for (const a of o.attrs) { const pa = p.amap.get(a.name); if (!pa || pa.text !== a.text) ch.push({ key, cls: o.cls, attr: a.name, kind: 'chg' }); }
+    }
+    for (const [key, o] of A.index) if (!B.index.has(key)) ch.push({ key, cls: o.cls, attr: null, kind: 'del' });
+  }
+  const ma = msetDiff(A ? A.msgs : [], B.msgs);
+  return { ch, msgAdd: ma.add, msgDel: ma.del };
+}
+function msetDiff(a, b) {
+  const cnt = new Map();
+  for (const x of a) cnt.set(x, (cnt.get(x) || 0) + 1);
+  const add = [];
+  for (const x of b) { const c = cnt.get(x) || 0; if (c > 0) cnt.set(x, c - 1); else add.push(x); }
+  const del = []; for (const [x, c] of cnt) for (let i = 0; i < c; i++) del.push(x);
+  return { add, del };
+}
+
+// Pretty printer for long Maude terms
+const SEPS = [', ', ' ; ', ' ~> ', ' |> '];
+function pp(s, ind, w) {
+  w = w || 100; ind = ind || 0;
+  s = s.trim();
+  if (s.length + ind <= w) return s;
+  const pad = ' '.repeat(ind);
+  for (const sep of SEPS) {
+    const parts = splitTop(s, sep);
+    if (parts.length > 1) return parts.map((p, i) => (i ? pad : '') + pp(p, ind, w) + (i < parts.length - 1 ? sep.trimEnd() : '')).join('\n');
+  }
+  // juxtaposition f(..) g(..)
+  const jx = splitTopJuxt(s);
+  if (jx.length > 1) return jx.map((p, i) => (i ? pad : '') + pp(p, ind, w)).join('\n');
+  // head( inner ) / head{ inner } / [ inner ]
+  const m = /^([^([{]*)([([{])/.exec(s);
+  if (m) {
+    const oi = m[1].length, ci = matchClose(s, oi);
+    if (ci > 0 && ci > oi + 1) {
+      const head = s.slice(0, oi + 1), inner = s.slice(oi + 1, ci), tail = s.slice(ci + 1);
+      const innerS = (inner.length + ind + head.length <= w) ? inner : '\n' + pad + '  ' + pp(inner, ind + 2, w) + '\n' + pad;
+      return head + innerS + s[ci] + (tail ? pp(tail, ind, w) : '');
+    }
+  }
+  return s;
+}
+function matchClose(s, i) {
+  let d = 0;
+  for (let j = i; j < s.length; j++) { if (OPEN[s[j]]) d++; else if (CLOSE[s[j]] && --d === 0) return j; }
+  return -1;
+}
+function splitTop(s, sep) {
+  const out = []; let d = 0, st = 0;
+  for (let j = 0; j < s.length; j++) {
+    const c = s[j];
+    if (OPEN[c]) d++; else if (CLOSE[c]) d--;
+    else if (d === 0 && s.startsWith(sep, j)) { out.push(s.slice(st, j)); j += sep.length - 1; st = j + 1; }
+  }
+  out.push(s.slice(st));
+  return out.filter(x => x.trim() !== '');
+}
+function splitTopJuxt(s) {
+  const out = []; let d = 0, st = 0;
+  for (let j = 0; j < s.length; j++) {
+    const c = s[j];
+    if (OPEN[c]) d++; else if (CLOSE[c]) { d--; if (d === 0 && s[j + 1] === ' ' && /[\w$\[<'#]/.test(s[j + 2] || '')) { out.push(s.slice(st, j + 1)); st = j + 2; } }
+  }
+  out.push(s.slice(st));
+  return out.filter(x => x.trim() !== '');
+}
+//PARSER-END
+</script>
+<script>
+// ---------- UI ----------
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem('cev:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('cev:' + k, JSON.stringify(v)); } catch (e) {} }
+};
+
+let CE = null;           // {header, steps:[{rule, cfg, diff}], cycleStart, classes, rules, fileName}
+let cur = 0;
+let hiddenCls = new Set(LS.get('hiddenCls', []));
+let hiddenAttr = new Set(LS.get('hiddenAttr', []));   // "Class.attr"
+let hiddenRule = new Set(LS.get('hiddenRule', []));
+let collapsedCards = new Set(LS.get('collapsedCls', [])); // class names collapsed by default
+let expanded = new Set();  // key|attr
+const openFilterCls = new Set();
+
+function saveFilters() {
+  LS.set('hiddenCls', [...hiddenCls]); LS.set('hiddenAttr', [...hiddenAttr]); LS.set('hiddenRule', [...hiddenRule]);
+  LS.set('collapsedCls', [...collapsedCards]);
+}
+
+['onlyChanged', 'showOld', 'diffVisible', 'hideQuiet'].forEach(id => {
+  const v = LS.get('opt:' + id, null); if (v !== null) $(id).checked = v;
+  $(id).addEventListener('change', () => { LS.set('opt:' + id, $(id).checked); refresh(); });
+});
+$('search').addEventListener('input', () => renderState());
+$('themeBtn').onclick = () => {
+  const r = document.documentElement, dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const curT = r.dataset.theme || (dark ? 'dark' : 'light');
+  r.dataset.theme = curT === 'dark' ? 'light' : 'dark'; LS.set('theme', r.dataset.theme);
+};
+{ const t = LS.get('theme', null); if (t) document.documentElement.dataset.theme = t; }
+
+$('openBtn').onclick = () => $('file').click();
+$('file').onchange = e => { if (e.target.files[0]) loadFile(e.target.files[0]); };
+let dragN = 0;
+addEventListener('dragenter', e => { e.preventDefault(); dragN++; document.body.classList.add('dragging'); });
+addEventListener('dragleave', e => { if (--dragN <= 0) { dragN = 0; document.body.classList.remove('dragging'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); dragN = 0; document.body.classList.remove('dragging'); const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+
+async function loadFile(f) {
+  $('progress').textContent = 'reading…';
+  return loadText(await f.text(), f.name);
+}
+async function loadText(raw, name) {
+  const f = { name };
+  let ce;
+  try { ce = parseCounterexample(raw); } catch (e) { $('progress').textContent = 'error: ' + e.message; return; }
+  ce.fileName = f.name;
+  const n = ce.steps.length;
+  // parse states in chunks so the page stays responsive
+  let i = 0, prev = null;
+  await new Promise((res, rej) => {
+    function chunk() {
+      try {
+        const t0 = performance.now();
+        while (i < n && performance.now() - t0 < 40) {
+          const st = ce.steps[i];
+          st.cfg = indexState(parseConfig(st.stateText));
+          st.diff = diffStates(prev, st.cfg);
+          delete st.stateText;
+          prev = st.cfg; i++;
+        }
+        $('progress').textContent = i < n ? `parsing ${i}/${n}` : '';
+        if (i < n) setTimeout(chunk, 0); else res();
+      } catch (e) { rej(e); }
+    }
+    chunk();
+  }).catch(e => { $('progress').textContent = `parse error at state ${i}: ${e.message}`; throw e; });
+  // catalog
+  const classes = new Map(); // cls -> {count, attrs: Map(name -> count)}
+  const rules = new Map();
+  for (const st of ce.steps) {
+    rules.set(st.rule, (rules.get(st.rule) || 0) + 1);
+    for (const o of st.cfg.index.values()) {
+      let c = classes.get(o.cls); if (!c) classes.set(o.cls, c = { objs: new Set(), attrs: new Map() });
+      c.objs.add(o.key);
+      for (const a of o.attrs) c.attrs.set(a.name, (c.attrs.get(a.name) || 0) + (st.diff.ch.some(x => x.key === o.key && x.attr === a.name) ? 1 : 0));
+    }
+  }
+  ce.classes = classes; ce.rules = rules;
+  CE = ce; cur = 0; expanded = new Set();
+  const nCyc = ce.cycleStart >= 0 ? n - ce.cycleStart : 0;
+  $('fileInfo').innerHTML = `<b>${esc(f.name)}</b> · ${n} states (prefix ${ce.cycleStart >= 0 ? ce.cycleStart : n}, cycle ${nCyc}) · ${esc(ce.header.filter(h => /^reduce|^search/.test(h)).join(' '))}`;
+  renderFilters(); refresh();
+}
+
+// ---------- visibility ----------
+const attrVisible = (cls, a) => !hiddenCls.has(cls) && !hiddenAttr.has(cls + '.' + a);
+function changeVisible(x) { return !hiddenCls.has(x.cls) && (x.attr === null || !hiddenAttr.has(x.cls + '.' + x.attr)); }
+function stepVisibleChanges(st) { return st.diff.ch.filter(changeVisible); }
+function stepShown(i) {
+  if (i === cur) return true;
+  const st = CE.steps[i];
+  if (i > 0 && hiddenRule.has(CE.steps[i - 1].rule)) return false;
+  if ($('hideQuiet').checked && i > 0 && !stepVisibleChanges(st).length && !st.diff.msgAdd.length && !st.diff.msgDel.length) return false;
+  return true;
+}
+function shownIndices() { const r = []; for (let i = 0; i < CE.steps.length; i++) if (stepShown(i)) r.push(i); return r; }
+function baseFor(i) {
+  if (i === 0) return null;
+  if (!$('diffVisible').checked) return i - 1;
+  for (let j = i - 1; j >= 0; j--) if (stepShown(j)) return j;
+  return null;
+}
+
+function refresh() { renderSteps(); renderState(); }
+
+// ---------- step list ----------
+function renderSteps() {
+  if (!CE) return;
+  const out = []; let hidden = 0, hiddenFrom = -1;
+  const flushGap = () => { if (hidden) out.push(`<div class="gap" data-i="${hiddenFrom}">… ${hidden} hidden step${hidden > 1 ? 's' : ''}</div>`); hidden = 0; };
+  for (let i = 0; i < CE.steps.length; i++) {
+    if (!stepShown(i)) { if (!hidden) hiddenFrom = i; hidden++; continue; }
+    flushGap();
+    const st = CE.steps[i];
+    const via = i === 0 ? 'initial' : CE.steps[i - 1].rule;
+    const vis = stepVisibleChanges(st);
+    const objs = [...new Set(vis.map(x => shortKey(x.key) + (x.attr ? '.' + x.attr : '')))];
+    let chips = objs.slice(0, 4).join(' ') + (objs.length > 4 ? ` +${objs.length - 4}` : '');
+    if (st.diff.msgAdd.length || st.diff.msgDel.length) chips += ` ✉${st.diff.msgAdd.length ? '+' + st.diff.msgAdd.length : ''}${st.diff.msgDel.length ? '−' + st.diff.msgDel.length : ''}`;
+    const cyc = CE.cycleStart >= 0 && i >= CE.cycleStart ? ' cycle' : '';
+    out.push(`<div class="step${i === cur ? ' cur' : ''}${cyc}" data-i="${i}" title="state ${i}, reached by ${esc(via)}"><span class="n">${i}</span><span class="r mono">${esc(via)}</span><span class="chips mono">${esc(chips)}</span></div>`);
+  }
+  flushGap();
+  $('stepList').innerHTML = out.join('');
+  const c = $('stepList').querySelector('.step.cur'); if (c) c.scrollIntoView({ block: 'nearest' });
+}
+$('stepList').addEventListener('click', e => {
+  const el = e.target.closest('[data-i]'); if (!el) return;
+  go(+el.dataset.i);
+});
+function shortKey(k) { return k.split('/').filter((_, i) => i % 2 === 0).pop(); }
+
+function go(i) {
+  if (!CE) return;
+  cur = Math.max(0, Math.min(CE.steps.length - 1, i));
+  refresh();
+}
+function move(dir) {
+  const sh = shownIndices(); let p = sh.indexOf(cur);
+  if (p < 0) { p = sh.findIndex(x => x > cur); if (dir < 0) p--; else dir = 0; }
+  go(sh[Math.max(0, Math.min(sh.length - 1, p + dir))]);
+}
+function moveChange(dir) {
+  for (let i = cur + dir; i >= 0 && i < CE.steps.length; i += dir) {
+    if (i > 0 && hiddenRule.has(CE.steps[i - 1].rule)) continue;
+    if (stepVisibleChanges(CE.steps[i]).length) return go(i);
+  }
+}
+addEventListener('keydown', e => {
+  if (!CE || e.target.tagName === 'INPUT') return;
+  if (e.key === 'j' || e.key === 'ArrowDown') { move(1); e.preventDefault(); }
+  else if (e.key === 'k' || e.key === 'ArrowUp') { move(-1); e.preventDefault(); }
+  else if (e.key === 'n') moveChange(1);
+  else if (e.key === 'p') moveChange(-1);
+  else if (e.key === 'Home') go(0);
+  else if (e.key === 'End') go(CE.steps.length - 1);
+  else if (e.key === 'Escape') $('hist').classList.remove('on');
+});
+
+// ---------- state view ----------
+function renderState() {
+  if (!CE) return;
+  const st = CE.steps[cur], bi = baseFor(cur), base = bi == null ? null : CE.steps[bi].cfg;
+  const diff = base ? diffStates(base, st.cfg) : { ch: [], msgAdd: [], msgDel: [] };
+  const chg = new Map(); // key -> Set(attr) ; attr null => add
+  for (const x of diff.ch) { if (!chg.has(x.key)) chg.set(x.key, new Map()); chg.get(x.key).set(x.attr, x.kind); }
+  const onlyChanged = $('onlyChanged').checked, q = $('search').value.trim().toLowerCase();
+  const via = cur === 0 ? 'initial state' : 'reached by ' + CE.steps[cur - 1].rule;
+  const next = cur < CE.steps.length - 1 ? 'next: ' + st.rule : (st.rule === 'deadlock' ? 'deadlock' : 'cycles back via ' + st.rule);
+  let h = `<div class="stephead"><h2>State ${cur}</h2><span class="mono">${esc(via)}</span><span class="muted mono">${esc(next)}</span>`;
+  h += `<span class="muted">${bi == null ? '' : 'diff vs state ' + bi}</span>`;
+  if (CE.cycleStart >= 0 && cur >= CE.cycleStart) h += `<span class="badge chg">cycle</span>`;
+  h += `</div>`;
+
+  function objHasChange(o) {
+    if (chg.has(o.key)) for (const [a] of chg.get(o.key)) if (a === null || attrVisible(o.cls, a)) return true;
+    for (const a of o.attrs) for (const c of a.children) if (!hiddenCls.has(c.cls) && objHasChange(c)) return true;
+    return false;
+  }
+  function objMatches(o) {
+    if (!q) return true;
+    if ((o.oid + ' ' + o.cls).toLowerCase().includes(q)) return true;
+    for (const a of o.attrs) { if (a.text.toLowerCase().includes(q)) return true; for (const c of a.children) if (objMatches(c)) return true; }
+    return false;
+  }
+  function card(o) {
+    if (hiddenCls.has(o.cls)) return '';
+    const changed = objHasChange(o);
+    if (onlyChanged && !changed) return '';
+    if (!objMatches(o)) return '';
+    const kind = chg.has(o.key) && chg.get(o.key).get(null);
+    const prev = base && base.index.get(o.key);
+    const coll = collapsedCards.has(o.cls) ? ' collapsed' : '';
+    let hiddenN = 0, rows = '';
+    for (const a of o.attrs) {
+      if (!attrVisible(o.cls, a.name)) { hiddenN++; continue; }
+      const ac = !kind && chg.has(o.key) && chg.get(o.key).has(a.name);
+      const childHtml = a.children.map(card).join('');
+      if (onlyChanged && !ac && !childHtml) continue;
+      const pa = prev && prev.amap.get(a.name);
+      rows += attrRow(o, a, ac ? (pa ? pa.text : '') : null, childHtml);
+    }
+    const badge = kind === 'add' ? '<span class="badge add">new</span>' : changed ? '<span class="badge chg">changed</span>' : '';
+    return `<div class="card${changed ? (kind === 'add' ? ' added' : ' changed') : ''}${coll}" data-cls="${esc(o.cls)}"><div class="hd"><span class="mono"><b>${esc(o.oid)}</b> : <span class="cls">${esc(o.cls)}</span></span>${badge}${hiddenN ? `<span class="hidn">${hiddenN} hidden attr${hiddenN > 1 ? 's' : ''}</span>` : ''}</div><div class="bd">${rows}</div></div>`;
+  }
+  for (const o of st.cfg.objects) h += card(o);
+  // removed objects
+  for (const x of diff.ch) if (x.kind === 'del' && !hiddenCls.has(x.cls)) {
+    const o = base.index.get(x.key);
+    h += `<div class="card removed"><div class="hd"><span class="mono"><b>${esc(x.key)}</b> : <span class="cls">${esc(o.cls)}</span></span><span class="badge del">removed</span></div></div>`;
+  }
+  // messages
+  const ms = msgsHtml(st.cfg.msgs, diff, q);
+  if (ms) h += `<div class="card${diff.msgAdd.length || diff.msgDel.length ? ' changed' : ''}"><div class="hd"><b>Other configuration items</b><span class="muted"> (${st.cfg.msgs.length})</span></div><div class="bd msgs">${ms}</div></div>`;
+  $('view').innerHTML = h;
+}
+
+function msgsHtml(msgs, diff, q) {
+  const addCnt = new Map(); for (const m of diff.msgAdd) addCnt.set(m, (addCnt.get(m) || 0) + 1);
+  let h = '';
+  for (const m of msgs) {
+    if (q && !m.toLowerCase().includes(q)) continue;
+    const c = addCnt.get(m) || 0; let cls = '';
+    if (c > 0) { cls = ' add'; addCnt.set(m, c - 1); } else if ($('onlyChanged').checked) continue;
+    h += `<div class="msg mono${cls}">${esc(m)}</div>`;
+  }
+  for (const m of diff.msgDel) if (!q || m.toLowerCase().includes(q)) h += `<div class="msg mono del">${esc(m)}</div>`;
+  return h;
+}
+
+function fmtText(t) { // highlight nested-object placeholders
+  return esc(t).replace(/\u27EA([^\u27EB]*)\u27EB/g, '<span class="nested-ph">⟨$1⟩</span>');
+}
+function attrRow(o, a, oldText, childHtml) {
+  const id = o.key + '|' + a.name, ex = expanded.has(id), changed = oldText !== null;
+  let v;
+  if (ex) {
+    v = changed && $('showOld').checked ? `<pre>${lineDiff(pp(oldText), pp(a.text))}</pre>` : `<pre>${fmtText(pp(a.text))}</pre>`;
+  } else if (changed) {
+    v = `<div class="one mono" title="click to expand">${snippetDiff(oldText, a.text, false)}</div>`;
+    if ($('showOld').checked) v += `<div class="one mono old">${snippetDiff(a.text, oldText, true)}</div>`;
+  } else {
+    v = `<div class="one mono" title="click to expand">${fmtText(a.text)}</div>`;
+  }
+  return `<div class="attr${changed ? ' changed' : ''}" data-id="${esc(id)}" data-key="${esc(o.key)}" data-attr="${esc(a.name)}" data-cls="${esc(o.cls)}">
+    <span class="k mono attrn">${esc(a.name)}</span><div class="v">${v}${childHtml}</div>
+    <span class="acts"><button data-act="hist" title="history of this attribute">⏱</button><button data-act="hide" title="hide ${esc(o.cls)}.${esc(a.name)}">✕</button></span></div>`;
+}
+
+// Show the region of `b` that differs from `a`, with some context
+function snippetDiff(a, b, isOld) {
+  let p = 0; const n = Math.min(a.length, b.length);
+  while (p < n && a[p] === b[p]) p++;
+  let sa = a.length, sb = b.length;
+  while (sa > p && sb > p && a[sa - 1] === b[sb - 1]) { sa--; sb--; }
+  const ctx = 40;
+  const from = Math.max(0, p - ctx);
+  const pre = (from > 0 ? '…' : '') + b.slice(from, p), mid = b.slice(p, sb), post = b.slice(sb, sb + 400);
+  return fmtText(pre) + (mid ? `<mark class="d">${fmtText(mid)}</mark>` : (isOld ? '' : '<mark class="d">∅</mark>')) + fmtText(post) + (sb + 400 < b.length ? '…' : '');
+}
+
+function lineDiff(a, b) {
+  const A = a.split('\n'), B = b.split('\n');
+  if (A.length * B.length > 4e6) return fmtText(b);
+  const n = A.length, m = B.length, L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  let i = 0, j = 0, out = '';
+  while (i < n || j < m) {
+    if (i < n && j < m && A[i] === B[j]) { out += `<span class="ln">${fmtText(B[j]) || ' '}</span>`; i++; j++; }
+    else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) { out += `<span class="ln-add">${fmtText(B[j]) || ' '}</span>`; j++; }
+    else { out += `<span class="ln-del">${fmtText(A[i]) || ' '}</span>`; i++; }
+  }
+  return out;
+}
+
+$('view').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-act]');
+  const row = e.target.closest('.attr');
+  if (btn && row) {
+    if (btn.dataset.act === 'hide') { hiddenAttr.add(row.dataset.cls + '.' + row.dataset.attr); saveFilters(); renderFilters(); refresh(); }
+    else showHistory(row.dataset.key, row.dataset.attr);
+    return;
+  }
+  if (e.target.closest('.one') && row && !e.target.closest('.card .card .hd')) {
+    if (e.target.closest('.attr') !== row) return;
+    expanded.add(row.dataset.id); renderState(); return;
+  }
+  if (e.target.closest('pre') && row && getSelection().isCollapsed && e.detail === 2) { expanded.delete(row.dataset.id); renderState(); return; }
+  const hd = e.target.closest('.card > .hd');
+  if (hd) hd.parentElement.classList.toggle('collapsed');
+});
+$('view').addEventListener('dblclick', e => {
+  const row = e.target.closest('.attr');
+  if (row && e.target.closest('pre') && e.target.closest('.attr') === row) { expanded.delete(row.dataset.id); getSelection().removeAllRanges(); renderState(); }
+});
+
+// ---------- attribute history ----------
+function showHistory(key, attr) {
+  let prev, items = '', count = 0;
+  for (let i = 0; i < CE.steps.length; i++) {
+    const o = CE.steps[i].cfg.index.get(key), a = o && o.amap.get(attr);
+    const t = a ? a.text : null;
+    if (i === 0 || t !== prev) {
+      count++;
+      const via = i === 0 ? 'initial' : CE.steps[i - 1].rule;
+      items += `<div class="it${i === cur ? ' hl' : ''}" data-i="${i}"><div><b>state ${i}</b> <span class="mono">${esc(via)}</span></div><div class="one mono">${t === null ? '<i>absent</i>' : (prev != null && t !== null ? snippetDiff(prev, t, false) : fmtText(t))}</div></div>`;
+      prev = t;
+    }
+  }
+  $('histTitle').innerHTML = `<span class="mono">${esc(key)}.${esc(attr)}</span> — ${count} distinct value${count > 1 ? 's' : ''}`;
+  $('histBody').innerHTML = items;
+  $('hist').classList.add('on');
+}
+$('histBody').addEventListener('click', e => { const it = e.target.closest('.it'); if (it) { go(+it.dataset.i); $('histBody').querySelectorAll('.it').forEach(x => x.classList.toggle('hl', x === it)); } });
+$('histClose').onclick = () => $('hist').classList.remove('on');
+
+// ---------- filters panel ----------
+function renderFilters() {
+  if (!CE) return;
+  let h = `<h3>Classes &amp; attributes</h3><div style="display:flex;gap:4px;margin-bottom:4px"><button data-f="allcls">show all</button><button data-f="nocls">hide all</button><button data-f="reset">reset attrs</button></div>`;
+  const cls = [...CE.classes.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  for (const [c, info] of cls) {
+    h += `<div class="fcls${openFilterCls.has(c) ? ' open' : ''}" data-c="${esc(c)}"><div class="row"><span class="tw">${openFilterCls.has(c) ? '▾' : '▸'}</span><label><input type="checkbox" data-k="cls" ${hiddenCls.has(c) ? '' : 'checked'}><span class="cls mono">${esc(c)}</span></label><span class="cnt" title="objects">${info.objs.size}</span></div><div class="attrs">`;
+    h += `<label title="collapse cards of this class by default"><input type="checkbox" data-k="coll" ${collapsedCards.has(c) ? 'checked' : ''}><i>collapse cards</i></label>`;
+    for (const [a, nch] of info.attrs) h += `<label><input type="checkbox" data-k="attr" data-a="${esc(a)}" ${hiddenAttr.has(c + '.' + a) ? '' : 'checked'}><span class="mono attrn">${esc(a)}</span><span class="cnt" style="margin-left:auto" title="steps where it changes">${nch ? 'Δ' + nch : ''}</span></label>`;
+    h += `</div></div>`;
+  }
+  h += `<h3>Rules (hide steps)</h3><div style="display:flex;gap:4px;margin-bottom:4px"><button data-f="allrule">show all</button></div>`;
+  for (const [r, n] of [...CE.rules.entries()].sort((a, b) => b[1] - a[1])) {
+    h += `<div class="frule"><label><input type="checkbox" data-k="rule" data-r="${esc(r)}" ${hiddenRule.has(r) ? '' : 'checked'}><span class="mono">${esc(r)}</span></label><span class="cnt">${n}</span></div>`;
+  }
+  $('filters').innerHTML = h;
+}
+$('filters').addEventListener('click', e => {
+  const tw = e.target.closest('.tw');
+  if (tw) { const c = tw.closest('.fcls').dataset.c; openFilterCls.has(c) ? openFilterCls.delete(c) : openFilterCls.add(c); renderFilters(); return; }
+  const f = e.target.closest('button[data-f]'); if (!f) return;
+  if (f.dataset.f === 'allcls') hiddenCls.clear();
+  if (f.dataset.f === 'nocls') for (const c of CE.classes.keys()) hiddenCls.add(c);
+  if (f.dataset.f === 'reset') hiddenAttr.clear();
+  if (f.dataset.f === 'allrule') hiddenRule.clear();
+  saveFilters(); renderFilters(); refresh();
+});
+$('filters').addEventListener('change', e => {
+  const t = e.target, k = t.dataset.k; if (!k) return;
+  const c = t.closest('.fcls') && t.closest('.fcls').dataset.c;
+  const tog = (set, v) => t.checked ? set.delete(v) : set.add(v);
+  if (k === 'cls') tog(hiddenCls, c);
+  else if (k === 'attr') tog(hiddenAttr, c + '.' + t.dataset.a);
+  else if (k === 'rule') tog(hiddenRule, t.dataset.r);
+  else if (k === 'coll') t.checked ? collapsedCards.add(c) : collapsedCards.delete(c);
+  saveFilters(); refresh();
+});
+</script>
+</body>
+</html>

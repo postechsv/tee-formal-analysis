@@ -1,0 +1,4 @@
+--- The model files of KMGK that the preprocessed TAs need (the spec and the TAs are loaded before
+--- and after them by models/<analysis>/model.maude, see tools/build/tee-build.py).
+load kmgk-data
+load kmgk-instance-data

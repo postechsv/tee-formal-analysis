@@ -1,0 +1,22 @@
+--- Constants of the MQT-TZ TA program (TA_* macros of hot_cache_ta.h), shared by the TA and the RA.
+
+fmod MQTTZ-DATA is
+  pr CRYPTO-KEY-SIZE .
+
+  --- The AES key size in bytes (the TA passes key_size * 8 bits to the TEE API).  Upstream's dummy
+  --- keys are 32 characters long, so the key is AES-256.
+  op TA-AES-KEY-SIZE : -> Nat [ctor] .
+  eq TA-AES-KEY-SIZE = 32 .
+
+  --- The size of a message buffer.  Its value is in hot_cache_ta.h, which is not in this
+  --- repository; the model never compares it, so it is left abstract.
+  op TA-MQTTZ-MAX-MSG-SZ : -> Nat [ctor] .
+
+  op TA-AES-MODE-ENCODE : -> Nat [ctor] .
+  eq TA-AES-MODE-ENCODE = 1 .
+  op TA-AES-MODE-DECODE : -> Nat [ctor] .
+  eq TA-AES-MODE-DECODE = 0 .
+
+  op TA-REENCRYPT : -> Nat [ctor] .
+  eq TA-REENCRYPT = 3 .
+endfm

@@ -36,7 +36,7 @@ THREATS = {
 
 # The invisible-transition reduction G of the paper: the three modules of the build together.
 REDUCTION = [
-    "IMP-INVISIBLE-REDUCTION",
+    "C-INVISIBLE-REDUCTION",
     "TEE-API-CALL-INVISIBLE-REDUCTION",
     "INVISIBLE-REDUCTION",
 ]

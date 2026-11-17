@@ -1,6 +1,6 @@
 mod DATA-STREAM-CASES is
   pr TEE-BEHAVIOR .
-  pr TEE-IMP-BEHAVIOR .
+  pr TEE-C-BEHAVIOR .
   pr MQTTZ-PROGRAM-DECL .
   pr MQTTZ-DATA .
   pr MQTTZ-CONSTANTS .
@@ -22,7 +22,7 @@ mod DATA-STREAM-CASES is
       --- Location: read_raw_object
       --- Test Case 1 (For TEE_ReadObjectData)
       --- openedHandleToPersistentObj ;
-      --- ReadObjectData(object, # dataSize(1)  ; res, data) ;
+      --- ReadObjectData(object, # 1  ; res, data) ;
       --- return data
 
       --- Test Case 2 (TEE_WriteObjectData)

@@ -20,7 +20,7 @@ mod BASE-SCENARIO is
   eq initBroker(RAPROG, TAPROG, BI) = 
   < BI : Broker | in-buffer : nil, out-buffer : nil, re-enc-queue : nil,
                   subscriptions : (topic(1) |-> {sub(1)} {sub(2)}, topic(2) |-> {sub(2)}) ,
-                  infra : {initRa(RAPROG)} | {initTa(TAPROG) initTrustedOS(clients) shareKeys(clients) initStorage(clients)},
+                  infra : {initRa(RAPROG)} | {initTa(TAPROG) initTrustedOS(TAPROG) shareKeys(clients) initStorage(clients)},
                   is-running : false, counter : 0 > .
 
   op scenario : Program Program Configuration -> Configuration .

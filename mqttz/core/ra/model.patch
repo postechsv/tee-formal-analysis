@@ -1,5 +1,5 @@
 Modeling changes of the MQT-TZ RA (hot_cache/host/main.c of mqttz/optee-apps, as published), applied
-before tools/lang/preprocess.py preprocesses it.  The model keeps payload_reencryption, the call of
+before tools/lang-preprocess.py preprocesses it.  The model keeps payload_reencryption, the call of
 the TA; main.imp is the entry point of the model in place of main, parse_arguments and the
 benchmark loop.
 

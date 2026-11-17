@@ -173,7 +173,7 @@ endm
 ------------------------------------------------------------
 
 mod MQTTZ-PROGRAM-DECL is 
-  pr IMP-PROGRAM .
+  pr C-PROGRAM .
 
   op cmd : -> Var [ctor] .
 

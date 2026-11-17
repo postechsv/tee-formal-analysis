@@ -17,7 +17,7 @@ mod BASE-SCENARIO is
   eq initBroker(RAPROG, TAPROG, BI, CLIENTS, SUBLIST) = 
       < BI : Broker | in-buffer : nil, out-buffer : nil, re-enc-queue : nil,
                       subscriptions : SUBLIST ,
-                      infra : {initRa(RAPROG)} | {initTa(TAPROG) initTrustedOS(CLIENTS) shareKeys(CLIENTS)},
+                      infra : {initRa(RAPROG)} | {initTa(TAPROG) initTrustedOS(TAPROG) shareKeys(CLIENTS)},
                       is-running : false, counter : 0 > .
 
 --- pub1 send at most 2 message

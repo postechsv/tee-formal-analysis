@@ -1,6 +1,6 @@
 --- This file defines the behaviors of the MQT-TZ RA.  Its programs (mqttzHost, mqttzHostPatched)
---- are preprocessed from the upstream host (ra/main.c) by tools/lang/preprocess.py, from the
---- [ra.host] table of mqttz.toml, into models/<analysis>/ra/broker-ra.maude.
+--- are preprocessed from the upstream host (ra/main.c) by tools/lang-preprocess.py, from the
+--- [ra.host] table of model-checking.toml, into models/<analysis>/ra/broker-ra.maude.
 
 --- This module declares what the programs of the RA and of the TA share: the client struct, the
 --- mqttz_client of the RA, which the TA reads and writes through its memory references, and the
@@ -8,13 +8,13 @@
 
 mod MQTTZ-CLIENT-DECL is
   pr TEE-BEHAVIOR .
-  pr TEE-IMP-BEHAVIOR .
+  pr TEE-C-BEHAVIOR .
   pr MQTTZ-PROGRAM-DECL .
   pr MQTTZ-DATA .
   pr MQTTZ-CRYPTO-KEY-VALUE .
   pr MQTTZ-CONSTANTS .
 
-  op MqttzClient : -> ImpType [ctor] .
+  op MqttzClient : -> CType [ctor] .
   --- The session context of the TA before alloc_resources sets it (TEE_Malloc fills it with zero).
   op anyAlgo : -> Algorithm [ctor] .
   op anyMode : -> Mode [ctor] .
@@ -58,8 +58,8 @@ omod MQTTZ-RA-BEHAVIOR is
   var P : Program .
   var KS : KConfig .
   vars V V1 V2 V3 : Value .
-  var VL : ArgList .
-  var RES : ArgList .
+  var VL : List{Arg} .
+  var RES : List{Arg} .
   var DATA : Data .
   var MSG : Msg .
   var MEM : Map{Nat,Value?} .
@@ -121,20 +121,20 @@ omod MQTTZ-RA-BEHAVIOR is
   eq finished(k(.K) KS) = true .
   eq finished(KS) = false [owise] .
 
-  op extractData : ArgList -> List{Data} .
+  op extractData : List{Arg} -> List{Data} .
   eq extractData((V # DATA)) = DATA .
   eq extractData(VL) = anyData [owise] .
 
-  op normalFinish : ArgList -> Bool .
+  op normalFinish : List{Arg} -> Bool .
   ceq normalFinish((V # DATA)) = true if DATA =/= discarded .
   eq normalFinish(VL) = false [owise] .
 
-  --- The memory of the RA when its program starts: the outputs of main, ret and destCliData, are
-  --- the objects at the locations 0 and 1, with the values errorGeneric and anyData.  outputs(KS)
-  --- are their values when the program has finished.
+  --- The memory of the RA when its program starts, the last argument of mkConf: the outputs of
+  --- main, ret and destCliData, are the objects at the locations 0 and 1, with the values
+  --- errorGeneric and anyData.  outputs(KS) are their values when the program has finished.
   op raMemory : -> CStore .
   eq raMemory = cstore((0 |-> # errorGeneric) ; (1 |-> # anyData), 2, empty) .
-  op outputs : KConfig -> ArgList .
+  op outputs : KConfig -> List{Arg} .
   eq outputs(store((0 |-> V1) ; (1 |-> V2) ; MEM) KS) = V1 V2 .
 
 --- The following three rules define how the MQT-TZ RA program is executed and its results are returned.
@@ -142,7 +142,7 @@ omod MQTTZ-RA-BEHAVIOR is
   rl [accept-re-enc-req]:
     < RI : RichApp | proc : none, prog : P > reqRA(reEncReq(DATA, PUB, SUB, MSG, N))
     => 
-    < RI : RichApp | proc : mkConf(P, main, (# fileName(PUB) # DATA # fileName(SUB) loc(0) loc(1)), raMemory) > reqRA(reEncReq(DATA, PUB, SUB, MSG, N)) .
+    < RI : RichApp | proc : mkConf(P, main, (# fileName(PUB) # DATA # fileName(SUB) loc(0) loc(1) # raMemory)) > reqRA(reEncReq(DATA, PUB, SUB, MSG, N)) .
 
   crl [return-re-enc-req]:
     < RI : RichApp | proc : KS > reqRA(reEncReq(DATA, PUB, SUB, MSG, N))

@@ -34,7 +34,6 @@ omod PROPOSITION is
   --- var TN : AppId .
   --- var SMAP : Map{AppId,StorageStatus} .
   var ALGO : Algorithm .
-  var KEYS : List{CryptoKey} .
   --- var SESI : SessionId .
   --- var FUNC : FuncId .
   --- var VL : ValueList .

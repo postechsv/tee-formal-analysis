@@ -24,12 +24,21 @@ omod SCENARIO-AUX is
 
   op osId : -> Oid .
   
-  op initTrustedOS : List{SubId} -> Configuration .
-  eq initTrustedOS(IL) 
-  = < osId : TrustedOS | sess : (sessionId(0) |-> ta) , session-counter : 1 ,                         
+  --- The broker has opened its session with the TA before the scenario starts: the state after
+  --- teec-open-session-storage for the RA ra, the TA mqttzTa (a single-instance TA with one
+  --- session at a time, taConfig(P, true, false)) and its storage oid(0, ta), which holds the
+  --- keys of the clients.  The instance is ta and the session is sessionId(0), which the RA
+  --- program uses (core/ra/main.imp).
+  op mqttzTa : -> AppId [ctor] .
+  op initTrustedOS : Program -> Configuration .
+  eq initTrustedOS(P)
+  = < osId : TrustedOS | session-counter : 1 ,
                          service-request-ta-inst : noOid ,
                          service-in : nil , service-out : nil ,
-                         temporary-objects : empty > . 
+                         ta-config : (mqttzTa |-> taConfig(P, true, false)) ,
+                         ta-instances : (mqttzTa |-> ta) ,
+                         ta-storages : (mqttzTa |-> oid(0, ta)) >
+    < sessionId(0) : Session | source : ra , destination : ta , is-smc : true , state : idle > .
 
   op initStorage : List{SubId} -> Configuration .
   eq initStorage(IL) 
@@ -39,10 +48,12 @@ omod SCENARIO-AUX is
   eq initRa(P) = < ra : RichApp | proc : none , prog : P > .
 
   op initTa : Program -> Configuration .
+  --- The TA instance as teec-open-session-storage creates it (counter 1: oid(0, ta) is its
+  --- storage), with one session, and the ghost attribute running (model-checking.ghost).
   eq initTa(P) = < ta : TrustedApp | proc : none , prog : P ,
                                      status : (normal).AppStatus , api-call : noCall ,
-                                     counter : 0 , storage : oid(0, ta) , os-kernel : osId ,
-                                     client-service : none , running : false > .
+                                     counter : 1 , storage : oid(0, ta) , os-kernel : osId ,
+                                     client-service : none , sessions : 1 , running : false > .
 
 --- Clients (publishers and subscribers) share symmetric keys with brokers.
 

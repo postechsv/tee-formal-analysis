@@ -3,24 +3,37 @@
 calls it, into the programs of the model.
 
 Usage
-    python3 tools/lang/preprocess.py NAME/NAME.toml [--ta KEY | --ra KEY] [--out FILE]
+    python3 tools/lang-preprocess.py NAME/NAME.toml [--ta KEY | --ra KEY] [--out FILE]
 
 The [ta.KEY] table of the case-study manifest (a TA), or the [ra.KEY] table (an RA), says what to
 preprocess and how (paths are relative to the manifest):
 
-    source     the C source (as published, or written for the model)
+    source     the C source (as published, or written for the model), or a list of C files
+               (headers and sources) that are concatenated in order into one translation unit
+               before the patches are applied
     patches    unified diffs applied to the source first: the modeling changes of the C code
     programs   {PROGRAM = [patch, ...]}: one model program per entry, from the source with
                `patches` and then the listed patches applied (a code-level fix is a patch here)
     functions  the functions to keep; the functions they call are kept too
+    globals    the global variables to keep: scalars of a base type or of a TEE handle type,
+               and arrays of them (a C
+               array size is a number or a name that a #define of the source gives a number).
+               Each is declared at the top of the program and set to 0 (false for a bool, null
+               for a handle), as
+               C initializes a static object; the model keeps their values from one command to
+               the next (the instance memory of the TA)
     structs    the structs to keep (struct declarations come first)
-    main       a file in the model's syntax appended to every program (the entry point of the model)
+    entry      the C function that serves the commands of a TA (TA_InvokeCommandEntryPoint): the
+               entry point of the model (see Entry point below)
+    main       instead of entry: a file in the model's syntax appended to every program (the entry
+               point of an RA)
     template   the Maude file the programs are put in: each line `---@program PROGRAM` is replaced
                by the equation of that program
     output     the name of the generated file (default: KEY.maude)
 
     drop-calls          calls whose statements are left out (logging, timing, freeing memory)
     malloc-never-fails  `if (!x)` after `x = TEE_Malloc(...)` is left out
+    [c-types]   "C type" = "model type": C types (typedefs) added to the built-in table
     [types]     "FUNCTION.VAR", "FUNCTION.PARAM" or "STRUCT.FIELD" -> model type, when the C
                 type alone is not the one the model needs (none is needed for MQT-TZ)
     [drop-args] "FUNCTION" = [index, ...]: parameters left out of the definition and of every
@@ -40,7 +53,7 @@ preprocess and how (paths are relative to the manifest):
                 which the model counts in bits)
     [assign]    "CALL" = "VAR": a statement that calls CALL assigns its result to VAR (a TEE
                 API function that returns a value in the model only)
-    [[insert]]  function, before (a called function), imp: a model statement put before the
+    [[insert]]  function, before (a called function), c: a model statement put before the
                 first statement that calls `before`
     [invoke]    the TEEC_InvokeCommand calls of an RA: entry = the TA function that serves the
                 command (the model calls it with the command as its first argument), ta-result =
@@ -73,8 +86,16 @@ with ENTRY and TA-RESULT of [invoke]: the TA runs on the memory of the RA, so a 
 the pointer it is, and the TA writes its return code to TA-RESULT.  The call returns success, or
 TEE_ERROR_TARGET_DEAD when the TA panicked; the return origin is not modeled (list it in drop-vars).
 
+Entry point (a TA).  The entry function becomes void main (PARAMS, TEE-Result & ret), the function
+that the RA invokes ([invoke] entry = "main"): PARAMS is the signature of its [memref] table, which
+maps the TEE_Param memory references (the parameter types are not modeled: list param_types in
+drop-vars).  A return E is ret := E ; followed by return unit ;.  The globals are the instance
+memory of the TA: main loads them with loadGlobals(G1, ..., Gn) when it starts and stores them with
+storeGlobals(G1, ..., Gn) before every return (an array global is its elements, in order).
+
 Canonical form of the output (no manifest entry needed): switch becomes an if/else chain,
-a != b becomes ! (a == b), every if and else body is a block, and a call in an if condition or in
+a != b becomes ! (a == b), a < b, a > b and a >= b become <= with !, a % b becomes a - (a / b) * b,
+for and while loops become while (a break is a goto past the loop), x++ is x := x + 1, every if and else body is a block, and a call in an if condition or in
 a return value is first assigned to a result variable (res when the function has one of the
 callee's return type, else <callee>_res, declared once next to res or at the start of the body).
 """
@@ -101,6 +122,7 @@ C_TYPES = {
     'TEE_ObjectHandle': 'TEE-ObjectHandle',
     'TEE_OperationHandle': 'TEE-OperationHandle',
     'TEE_ObjectInfo': 'struct TeeObjectInfo',
+    'TEE_Time': 'struct TeeTime',
     'char': 'char',                # the content of a buffer (char * points to it)
     'uint32_t': 'int',
     'size_t': 'int',
@@ -121,7 +143,17 @@ CONSTANTS = {
     'TEE_ERROR_NOT_SUPPORTED': 'errorNotSupported',
     'TEE_ERROR_ITEM_NOT_FOUND': 'errorItemNotFound',
     'TEE_ERROR_SHORT_BUFFER': 'errorShortBuffer',
+    'TEE_ERROR_MAC_INVALID': 'errorMacInvalid',
+    # a storage failure is returned as the storage status (# STATUS, as in the paper)
+    'TEE_ERROR_CORRUPT_OBJECT': 'corrupted',
+    'TEE_ERROR_STORAGE_NOT_AVAILABLE': 'notAvailable',
+    'TEE_ERROR_STORAGE_NO_SPACE': 'outOfSpace',
+    'TEE_ERROR_CORRUPT_OBJECT_2': 'errorCorruptObject2',
+    'TEE_ERROR_STORAGE_NOT_AVAILABLE_2': 'errorStorageNotAvailable2',
     'TEE_ALG_AES_CBC_NOPAD': 'algAesCbcNopad',
+    'TEE_ALG_HMAC_SHA256': 'algHmacSha256',
+    'TEE_MODE_MAC': 'modeMac',
+    'TEE_TYPE_HMAC_SHA256': 'typeHmacSha256',
     'TEE_MODE_ENCRYPT': 'modeEncrypt',
     'TEE_MODE_DECRYPT': 'modeDecrypt',
     'TEE_TYPE_AES': 'typeAes',
@@ -140,7 +172,9 @@ DATA_FLAGS = {
 }
 
 # TEE API -> (model name, C arity, arguments).  An argument is the index of a C argument, or
-# (index, wrapper): `# v` becomes `# wrapper(v)`.  Arities are those of GlobalPlatform.
+# (index, wrapper): `# v` becomes `# wrapper(v)`, or ('ptr', index): a buffer, passed as the pointer
+# it is (&x is addr(x)) where the other arguments pass &x as the lvalue x.  Arities are those of
+# GlobalPlatform.
 API = {
     'TEE_AllocateOperation': ('allocOperation', 4, [1, 2, 3, 0]),
     'TEE_FreeOperation': ('freeOperation', 1, [0]),
@@ -152,14 +186,20 @@ API = {
     'TEE_FreeTransientObject': ('freeTransientObject', 1, [0]),
     'TEE_ResetTransientObject': ('resetTransientObject', 1, [0]),
     'TEE_PopulateTransientObject': ('populateTransientObject', 3, [0, 1]),
-    'TEE_InitRefAttribute': ('initRefAttribute', 4, [1, 2, 0]),
-    'TEE_OpenPersistentObject': ('openPersistentObject', 5, [0, 1, 3, 4]),
-    'TEE_CreatePersistentObject': ('createPersistent', 8, [0, 1, 3, 4, 5, (6, 'dataSize'), 7]),
+    'TEE_InitRefAttribute': ('initRefAttribute', 4, [1, ('ptr', 2), 0]),
+    'TEE_OpenPersistentObject': ('openPersistentObject', 5, [0, ('ptr', 1), 3, 4]),
+    'TEE_CreatePersistentObject': ('createPersistent', 8, [0, 1, 3, 4, 5, 6, 7]),
     'TEE_GetObjectInfo1': ('getObjectInfo1', 2, [0, 1]),
-    'TEE_ReadObjectData': ('readObjData', 4, [0, 2, 1]),
-    'TEE_WriteObjectData': ('writeObjectData', 3, [0, 1]),
+    'TEE_ReadObjectData': ('readObjData', 4, [0, 2, ('ptr', 1)]),
+    'TEE_WriteObjectData': ('writeObjectData', 3, [0, ('ptr', 1)]),
     'TEE_CloseObject': ('closeObject', 1, [0]),
     'TEE_CloseAndDeletePersistentObject1': ('closeAndDeletePersistentObject1', 1, [0]),
+    'TEE_MACInit': ('macInit', 3, [0, ('ptr', 1)]),
+    'TEE_MACUpdate': ('macUpdate', 3, [0, ('ptr', 1)]),
+    'TEE_MACComputeFinal': ('macComputeFinal', 5, [0, ('ptr', 1), ('ptr', 3)]),
+    'TEE_MACCompareFinal': ('macCompareFinal', 5, [0, ('ptr', 1), ('ptr', 3)]),
+    'TEE_GenerateRandom': ('generateRandom', 2, [('ptr', 0)]),
+    'TEE_GetSystemTime': ('getSystemTime', 1, [0]),
 }
 API_RESULT = 'TEE_Result'      # C return type of the API functions above that return a value
 TEEC_OPERATION = 'TEEC_Operation'
@@ -206,6 +246,8 @@ class Config(object):
         self.drop_calls = set(table.get('drop-calls', []))
         self.malloc_safe = table.get('malloc-never-fails', False)
         self.types = table.get('types', {})
+        self.ctypes = dict(C_TYPES, **table.get('c-types', {}))
+        self.globals = table.get('globals', [])
         self.drop_args = {k: set(v) for k, v in table.get('drop-args', {}).items()}
         self.drop_vars = set(table.get('drop-vars', []))
         self.malloc = table.get('malloc', {})
@@ -215,6 +257,7 @@ class Config(object):
         self.insert = table.get('insert', [])
         self.memref = table.get('memref', {})
         self.invoke = table.get('invoke')
+        self.entry = table.get('entry')
         self.used = set()      # manifest entries that were applied (unused ones are errors)
 
     def path(self, p):
@@ -233,6 +276,7 @@ class Func(object):
     def __init__(self, node):
         self.node = node
         decl = node.child_by_field_name('declarator')
+        self.ret_ptr = decl.type == 'pointer_declarator'     # returns a pointer (void * f(...))
         while decl.type == 'pointer_declarator':
             decl = decl.child_by_field_name('declarator')
         self.name = text(decl.child_by_field_name('declarator'))
@@ -270,17 +314,34 @@ def declarator_name(d):
 class Translator(object):
     def __init__(self, cfg, src_text):
         self.cfg = cfg
+        # __unused (OP-TEE's __attribute__((unused))) is a macro that the parser does not know
+        src_text = re.sub(r'\b__unused\b', '', src_text)
         self.tree = PARSER.parse(src_text.encode())
         self.funcs, self.structs = {}, {}
-        for n in self.tree.root_node.children:
+        self.decls, self.defines = {}, {}
+        for n in walk(self.tree.root_node):
+            if n.type == 'preproc_def' and n.child_by_field_name('value') is not None:
+                v = text(n.child_by_field_name('value')).strip()
+                if re.fullmatch(r'\d+U?', v):
+                    self.defines[text(n.child_by_field_name('name'))] = int(v.rstrip('U'))
+        for n in top_level(self.tree.root_node):
+            if n.type == 'declaration':
+                for d in n.children_by_field_name('declarator'):
+                    self.decls[declarator_name(d)[0]] = (n, d)
             if n.type == 'function_definition':
                 f = Func(n)
                 self.funcs[f.name] = f
             elif n.type == 'type_definition':
                 st = n.child_by_field_name('type')
-                if st is not None and st.type == 'struct_specifier' and st.child_by_field_name('name'):
-                    self.structs[text(st.child_by_field_name('name'))] = st
+                if st is not None and st.type == 'struct_specifier' and st.child_by_field_name('body'):
+                    # typedef struct NAME {...} T; is found as NAME and as T
+                    if st.child_by_field_name('name'):
+                        self.structs[text(st.child_by_field_name('name'))] = st
+                    for d in n.children_by_field_name('declarator'):
+                        self.structs[text(d)] = st
         self.done_ins = set()      # [[insert]] entries already placed in this program
+        self.breaks = []           # the label of a break: of the innermost loop, None in a switch
+        self.loops = 0             # the loops so far, for their break labels
         self.struct_types = {}
         for s in cfg.t.get('structs', []):
             if s not in self.structs:
@@ -288,7 +349,7 @@ class Translator(object):
             self.struct_types[s] = 'struct ' + pascal(s)
 
     # ---- types
-    def imp_type(self, key, ctype, ptr):
+    def c_type(self, key, ctype, ptr):
         t = self.cfg.get(self.cfg.types, key)
         if t is not None:
             return t
@@ -297,18 +358,18 @@ class Translator(object):
                 return ctype + ' *'
             if ctype in self.struct_types:
                 return '(%s) *' % self.struct_types[ctype]
-            if ctype in C_TYPES and C_TYPES[ctype] == 'int':
-                return 'int *'
+            if self.cfg.ctypes.get(ctype) in ('int', 'char'):
+                return self.cfg.ctypes[ctype] + ' *'
         elif ctype in self.struct_types:
             return self.struct_types[ctype]
-        if ctype in C_TYPES and not ptr:
-            return C_TYPES[ctype]
+        if ctype in self.cfg.ctypes and not ptr:
+            return self.cfg.ctypes[ctype]
         raise TransError('%s: no model type for C type %s%s; add it to [types]'
                          % (key, ctype, ' *' if ptr else ''))
 
     # ---- program
     def selected(self):
-        roots = self.cfg.t.get('functions', [])
+        roots = self.cfg.t.get('functions', []) + ([self.cfg.entry] if self.cfg.entry else [])
         order, seen = [], set()
 
         def visit(name):
@@ -328,13 +389,15 @@ class Translator(object):
             if r not in self.funcs:
                 raise TransError('function %s not found' % r)
             visit(r)
-        src_order = [n for n in self.funcs if n in seen]
-        return src_order
+        src_order = [n for n in self.funcs if n in seen and n != self.cfg.entry]
+        return src_order + ([self.cfg.entry] if self.cfg.entry else [])
 
     def program(self):
         out = []
         for s in self.cfg.t.get('structs', []):
             out += self.struct(s) + ['']
+        if self.cfg.globals:
+            out += self.global_vars() + ['']
         for name in self.selected():
             f = self.funcs[name]
             bad = [n for n in walk(f.node) if n.type == 'ERROR' or n.is_missing]
@@ -343,6 +406,50 @@ class Translator(object):
             out += self.function(f) + ['']
         return out
 
+    def global_cells(self):
+        """The globals as the entry point loads and stores them: an array is its elements."""
+        cells = []
+        for g in self.cfg.globals:
+            _, size = self.global_shape(g)
+            cells += [camel(g)] if size is None else ['%s[# %d]' % (camel(g), k) for k in range(size)]
+        return cells
+
+    def global_shape(self, g):
+        """(model type, array size or None) of the global g."""
+        if g not in self.decls:
+            raise TransError('global %s not found' % g)
+        n, d = self.decls[g]
+        _, ptr, arr = declarator_name(d)
+        if ptr:
+            raise TransError('global %s: a pointer is not kept (see the instance memory)' % g)
+        t = self.c_type('global.%s' % g, base_type(n), False)
+        if not arr:
+            return t, None
+        while d.type != 'array_declarator':
+            d = d.child_by_field_name('declarator')
+        size = text(d.child_by_field_name('size'))
+        size = self.defines.get(size, size)
+        if not re.fullmatch(r'\d+', str(size)):
+            raise TransError('global %s: array size %s is not a number' % (g, size))
+        return t, int(size)
+
+    def global_vars(self):
+        decls, inits = [], []
+        for g in self.cfg.globals:
+            t, size = self.global_shape(g)
+            zeros = {'int': '# 0', 'bool': '# false', 'char': '# noData',
+                     'TEE-OperationHandle': '# null', 'TEE-ObjectHandle': '# null'}
+            if t not in zeros:
+                raise TransError('global %s: type %s is not a base type or a handle' % (g, t))
+            zero = zeros[t]
+            if size is not None:
+                decls.append('%s[%s] %s ;' % (t, size, camel(g)))
+                inits += ['%s[# %d] := %s ;' % (camel(g), k, zero) for k in range(size)]
+            else:
+                decls.append('%s %s ;' % (t, camel(g)))
+                inits.append('%s := %s ;' % (camel(g), zero))
+        return decls + inits
+
     def struct(self, name):
         body = self.structs[name].child_by_field_name('body')
         lines = ['%s {' % self.struct_types[name]]
@@ -350,7 +457,7 @@ class Translator(object):
             if fd.type != 'field_declaration':
                 continue
             fname, ptr, _ = declarator_name(fd.child_by_field_name('declarator'))
-            lines.append(IND + '%s %s ;' % (self.imp_type('%s.%s' % (name, fname), base_type(fd), ptr),
+            lines.append(IND + '%s %s ;' % (self.c_type('%s.%s' % (name, fname), base_type(fd), ptr),
                                             camel(fname)))
         return lines + ['} ;']
 
@@ -361,6 +468,9 @@ class Translator(object):
         if drops:
             self.cfg.used.add((id(self.cfg.drop_args), f.name))
         mem = self.cfg.memref.get(f.name)
+        self.is_entry = f.name == self.cfg.entry
+        if self.is_entry and mem is None:
+            raise TransError('%s: the entry point needs a [memref.%s] table (its signature)' % (f.name, f.name))
         self.removed = set()
         self.memmap = {}
         if mem is not None:
@@ -379,8 +489,10 @@ class Translator(object):
                     self.removed.add(n)
                     continue
                 self.locals[n] = ct
-                ps.append('%s %s' % (self.imp_type('%s.%s' % (f.name, n), ct, ptr), camel(n)))
+                ps.append('%s %s' % (self.c_type('%s.%s' % (f.name, n), ct, ptr), camel(n)))
             sig = ', '.join(ps)
+        if self.is_entry:
+            sig += ', TEE-Result & ret'
         self.mallocs = set()
         self.ops = {}               # TEEC_Operation variable -> {index: model argument}
         self.inlines = {}
@@ -401,14 +513,29 @@ class Translator(object):
         self.result_vars = []       # (C name, C type) of result variables to declare
         self.declared_res = {}
         body = self.block(f.body, 1)
+        # a void function ends with return unit; (fQuit in lang/c/semantics.maude pops a frame only on a
+        # return), unless its body already ends with a return
+        if f.ret == 'void' and not f.ret_ptr and not (body and body[-1].strip().startswith('return ')):
+            body += [IND + 'return unit ;']
+        if self.is_entry and self.cfg.globals:
+            body = [IND + 'loadGlobals(%s) ;' % ', '.join(self.global_cells())] + body
         # result variables: next to res when it is declared, else first
-        decls = [IND + '%s %s ;' % (self.imp_type('%s.%s' % (f.name, n), t, False), camel(n))
+        decls = [IND + '%s %s ;' % (self.c_type('%s.%s' % (f.name, n), t, False), camel(n))
                  for n, t in self.result_vars]
         if decls:
             at = next((k + 1 for k, ln in enumerate(body) if re.match(r'^\s*TEE-Result res ;$', ln)), 0)
             body[at:at] = decls
-        head = '%s %s (%s)' % (self.imp_type('%s.return' % f.name, f.ret, False), camel(f.name), sig)
-        return [head, '{'] + body + ['}']
+        if self.is_entry:
+            head = 'void main (%s)' % sig
+        else:
+            head = '%s %s (%s)' % (self.c_type('%s.return' % f.name, f.ret, False), camel(f.name), sig)
+        # an empty block of the model is { skip }
+        filled = []
+        for k, ln in enumerate(body):
+            filled.append(ln)
+            if ln.endswith('{') and k + 1 < len(body) and body[k + 1].strip() in ('}', '} else {'):
+                filled.append(ln[:len(ln) - len(ln.lstrip())] + IND + 'skip')
+        return [head, '{'] + filled + ['}']
 
     # ---- statements
     def block(self, node, depth):
@@ -459,10 +586,15 @@ class Translator(object):
             if e.type == 'assignment_expression':
                 out = self.assignment(e, depth)
                 return [] if self.gone(out) else out
+            if e.type == 'update_expression':
+                return [pad + self.update(e)]
             raise TransError('%s: unsupported statement %s' % (self.f.name, text(s)[:60]))
         if t == 'if_statement':
             cond = s.child_by_field_name('condition')
             if self.malloc_check(cond):
+                return []
+            if any(n.type == 'identifier' and text(n) in self.dropped for n in walk(cond)):
+                self.mixed_condition(cond)
                 return []
             pre, c = self.hoist(cond, depth)
             if self.gone(pre + [c]):
@@ -476,35 +608,102 @@ class Translator(object):
                 out += [pad + '} else {'] + self.block(alt, depth + 1)
             return out + [pad + '}']
         if t == 'switch_statement':
-            return self.switch(s, depth)
+            self.breaks.append(None)
+            try:
+                return self.switch(s, depth)
+            finally:
+                self.breaks.pop()
+        if t in ('for_statement', 'while_statement'):
+            return self.loop(s, depth)
         if t == 'return_statement':
             e = named(s)
+            if not e and self.is_entry:
+                raise TransError('%s: the entry point returns no value' % self.f.name)
             if not e:
-                return [pad + 'return ;']
+                # a return of a void function is return unit; (fQuit in lang/c/semantics.maude)
+                return [pad + 'return unit ;']
             e = e[0]
             if self.malloc_ptr(e) is not None:
                 raise TransError('%s: returns the TEE_Malloc pointer %s; the model allocates it in '
                                  'the frame of the function' % (self.f.name, text(e)))
             if self.gone([self.expr(e)]):
                 return []
+            if self.is_entry:
+                return [pad + 'ret := %s ;' % self.expr(e)] + self.entry_exit(depth)
             if self.contains_call(e):
                 var = self.result_var_for(e, declare_here=True)
                 out = []
                 if var[1]:
-                    out.append(pad + '%s %s ;' % (self.imp_type('%s.%s' % (self.f.name, var[0]), var[2], False),
+                    out.append(pad + '%s %s ;' % (self.c_type('%s.%s' % (self.f.name, var[0]), var[2], False),
                                                  camel(var[0])))
                 return out + [pad + '%s := %s ;' % (camel(var[0]), self.expr(e)), pad + 'return %s ;' % camel(var[0])]
             return [pad + 'return %s ;' % self.expr(e)]
         if t == 'goto_statement':
-            return [pad + 'goto %s ;' % text(named(s)[0])]
+            return [pad + 'goto %s ;' % camel(text(named(s)[0]))]
         if t == 'labeled_statement':
-            lab = text(s.child_by_field_name('label'))
+            lab = camel(text(s.child_by_field_name('label')))
             return [pad + '%s :' % lab] + self.stmt(named(s)[-1], depth + 1)
         if t == 'compound_statement':
             return self.block(s, depth)
         if t == 'break_statement':
+            if self.breaks and self.breaks[-1] is not None:
+                return [pad + 'goto %s ;' % self.breaks[-1]]
             return []
         raise TransError('%s: unsupported statement %s: %s' % (self.f.name, t, text(s)[:60]))
+
+    def entry_exit(self, depth):
+        """The end of the entry point at a return: the globals are stored, and main returns."""
+        pad = IND * depth
+        out = [pad + 'storeGlobals(%s) ;' % ', '.join(self.global_cells())] if self.cfg.globals else []
+        return out + [pad + 'return unit ;']
+
+    def update(self, e):
+        """x++, ++x, x-- or --x as a statement: x := x + 1 (or - 1)."""
+        op = text(e.child_by_field_name('operator'))
+        x = self.expr(e.child_by_field_name('argument'))
+        return '%s := %s %s # 1 ;' % (x, x, '+' if op == '++' else '-')
+
+    def loop(self, s, depth):
+        """for (init; cond; update) body is init, then while (cond) { body update }; while (cond) body
+        is the model's while.  A break in the body is a goto to a label after the loop (brkN), so
+        the loop must be in a statement sequence that holds labels (the top level of a function
+        body).  continue is not supported."""
+        pad = IND * depth
+        if any(n.type == 'continue_statement' for n in walk(s.child_by_field_name('body'))):
+            raise TransError('%s: continue in a loop is not supported' % self.f.name)
+        self.loops += 1
+        label = 'brk%d' % self.loops
+        out, step = [], []
+        if s.type == 'for_statement':
+            init = s.child_by_field_name('initializer')
+            if init is not None:
+                out += self.stmt(init, depth) if init.type == 'declaration' else \
+                    self.stmt_of_expr(init, depth)
+            upd = s.child_by_field_name('update')
+            if upd is not None:
+                step = self.stmt_of_expr(upd, depth + 1)
+        cond = s.child_by_field_name('condition')
+        c = '# true' if cond is None else self.expr(strip_parens(cond))
+        if cond is not None and self.contains_call(cond):
+            raise TransError('%s: a call in a loop condition is not supported' % self.f.name)
+        self.breaks.append(label)
+        try:
+            body = self.block(s.child_by_field_name('body'), depth + 1)
+        finally:
+            self.breaks.pop()
+        out += [pad + 'while (%s) {' % c] + body + step + [pad + '}']
+        if any(ln.strip() == 'goto %s ;' % label for ln in body):
+            self.labels_used = True
+            out += [pad + '%s :' % label, pad + IND + 'skip']
+        return out
+
+    def stmt_of_expr(self, e, depth):
+        pad = IND * depth
+        if e.type == 'update_expression':
+            return [pad + self.update(e)]
+        if e.type == 'assignment_expression':
+            return self.assignment(e, depth)
+        raise TransError('%s: unsupported loop expression %s' % (self.f.name, text(e)[:60]))
 
     def mixed_condition(self, cond):
         """An error when a condition left out because of a dropped name has && or || operands
@@ -533,7 +732,7 @@ class Translator(object):
             if ins['function'] == self.f.name and ins['before'] == callee and k not in self.done_ins:
                 self.done_ins.add(k)
                 self.cfg.used.add(('ins', k))
-                out.append(IND * depth + ins['imp'])
+                out.append(IND * depth + ins['c'])
         return out
 
     def declaration(self, s, depth):
@@ -550,7 +749,7 @@ class Translator(object):
                     raise TransError('%s: the operation %s has an initializer' % (self.f.name, name))
                 self.ops[name] = {}
                 continue
-            out.append(IND * depth + '%s %s ;' % (self.imp_type('%s.%s' % (self.f.name, name), ct, ptr), camel(name)))
+            out.append(IND * depth + '%s %s ;' % (self.c_type('%s.%s' % (self.f.name, name), ct, ptr), camel(name)))
             if d.type == 'init_declarator':
                 v = d.child_by_field_name('value')
                 if self.malloc_ptr(v) is not None:
@@ -792,6 +991,19 @@ class Translator(object):
                     return '# (%s)' % ', '.join(DATA_FLAGS[f] for f in flags)
             if op == '!=':
                 return '! (%s == %s)' % (self.expr(l, sub), self.expr(r, sub))
+            # the model has <= and == only, and no %: a < b is ! (b <= a), a > b is ! (a <= b),
+            # a >= b is b <= a, and a % b is a - (a / b) * b (the model's / is the C quotient)
+            if op == '<':
+                return '! (%s <= %s)' % (self.expr(r, sub), self.expr(l, sub))
+            if op == '>':
+                return '! (%s <= %s)' % (self.expr(l, sub), self.expr(r, sub))
+            if op == '>=':
+                return '%s <= %s' % (self.expr(r, sub), self.expr(l, sub))
+            if op == '%':
+                a, b = self.expr(l, sub), self.expr(r, sub)
+                return '(%s - (%s / %s) * %s)' % (a, a, b, b)
+            if op in ('<<', '>>', '&', '^'):
+                raise TransError('%s: operator %s is not in the model (change it in a patch)' % (self.f.name, op))
             return '%s %s %s' % (self.expr(l, sub), op, self.expr(r, sub))
         if t == 'call_expression':
             return self.call(e, sub)
@@ -818,7 +1030,9 @@ class Translator(object):
                 raise TransError('%s: %s takes %d arguments, not %d' % (self.f.name, callee, arity, len(args)))
             out = []
             for a in spec:
-                if isinstance(a, tuple):
+                if isinstance(a, tuple) and a[0] == 'ptr':
+                    out.append(self.expr(args[a[1]], sub))
+                elif isinstance(a, tuple):
                     v = self.api_arg(args[a[0]], sub)
                     out.append('# %s(%s)' % (a[1], v[2:]) if v.startswith('# ') else v)
                 else:
@@ -855,11 +1069,23 @@ def walk(n):
         yield from walk(c)
 
 
+def top_level(n):
+    """The top-level items of a translation unit, looking through #if, #ifdef and #ifndef blocks
+    (the include guards of headers)."""
+    for c in n.children:
+        if c.type in ('preproc_ifdef', 'preproc_if', 'preproc_else', 'preproc_elif'):
+            yield from top_level(c)
+        else:
+            yield c
+
+
 # ------------------------------------------------------------------------------------------ main
 
 def apply_patches(src, patches):
-    with open(src, encoding='utf-8') as fh:
-        cur = fh.read()
+    cur = ''
+    for f in (src if isinstance(src, list) else [src]):
+        with open(f, encoding='utf-8') as fh:
+            cur += fh.read()
     for p in patches:
         with tempfile.TemporaryDirectory() as d:
             a = os.path.join(d, 'in.c')
@@ -874,17 +1100,58 @@ def apply_patches(src, patches):
     return cur
 
 
+DECL_LINE = re.compile(r'^\s*(?!goto |return )(\S.*) (\w+) ;$')
+
+
+def decls_of(bodies):
+    """The declarations of the names of the programs (a template line ---@decls): the variables,
+    struct members and parameters (Var), the functions (FuncId), the labels (Label) and the struct
+    types (CType)."""
+    var, fun, lab, typ = set(), set(), set(), set()
+    for body in bodies:
+        for ln in body.split('\n'):
+            m = re.match(r'^\s*struct (\w+) \{$', ln)
+            if m:
+                typ.add(m.group(1))
+                continue
+            m = re.match(r'^\s*(?:\S.*?) (\w+) \((.*)\)$', ln)
+            if m and ':=' not in ln and not ln.strip().startswith(('if', 'while')):
+                fun.add(m.group(1))
+                var.update(p.split()[-1] for p in m.group(2).split(',') if p.strip())
+                continue
+            m = re.match(r'^\s*(\w+) :$', ln)
+            if m:
+                lab.add(m.group(1))
+                continue
+            for g in re.findall(r'goto (\w+) ;', ln):
+                lab.add(g)
+            m = DECL_LINE.match(ln)
+            if m and ':=' not in ln and '(' not in m.group(1).replace('(struct', ''):
+                var.add(m.group(2))
+    out = []
+    for names, sort in ((var, 'Var'), (fun, 'FuncId'), (lab, 'Label'), (typ, 'CType')):
+        names = sorted(names)
+        for k in range(0, len(names), 8):
+            out.append('  ops %s : -> %s [ctor] .' % (' '.join(names[k:k + 8]), sort))
+    return out
+
+
 def translate(manifest, key, out_path=None, section='ta'):
     with open(manifest, 'rb') as fh:
         data = tomllib.load(fh)
     base = os.path.dirname(os.path.abspath(manifest))
     table = data[section][key]
     cfg = Config(table, base)
-    with open(cfg.path(table['main']), encoding='utf-8') as fh:
-        main = fh.read().rstrip('\n').split('\n')
+    if ('entry' in table) == ('main' in table):
+        raise TransError('[%s.%s]: give one of entry and main' % (section, key))
+    main = []
+    if 'main' in table:
+        with open(cfg.path(table['main']), encoding='utf-8') as fh:
+            main = fh.read().rstrip('\n').split('\n')
     bodies = {}
     for prog, extra in table['programs'].items():
-        src = apply_patches(cfg.path(table['source']), [cfg.path(p) for p in table.get('patches', []) + extra])
+        srcs = table['source'] if isinstance(table['source'], list) else [table['source']]
+        src = apply_patches([cfg.path(f) for f in srcs], [cfg.path(p) for p in table.get('patches', []) + extra])
         tr = Translator(cfg, src)
         lines = tr.program() + main
         bodies[prog] = '\n'.join(('    ' + ln) if ln else '' for ln in lines)
@@ -904,6 +1171,9 @@ def translate(manifest, key, out_path=None, section='ta'):
         raise TransError('manifest entries that match nothing: ' + '; '.join(sorted(unused)))
     with open(cfg.path(table['template']), encoding='utf-8') as fh:
         tmpl = fh.read()
+    if any(ln.strip() == '---@decls' for ln in tmpl.split('\n')):
+        tmpl = '\n'.join('\n'.join(decls_of(bodies.values())) if ln.strip() == '---@decls' else ln
+                         for ln in tmpl.split('\n'))
     for prog, body in bodies.items():
         marker = '---@program %s' % prog
         lines = tmpl.split('\n')

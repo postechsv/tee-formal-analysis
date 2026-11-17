@@ -1,0 +1,1468 @@
+Modeling changes of the Keymaster TA of linaro-swg/kmgk (keymaster/ta: include/operations.h,
+operations.c, auth.c and keystore_ta.c as published, concatenated in this order), applied before
+tools/lang-preprocess.py preprocesses it.  The model keeps the state of the operations of the TA
+(the operation table of operations.c, which outlives the commands and the sessions) and the paths
+of begin, update, finish and abort through it, with their authorization checks, for HMAC keys.
+Everything else is left out or simplified; the [ta.keymaster] table of the analysis files only says what to
+preprocess.
+
+1. Types.  The types of hardware/keymaster_defs.h and hw_auth_token.h (not in the repository) that
+   the model needs are here.  A key blob is a struct with the key data (one buffer) and the
+   authorization tags that the operations use (KM_TAG_USER_SECURE_ID, KM_TAG_USER_AUTH_TYPE,
+   KM_TAG_NO_AUTH_REQUIRED, KM_TAG_AUTH_TIMEOUT), not the encrypted blob of upstream: so there is
+   no TA_restore_key (key blob decryption under the master key and parameter parsing).  A byte
+   array is one buffer (the HMAC of an auth token).
+2. An operation (keymaster_operation_t) keeps the fields that the model uses: the key blob, the
+   handle, the purpose, the time of the last access, the TEE operation, min_sec and do_auth.  The
+   TEE operation and the time are values: upstream keeps a pointer to a TEE_Malloc'd handle, and a
+   pointer to a local TEE_Time (last_access = &cur_t, which dangles once the function returns), so
+   TA_kill_old_operation compares stale stack data; the model compares the times.  The nonce, the
+   buffered data, the digest and the AES/RSA/EC fields are left out.
+3. The operation table (static keymaster_operation_t operations[20]) is one static array per field,
+   as the model has no arrays of structs, with two operations instead of 20: the scenarios have at
+   most two at a time.  The functions of operations.c read and write the fields in the arrays; the
+   timer of a key with KM_TAG_MIN_SECONDS_BETWEEN_OPS (TA_trigger_timer) is left out (min_sec is
+   UNDEFINED in the model).  The table is a global of the TA, so the model keeps it from one
+   command to the next as the instance memory of the TA, shared by all the sessions of the
+   instance (the TA is single-instance, multi-session), as upstream does.
+4. auth.c.  The auth token key is the persistent object AUTH_TOKEN_KEY_ID (a constant of the model,
+   auth_token_key_id[] upstream).  The signature of an auth token is the HMAC of its user id, under
+   the auth token key: upstream signs the whole token but the HMAC, which the model cannot
+   serialize; the Gatekeeper TA of the model signs the same.  TA_check_auth_token compares the
+   user id with the one secure id of the key, and the authenticator type for equality (upstream:
+   a bitwise and with the type of the key, in network byte order).  As upstream, it does not compare
+   the challenge of the token with the operation handle, nor the time of the token with the
+   timeout of the key.  TA_do_auth reads the tags of the key blob instead of a parameter set; a
+   missing token is NULL.
+5. The commands.  TA_begin, TA_update, TA_finish and TA_abort take a request struct and a response
+   struct (the fields that upstream deserializes and serializes) instead of the serialized buffers;
+   the buffer checks go.  TA_InvokeCommandEntryPoint, the entry point of the model, passes the
+   request (params[0]) and the response (params[1]), and keeps these four commands: the others
+   (configuration, key generation, import and export, attestation, ...) get its default answer,
+   KM_ERROR_UNIMPLEMENTED.  TA_begin keeps the order of upstream: the key object, then the
+   checks of TA_check_params for the purpose (sign or verify) and for authorization, then the HMAC
+   operation (TA_create_operation), the random handle and TA_start_operation.  The authorization
+   checks are those of TA_check_params: a key with NO_AUTH_REQUIRED needs nothing; a key with a
+   secure id and AUTH_TIMEOUT needs a valid token at begin and is not checked again (do_auth is
+   false); a key with a secure id and no AUTH_TIMEOUT gets do_auth, but begin then fails with
+   KM_ERROR_KEY_USER_NOT_AUTHENTICATED (upstream's else branch), so per-operation authorization
+   never succeeds.  TA_update and TA_finish keep the order of upstream: the operation, TA_do_auth
+   when do_auth, then the HMAC (TEE_MACUpdate, TEE_MACComputeFinal for sign, TEE_MACCompareFinal
+   for verify); update aborts the operation on an error, finish always.
+
+The entry points are not modeled: TA_CreateEntryPoint (which resets the table and creates the
+secret key and the auth token key when they are missing) and the session entry points.  As
+upstream, TA_CloseSessionEntryPoint does nothing: an operation outlives the session that began it.
+The auth token key is in the storage of the TA in the initial state of a scenario.
+
+--- a/keystore_ta.c
++++ b/keystore_ta.c
+@@ -18,7 +18,7 @@
+ #ifndef ANDROID_OPTEE_OPERATIONS_H
+ #define ANDROID_OPTEE_OPERATIONS_H
+ 
+-#define KM_MAX_OPERATION 20U
++#define KM_MAX_OPERATION 2U
+ 
+ #include <tee_internal_api.h>
+ #include <tee_internal_api_extensions.h>
+@@ -28,35 +28,32 @@
+ #include "tables.h"
+ #include "master_crypto.h"
+ 
+-typedef struct keymaster_blob_list_item_t {
+-	keymaster_blob_t data;
+-	struct keymaster_blob_list_item_t *next;
+-} keymaster_blob_list_item_t;
++typedef struct {
++	uint32_t version;
++	uint64_t challenge;
++	uint64_t user_id;
++	uint64_t authenticator_id;
++	uint32_t authenticator_type;
++	uint64_t timestamp;
++	uint8_t hmac;
++} hw_auth_token_t;
+ 
+ typedef struct {
+-	uint8_t key_id[TAG_LENGTH];
+-	keymaster_key_blob_t *key;
+-	keymaster_blob_t nonce;
+-	keymaster_blob_t last_block;
++	uint8_t key_material;
++	uint64_t user_secure_id;
++	uint32_t user_auth_type;
++	bool no_auth_required;
++	bool auth_timeout;
++} keymaster_key_blob_t;
++
++typedef struct {
++	keymaster_key_blob_t key;
+ 	keymaster_operation_handle_t op_handle;
+ 	keymaster_purpose_t purpose;
+-	keymaster_padding_t padding;
+-	keymaster_block_mode_t mode;
+-	keymaster_blob_list_item_t *sf_item;/*sign/verify data*/
+-	TEE_Time *last_access;
+-	TEE_OperationHandle *operation;
+-	TEE_OperationHandle *digest_op;
+-	size_t prev_in_size;
++	uint64_t last_access;
++	TEE_OperationHandle operation;
+ 	uint32_t min_sec;
+-	uint32_t mac_length;
+-	uint32_t digestLength;
+-	uint32_t a_data_length;
+-	uint8_t *a_data;
+ 	bool do_auth;
+-	bool got_input;
+-	bool buffering;
+-	bool padded;
+-	bool first;
+ } keymaster_operation_t;
+ 
+ void TA_free_blob_list(keymaster_blob_list_item_t *item);
+@@ -136,7 +133,17 @@
+ #include "operations.h"
+ #include "parameters.h"
+ 
+-static keymaster_operation_t operations[KM_MAX_OPERATION];
++static keymaster_operation_handle_t operations_op_handle[KM_MAX_OPERATION];
++static uint8_t operations_key_material[KM_MAX_OPERATION];
++static uint64_t operations_key_user_secure_id[KM_MAX_OPERATION];
++static uint32_t operations_key_user_auth_type[KM_MAX_OPERATION];
++static bool operations_key_no_auth_required[KM_MAX_OPERATION];
++static bool operations_key_auth_timeout[KM_MAX_OPERATION];
++static keymaster_purpose_t operations_purpose[KM_MAX_OPERATION];
++static uint64_t operations_last_access[KM_MAX_OPERATION];
++static TEE_OperationHandle operations_operation[KM_MAX_OPERATION];
++static uint32_t operations_min_sec[KM_MAX_OPERATION];
++static bool operations_do_auth[KM_MAX_OPERATION];
+ 
+ void TA_free_blob_list(keymaster_blob_list_item_t *item)
+ {
+@@ -157,56 +164,14 @@
+ 	keymaster_error_t res = KM_ERROR_INVALID_OPERATION_HANDLE;
+ 
+ 	for (uint32_t i = 0; i < KM_MAX_OPERATION; i++) {
+-		if (op_handle == operations[i].op_handle) {
++		if (op_handle == operations_op_handle[i]) {
+ 			res = KM_ERROR_OK;
+-			if (operations[i].min_sec != UNDEFINED) {
+-				TA_trigger_timer(operations[i].key_id);
+-			}
+-			operations[i].op_handle = UNDEFINED;
+-			if (operations[i].key != NULL) {
+-				if (operations[i].key->key_material)
+-					TEE_Free(operations[i].key->
+-							key_material);
+-				TEE_Free(operations[i].key);
+-			}
+-			operations[i].key = NULL;
+-			operations[i].last_access = NULL;
+-			operations[i].min_sec = UNDEFINED;
+-			if (*operations[i].operation != TEE_HANDLE_NULL)
+-				TEE_FreeOperation(*operations[i].operation);
+-			TEE_Free(operations[i].operation);
+-			operations[i].operation = TEE_HANDLE_NULL;
+-			operations[i].purpose = UNDEFINED;
+-			operations[i].do_auth = false;
+-			if (*operations[i].digest_op != TEE_HANDLE_NULL)
+-				TEE_FreeOperation(*operations[i].digest_op);
+-			TEE_Free(operations[i].digest_op);
+-			operations[i].padding = UNDEFINED;
+-			operations[i].mode = UNDEFINED;
+-			operations[i].got_input = false;
+-			if (operations[i].sf_item)
+-				TA_free_blob_list(operations[i].sf_item);
+-			operations[i].sf_item = NULL;
+-			operations[i].mac_length = UNDEFINED;
+-			operations[i].digestLength = UNDEFINED;
+-			if (operations[i].a_data)
+-				TEE_Free(operations[i].a_data);
+-			operations[i].a_data = NULL;
+-			operations[i].a_data_length = 0;
+-			operations[i].buffering = false;
+-			operations[i].prev_in_size = UNDEFINED;
+-			if (operations[i].nonce.data)
+-				TEE_Free(operations[i].nonce.data);
+-			operations[i].nonce.data = NULL;
+-			operations[i].nonce.data_length = 0;
+-			operations[i].padded = false;
+-			operations[i].first = true;
+-			if (operations[i].last_block.data)
+-				TEE_Free(operations[i].last_block.data);
+-			operations[i].last_block.data = NULL;
+-			operations[i].last_block.data_length = 0;
+-			TEE_MemFill(operations[i].key_id, 0,
+-				    sizeof(operations[i].key_id));
++			operations_op_handle[i] = UNDEFINED;
++			operations_last_access[i] = 0;
++			operations_min_sec[i] = UNDEFINED;
++			if (operations_operation[i] != TEE_HANDLE_NULL)
++				TEE_FreeOperation(operations_operation[i]);
++			operations_operation[i] = TEE_HANDLE_NULL;
+ 			break;
+ 		}
+ 	}
+@@ -247,89 +212,40 @@
+ 
+ keymaster_error_t TA_kill_old_operation(void)
+ {
+-	keymaster_operation_t oldest;
++	uint32_t oldest = 0;
+ 
+-	oldest = operations[0];
+ 	for (uint32_t i = 1; i < KM_MAX_OPERATION; i++) {
+-		if (oldest.last_access->seconds >
+-				operations[i].last_access->seconds ||
+-				(oldest.last_access->seconds ==
+-				operations[i].last_access->seconds &&
+-				oldest.last_access->millis >
+-				operations[i].last_access->millis)) {
+-			oldest = operations[i];
++		if (operations_last_access[oldest] > operations_last_access[i]) {
++			oldest = i;
+ 		}
+ 	}
+-	return TA_abort_operation(oldest.op_handle);
++	return TA_abort_operation(operations_op_handle[oldest]);
+ }
+ 
+ keymaster_error_t TA_try_start_operation(
+ 				const keymaster_operation_handle_t op_handle,
+-				const keymaster_key_blob_t key,
++				const keymaster_key_blob_t *key,
+ 				const uint32_t min_sec,
+-				TEE_OperationHandle *operation,
++				TEE_OperationHandle operation,
+ 				const keymaster_purpose_t purpose,
+-				TEE_OperationHandle *digest_op,
+-				const bool do_auth,
+-				const keymaster_padding_t padding,
+-				const keymaster_block_mode_t mode,
+-				const uint32_t mac_length,
+-				const keymaster_digest_t digest,
+-				const keymaster_blob_t nonce,
+-				uint8_t *key_id)
++				const bool do_auth)
+ {
+ 	TEE_Time cur_t;
+ 
+ 	for (uint32_t i = 0; i < KM_MAX_OPERATION; i++) {
+-		if (operations[i].op_handle == UNDEFINED) {
++		if (operations_op_handle[i] == UNDEFINED) {
+ 			TEE_GetSystemTime(&cur_t);
+-			/* freed when operation aborted (TA_abort_operation) */
+-			operations[i].key = TEE_Malloc(
+-					sizeof(keymaster_key_blob_t),
+-					TEE_MALLOC_FILL_ZERO);
+-			if (!operations[i].key) {
+-				EMSG("Failed to allocate memory for operation key struct");
+-				return KM_ERROR_MEMORY_ALLOCATION_FAILED;
+-			}
+-			operations[i].key->key_material_size =
+-							key.key_material_size;
+-			/* freed when operation aborted (TA_abort_operation) */
+-			operations[i].key->key_material = TEE_Malloc(
+-						key.key_material_size,
+-						TEE_MALLOC_FILL_ZERO);
+-			if (!operations[i].key->key_material) {
+-				EMSG("Failed to allocate memory for operation key data");
+-				TEE_Free(operations[i].key);
+-				return KM_ERROR_MEMORY_ALLOCATION_FAILED;
+-			}
+-			TEE_MemMove(operations[i].key->key_material,
+-						key.key_material,
+-						key.key_material_size);
+-			operations[i].last_access = &cur_t;
+-			operations[i].min_sec = min_sec;
+-			operations[i].operation = operation;
+-			operations[i].purpose = purpose;
+-			operations[i].do_auth = do_auth;
+-			operations[i].digest_op = digest_op;
+-			operations[i].mac_length = mac_length;
+-			operations[i].padding = padding;
+-			operations[i].mode = mode;
+-			operations[i].digestLength = get_digest_size(&digest) / 8; /*in bytes*/
+-			operations[i].nonce.data = TEE_Malloc(
+-						nonce.data_length,
+-						TEE_MALLOC_FILL_ZERO);
+-			if (!operations[i].nonce.data) {
+-				EMSG("Failed to allocate memory for nonce");
+-				TEE_Free(operations[i].key->key_material);
+-				TEE_Free(operations[i].key);
+-				return KM_ERROR_MEMORY_ALLOCATION_FAILED;
+-			}
+-			TEE_MemMove(operations[i].nonce.data,
+-					nonce.data, nonce.data_length);
+-			operations[i].nonce.data_length = nonce.data_length;
+-			operations[i].op_handle = op_handle;
+-			memcpy(operations[i].key_id, key_id,
+-					sizeof(operations[i].key_id));
++			operations_key_material[i] = key->key_material;
++			operations_key_user_secure_id[i] = key->user_secure_id;
++			operations_key_user_auth_type[i] = key->user_auth_type;
++			operations_key_no_auth_required[i] = key->no_auth_required;
++			operations_key_auth_timeout[i] = key->auth_timeout;
++			operations_last_access[i] = cur_t.seconds * 1000 + cur_t.millis;
++			operations_min_sec[i] = min_sec;
++			operations_operation[i] = operation;
++			operations_purpose[i] = purpose;
++			operations_do_auth[i] = do_auth;
++			operations_op_handle[i] = op_handle;
+ 			return KM_ERROR_OK;
+ 		}
+ 	}
+@@ -338,33 +254,18 @@
+ 
+ keymaster_error_t TA_start_operation(
+ 				const keymaster_operation_handle_t op_handle,
+-				const keymaster_key_blob_t key, uint32_t min_sec,
+-				TEE_OperationHandle *operation,
++				const keymaster_key_blob_t *key, uint32_t min_sec,
++				TEE_OperationHandle operation,
+ 				const keymaster_purpose_t purpose,
+-				TEE_OperationHandle *digest_op,
+-				const bool do_auth,
+-				const keymaster_padding_t padding,
+-				const keymaster_block_mode_t mode,
+-				const uint32_t mac_length,
+-				const keymaster_digest_t digest,
+-				const keymaster_blob_t nonce,
+-				uint8_t *key_id)
++				const bool do_auth)
+ {
+ 	keymaster_error_t res = TA_try_start_operation(op_handle, key, min_sec,
+-						       operation, purpose,
+-						       digest_op, do_auth,
+-						       padding, mode,
+-						       mac_length, digest,
+-						       nonce, key_id);
++						       operation, purpose, do_auth);
+ 	if (res != KM_ERROR_OK) {
+ 		res = TA_kill_old_operation();
+ 		if (res == KM_ERROR_OK) {
+ 			res = TA_try_start_operation(op_handle, key, min_sec,
+-						     operation, purpose,
+-						     digest_op, do_auth,
+-						     padding, mode,
+-						     mac_length, digest,
+-						     nonce, key_id);
++						     operation, purpose, do_auth);
+ 		}
+ 	}
+ 	return res;
+@@ -377,11 +278,21 @@
+ 	TEE_Time cur_t;
+ 
+ 	for (uint32_t i = 0; i < KM_MAX_OPERATION; i++) {
+-		if (op_handle == operations[i].op_handle) {
++		if (op_handle == operations_op_handle[i]) {
+ 			TEE_GetSystemTime(&cur_t);
+-			operations[i].last_access = &cur_t;
++			operations_last_access[i] = cur_t.seconds * 1000 + cur_t.millis;
+ 			res = KM_ERROR_OK;
+-			*operation = operations[i];
++			operation->key.key_material = operations_key_material[i];
++			operation->key.user_secure_id = operations_key_user_secure_id[i];
++			operation->key.user_auth_type = operations_key_user_auth_type[i];
++			operation->key.no_auth_required = operations_key_no_auth_required[i];
++			operation->key.auth_timeout = operations_key_auth_timeout[i];
++			operation->op_handle = operations_op_handle[i];
++			operation->purpose = operations_purpose[i];
++			operation->last_access = operations_last_access[i];
++			operation->operation = operations_operation[i];
++			operation->min_sec = operations_min_sec[i];
++			operation->do_auth = operations_do_auth[i];
+ 			break;
+ 		}
+ 	}
+@@ -394,8 +305,12 @@
+ 	keymaster_error_t res = KM_ERROR_INVALID_OPERATION_HANDLE;
+ 
+ 	for (uint32_t i = 0; i < KM_MAX_OPERATION; i++) {
+-		if (op_handle == operations[i].op_handle) {
+-			operations[i] = *operation;
++		if (op_handle == operations_op_handle[i]) {
++			operations_purpose[i] = operation->purpose;
++			operations_last_access[i] = operation->last_access;
++			operations_operation[i] = operation->operation;
++			operations_min_sec[i] = operation->min_sec;
++			operations_do_auth[i] = operation->do_auth;
+ 			break;
+ 		}
+ 	}
+@@ -651,29 +566,22 @@
+  *
+  * @return TEE_SUCCESS on success
+  */
+-static TEE_Result TA_ReadAuthTokenKey(uint8_t *key, uint32_t key_size)
++static TEE_Result TA_ReadAuthTokenKey(uint8_t *key)
+ {
+-	TEE_Result res = TEE_SUCCESS;
++	TEE_Result res;
+ 	TEE_ObjectHandle auth_token_key_obj = TEE_HANDLE_NULL;
+ 	uint32_t read_size = 0;
++	uint8_t key_id = AUTH_TOKEN_KEY_ID;
+ 
+-	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE,
+-			auth_token_key_id, sizeof(auth_token_key_id),
+-			TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ,
++	res = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, &key_id,
++			sizeof(key_id), TEE_DATA_FLAG_ACCESS_READ | TEE_DATA_FLAG_SHARE_READ,
+ 			&auth_token_key_obj);
+ 	if (res != TEE_SUCCESS) {
+-		EMSG("Failed to open auth_token key secret, res=%x", res);
+ 		goto exit;
+ 	}
+ 
+-	res = TEE_ReadObjectData(auth_token_key_obj, key,
+-			key_size, &read_size);
+-	if (res != TEE_SUCCESS || key_size != read_size) {
+-		EMSG("Failed to read secret data, bytes = %u, res=%x", read_size, res);
+-		goto close_obj;
+-	}
++	res = TEE_ReadObjectData(auth_token_key_obj, key, AUTH_TOKEN_KEY_SIZE, &read_size);
+ 
+-close_obj:
+ 	TEE_CloseObject(auth_token_key_obj);
+ exit:
+ 	return res;
+@@ -721,64 +629,26 @@
+  * This function checks that @in_params and @key_params meet all necessary
+  * requirements. After that, it checks hw_auth_token signature.
+  */
+-keymaster_error_t TA_do_auth(const keymaster_key_param_set_t in_params,
+-				const keymaster_key_param_set_t key_params)
++keymaster_error_t TA_do_auth(const hw_auth_token_t *auth_token,
++				const keymaster_key_blob_t *key)
+ {
+-	uint64_t suid[MAX_SUID];
+-	uint32_t suid_count = 0;
+-	bool found_token = false;
+-	hw_authenticator_type_t auth_type = UNDEFINED;
+-	hw_auth_token_t auth_token;
+ 	keymaster_error_t res = KM_ERROR_OK;
+ 
+-	for (size_t i = 0; i < key_params.length; i++) {
+-		switch (key_params.params[i].tag) {
+-		case KM_TAG_NO_AUTH_REQUIRED:
+-		case KM_TAG_AUTH_TIMEOUT:
+-			/*
+-			 * If no auth is required or if auth is timeout-based,
+-			 * we have nothing to check.
+-			 */
+-			res = KM_ERROR_OK;
+-			goto exit;
+-		case KM_TAG_USER_SECURE_ID:
+-			if (suid_count + 1 > MAX_SUID) {
+-				EMSG("To many SUID. Expected max count %u",
+-								MAX_SUID);
+-				break;
+-			}
+-			suid[suid_count] = key_params.params[i].
+-						key_param.long_integer;
+-			suid_count++;
+-			break;
+-		case KM_TAG_USER_AUTH_TYPE:
+-			auth_type = (hw_authenticator_type_t)
+-				key_params.params[i].key_param.enumerated;
+-			break;
+-		default:
+-			break;
+-		}
+-	}
+-
+-	for (size_t i = 0; i < in_params.length; i++) {
+-		if (in_params.params[i].tag == KM_TAG_AUTH_TOKEN) {
+-			if (in_params.params[i].key_param.blob.data_length ==
+-					sizeof(auth_token)) {
+-				found_token = true;
+-				TEE_MemMove(&auth_token,
+-					in_params.params[i].key_param.blob.data,
+-					sizeof(auth_token));
+-			}
+-		}
++	if (key->no_auth_required || key->auth_timeout) {
++		/*
++		 * If no auth is required or if auth is timeout-based,
++		 * we have nothing to check.
++		 */
++		res = KM_ERROR_OK;
++		goto exit;
+ 	}
+ 
+-	if (!suid_count || !found_token) {
+-		EMSG("Authentication failed. Key can not be used");
++	if (key->user_secure_id == 0 || auth_token == NULL) {
+ 		res = KM_ERROR_KEY_USER_NOT_AUTHENTICATED;
+ 		goto exit;
+ 	}
+ 
+-	res = TA_check_auth_token(suid, suid_count, auth_type, &auth_token);
++	res = TA_check_auth_token(key->user_secure_id, key->user_auth_type, auth_token);
+ 
+ exit:
+ 	return res;
+@@ -792,42 +662,33 @@
+  *
+  * @return TEE_SUCCESS on success
+  */
+-static TEE_Result TA_ComputeSignature(uint8_t *signature, size_t signature_length,
+-	TEE_ObjectHandle key, const uint8_t *message, size_t length)
++static TEE_Result TA_ComputeSignature(uint8_t *signature,
++		TEE_ObjectHandle key, const void *message)
+ {
+-	uint32_t		buf_length = HMAC_SHA256_KEY_SIZE_BYTE;
+-	uint8_t			buf[buf_length];
+-	TEE_OperationHandle	op = TEE_HANDLE_NULL;
+-	TEE_Result		res;
+-	uint32_t		to_write;
++	uint32_t buf_length = HMAC_SHA256_KEY_SIZE_BYTE;
++	uint8_t buf;
++	TEE_OperationHandle op = TEE_HANDLE_NULL;
++	TEE_Result res;
+ 
+ 	res = TEE_AllocateOperation(&op, TEE_ALG_HMAC_SHA256, TEE_MODE_MAC,
+ 			HMAC_SHA256_KEY_SIZE_BIT);
+ 	if (res != TEE_SUCCESS) {
+-		EMSG("Failed to allocate HMAC operation, res=%x", res);
+ 		goto exit;
+ 	}
+ 
+ 	res = TEE_SetOperationKey(op, key);
+ 	if (res != TEE_SUCCESS) {
+-		EMSG("Failed to set secret key, res=%x", res);
+ 		goto free_op;
+ 	}
+ 
+ 	TEE_MACInit(op, NULL, 0);
+ 
+-	res = TEE_MACComputeFinal(op, (void *)message, length, buf, &buf_length);
++	res = TEE_MACComputeFinal(op, message, 0, &buf, &buf_length);
+ 	if (res != TEE_SUCCESS) {
+-		EMSG("Failed to compute HMAC, res=%x", res);
+ 		goto free_op;
+ 	}
+ 
+-	to_write = buf_length;
+-	if (buf_length > signature_length)
+-		to_write = signature_length;
+-
+-	memset(signature, 0, signature_length);
+-	memcpy(signature, buf, to_write);
++	*signature = buf;
+ 
+ free_op:
+ 	TEE_FreeOperation(op);
+@@ -846,22 +707,19 @@
+ static TEE_Result TA_GetAuthKeyObj(TEE_ObjectHandle auth_token_key_obj)
+ {
+ 	TEE_Result res = TEE_SUCCESS;
+-	TEE_Attribute attrs[1];
+-	uint8_t auth_token_key[HMAC_SHA256_KEY_SIZE_BYTE];
++	TEE_Attribute attrs;
++	uint8_t auth_token_key;
+ 
+-	res = TA_ReadAuthTokenKey(auth_token_key, sizeof(auth_token_key));
++	res = TA_ReadAuthTokenKey(&auth_token_key);
+ 	if (res != TEE_SUCCESS) {
+-		EMSG("Failed to create auth_token key object, res=%x", res);
+ 		goto exit;
+ 	}
+ 
+-	TEE_InitRefAttribute(&attrs[0], TEE_ATTR_SECRET_VALUE, auth_token_key,
++	TEE_InitRefAttribute(&attrs, TEE_ATTR_SECRET_VALUE, &auth_token_key,
+ 			sizeof(auth_token_key));
+ 
+-	res = TEE_PopulateTransientObject(auth_token_key_obj, attrs,
+-			sizeof(attrs)/sizeof(attrs[0]));
++	res = TEE_PopulateTransientObject(auth_token_key_obj, &attrs, 1);
+ 	if (res != TEE_SUCCESS) {
+-		EMSG("Failed to set auth_token key attributes, res=%x", res);
+ 		goto exit;
+ 	}
+ 
+@@ -877,44 +735,32 @@
+ static TEE_Result TA_ValidateTokenSignature(const hw_auth_token_t *token)
+ {
+ 	TEE_Result res = TEE_SUCCESS;
+-
+-	// Signature covers entire token except HMAC field.
+-	const uint8_t *token_data = (const uint8_t *)token;
+-	const uint32_t token_data_length = (const uint8_t *)token->hmac - token_data;
+-
+-	const uint32_t computed_hmac_length = sizeof(token->hmac);
+-	uint8_t computed_hmac[computed_hmac_length];
+-
++	uint8_t computed_hmac;
+ 	TEE_ObjectHandle auth_token_key_obj = TEE_HANDLE_NULL;
+ 
+ 	res = TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256,
+ 			HMAC_SHA256_KEY_SIZE_BIT, &auth_token_key_obj);
+ 	if (res != TEE_SUCCESS) {
+-		EMSG("Failed to allocate auth_token_key_obj, res=%x", res);
+ 		goto exit;
+ 	}
+ 
+ 	res = TA_GetAuthKeyObj(auth_token_key_obj);
+ 	if (res != TEE_SUCCESS) {
+-		EMSG("Failed to get auth_token key object, res=%x", res);
+ 		goto close_obj;
+ 	}
+ 
+-	res = TA_ComputeSignature(computed_hmac, computed_hmac_length, auth_token_key_obj,
+-			token_data, token_data_length);
++	res = TA_ComputeSignature(&computed_hmac, auth_token_key_obj, &token->user_id);
+ 	if (res != TEE_SUCCESS) {
+-		EMSG("Failed to compute auth_token signature, res=%x", res);
+ 		goto close_obj;
+ 	}
+ 
+-	if (memcmp(token->hmac, computed_hmac, computed_hmac_length) != 0) {
++	if (token->hmac != computed_hmac) {
+ 		res = TEE_ERROR_MAC_INVALID;
+-		EMSG("auth_token has invallid HMAC");
+ 		goto close_obj;
+ 	}
+ 
+ close_obj:
+-	TEE_CloseObject(auth_token_key_obj);
++	TEE_FreeTransientObject(auth_token_key_obj);
+ exit:
+ 	return res;
+ }
+@@ -925,37 +771,23 @@
+  * @return TEE_SUCCESS on success or KM_ERROR_KEY_USER_NOT_AUTHENTICATED
+  * if any of requirements are not met
+ */
+-keymaster_error_t TA_check_auth_token(const uint64_t *suid,
+-					const uint32_t suid_count,
++keymaster_error_t TA_check_auth_token(const uint64_t suid,
+ 					const hw_authenticator_type_t auth_type,
+ 					const hw_auth_token_t *auth_token)
+ {
+ 	TEE_Result	res;
+-	bool		in_list = false;
+ 
+-	/*
+-	 * At least one of the KM_TAG_USER_SECURE_ID values from the key must
+-	 * match the secure ID value in the auth_token
+-	 */
+-	for (uint32_t i = 0; i < suid_count; i++) {
+-		if (auth_token->user_id == suid[i]) {
+-			in_list = true;
+-			break;
+-		}
++	if (auth_token == NULL) {
++		return KM_ERROR_KEY_USER_NOT_AUTHENTICATED;
+ 	}
+-	if (!in_list) {
+-		EMSG("Suid from auth token not in list of this key");
++	if (auth_token->user_id != suid) {
+ 		return KM_ERROR_KEY_USER_NOT_AUTHENTICATED;
+ 	}
+-	if ((TEE_U32_FROM_BIG_ENDIAN(auth_token->authenticator_type) &
+-						(uint32_t) auth_type) == 0) {
+-		EMSG("Authentication type not passed");
++	if (auth_token->authenticator_type != auth_type) {
+ 		return KM_ERROR_KEY_USER_NOT_AUTHENTICATED;
+ 	}
+ 
+ 	if (auth_token->version != HW_AUTH_TOKEN_VERSION) {
+-		EMSG("auth_token has %u version, expected %u",
+-				auth_token->version, HW_AUTH_TOKEN_VERSION);
+ 		return KM_ERROR_KEY_USER_NOT_AUTHENTICATED;
+ 	}
+ 
+@@ -964,14 +796,12 @@
+ 	case TEE_SUCCESS:
+ 		break;
+ 	case TEE_ERROR_MAC_INVALID:
+-		EMSG("auth_token failed validation");
+ 		return KM_ERROR_KEY_USER_NOT_AUTHENTICATED;
+ 	default:
+-		EMSG("Validation failed");
+ 		return KM_ERROR_UNKNOWN_ERROR;
+ 	}
+ 
+-	return res;
++	return KM_ERROR_OK;
+ }
+ /*
+  *
+@@ -2338,360 +2168,161 @@
+  * operation handle that is used with update and finish to complete the
+  * operation
+  */
+-static keymaster_error_t TA_begin(TEE_Param params[TEE_NUM_PARAMS])
++typedef struct {
++	keymaster_purpose_t purpose;
++	keymaster_key_blob_t *key;
++	hw_auth_token_t *auth_token;
++} km_begin_request_t;
++
++typedef struct {
++	keymaster_error_t error;
++	keymaster_operation_handle_t op_handle;
++} km_begin_response_t;
++
++typedef struct {
++	keymaster_operation_handle_t op_handle;
++	hw_auth_token_t *auth_token;
++	uint8_t *input;
++} km_update_request_t;
++
++typedef struct {
++	keymaster_error_t error;
++} km_update_response_t;
++
++typedef struct {
++	keymaster_operation_handle_t op_handle;
++	hw_auth_token_t *auth_token;
++	uint8_t *input;
++	uint8_t *signature;
++} km_finish_request_t;
++
++typedef struct {
++	keymaster_error_t error;
++	uint8_t output;
++} km_finish_response_t;
++
++typedef struct {
++	keymaster_operation_handle_t op_handle;
++} km_abort_request_t;
++
++typedef struct {
++	keymaster_error_t error;
++} km_abort_response_t;
++
++static keymaster_error_t TA_begin(km_begin_request_t *req, km_begin_response_t *resp)
+ {
+-	uint8_t *in = NULL;
+-	uint8_t *in_end = NULL;
+-	uint8_t *out = NULL;
+-	uint8_t *out_end = NULL;
+-	size_t out_size = 0;
+-	uint8_t *key_material = NULL;
+-	uint8_t *secretIV = NULL;
+-	uint32_t mac_length = UNDEFINED;
+-	uint32_t key_size = 0;
+-	uint32_t IVsize = UNDEFINED;
+ 	uint32_t min_sec = UNDEFINED;
+-	uint32_t type = 0;
+ 	bool do_auth = false;
+ 	keymaster_purpose_t purpose = UNDEFINED; /* IN */
+-	keymaster_key_blob_t key = EMPTY_KEY_BLOB; /* IN */
+-	keymaster_key_param_set_t in_params = EMPTY_PARAM_SET; /* IN */
+-	keymaster_key_param_set_t out_params = EMPTY_PARAM_SET; /* OUT */
++	keymaster_key_blob_t *key = NULL; /* IN */
+ 	keymaster_operation_handle_t operation_handle = 0; /* OUT */
+-	keymaster_key_param_set_t params_t = EMPTY_PARAM_SET;
+-	keymaster_key_param_t *nonce_param = NULL;
+ 	keymaster_error_t res = KM_ERROR_OK;
+-	keymaster_algorithm_t algorithm = UNDEFINED;
+-	keymaster_blob_t nonce = EMPTY_BLOB;
+-	keymaster_digest_t digest = UNDEFINED;
+-	keymaster_block_mode_t mode = UNDEFINED;
+-	keymaster_padding_t padding = UNDEFINED;
++	TEE_Result tee_res = TEE_SUCCESS;
+ 	TEE_ObjectHandle obj_h = TEE_HANDLE_NULL;
+-	TEE_OperationHandle *operation = TEE_HANDLE_NULL;
+-	TEE_OperationHandle *digest_op = TEE_HANDLE_NULL;
+-	uint8_t key_id[TAG_LENGTH];
+-	bool oob = false; /* out of bounds flag */
++	TEE_OperationHandle operation = TEE_HANDLE_NULL;
++	TEE_Attribute attrs;
+ 
+-	DMSG("%s %d", __func__, __LINE__);
+-
+-	in = (uint8_t *)params[0].memref.buffer;
+-	in_end = in + params[0].memref.size;
+-	out = (uint8_t *)params[1].memref.buffer;
+-	out_size = (size_t)params[1].memref.size; /* limited to 8192 */
+-	out_end = out + out_size;
++	purpose = req->purpose;
++	key = req->key;
+ 
+-	if (!in || !out) {
+-		EMSG("Unexpected null pointer");
+-		return KM_ERROR_UNEXPECTED_NULL_POINTER;
+-	}
+-
+-	if (out_size < KM_RECV_BUF_SIZE) {
+-		EMSG("Insufficient output buffer space!");
+-		return KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-	}
+-
+-	/* Freed when operation is aborted (TA_abort_operation) */
+-	operation = TEE_Malloc(sizeof(TEE_OperationHandle),
+-			       TEE_MALLOC_FILL_ZERO);
+-	if (!operation) {
+-		EMSG("Failed to allocate memory for operation");
+-		res = KM_ERROR_MEMORY_ALLOCATION_FAILED;
++	/* TA_restore_key: the key object of the HMAC key */
++	tee_res = TEE_AllocateTransientObject(TEE_TYPE_HMAC_SHA256,
++			HMAC_SHA256_KEY_SIZE_BIT, &obj_h);
++	if (tee_res != TEE_SUCCESS) {
++		res = KM_ERROR_UNKNOWN_ERROR;
+ 		goto out;
+ 	}
+-	/* Freed when operation is aborted (TA_abort_operation) */
+-	digest_op = TEE_Malloc(sizeof(TEE_OperationHandle),
+-			       TEE_MALLOC_FILL_ZERO);
+-	if (!digest_op) {
+-		EMSG("Failed to allocate memory for digest operation");
+-		res = KM_ERROR_MEMORY_ALLOCATION_FAILED;
++	TEE_InitRefAttribute(&attrs, TEE_ATTR_SECRET_VALUE, &key->key_material,
++			sizeof(key->key_material));
++	tee_res = TEE_PopulateTransientObject(obj_h, &attrs, 1);
++	if (tee_res != TEE_SUCCESS) {
++		res = KM_ERROR_UNKNOWN_ERROR;
+ 		goto out;
+ 	}
+-	*operation = TEE_HANDLE_NULL;
+-	*digest_op = TEE_HANDLE_NULL;
+-
+-	in += TA_deserialize_purpose(in, in_end, &purpose, &res);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+-	in += TA_deserialize_key_blob_akms(in, in_end, &key, &res);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+-	in += TA_deserialize_auth_set(in, in_end, &in_params, false, &res);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+-	key_material = TEE_Malloc(key.key_material_size, TEE_MALLOC_FILL_ZERO);
+-
+-	memcpy(key_id, key.key_material + key.key_material_size - TAG_LENGTH,
+-	       TAG_LENGTH);
+ 
+-	res = TA_restore_key(key_material, &key, &key_size, &type, &obj_h,
+-			     &params_t);
+-	if (res != KM_ERROR_OK)
++	/* TA_check_params: the purpose and the authorization tags of the key */
++	if (purpose != KM_PURPOSE_SIGN && purpose != KM_PURPOSE_VERIFY) {
++		res = KM_ERROR_UNSUPPORTED_PURPOSE;
+ 		goto out;
+-	switch (type) {
+-	case TEE_TYPE_AES:
+-		algorithm = KM_ALGORITHM_AES;
+-		break;
+-	case TEE_TYPE_RSA_KEYPAIR:
+-		algorithm = KM_ALGORITHM_RSA;
+-		break;
+-	case TEE_TYPE_ECDSA_KEYPAIR:
+-		algorithm = KM_ALGORITHM_EC;
+-		break;
+-	default:/* HMAC */
+-		algorithm = KM_ALGORITHM_HMAC;
+ 	}
+-	res = TA_check_params(&params_t, &in_params, &algorithm, purpose,
+-			      &digest, &mode, &padding, &mac_length, &nonce,
+-			      &min_sec, &do_auth, key_id);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+-	if (algorithm == KM_ALGORITHM_AES && mode != KM_MODE_ECB &&
+-	    nonce.data_length == 0) {
+-		if (mode == KM_MODE_CBC || mode == KM_MODE_CTR) {
+-			IVsize = 16;
+-		} else { /* GCM mode */
+-			IVsize = 12;
+-		}
+-		out_params.length = 1;
+-		secretIV = TEE_Malloc(IVsize, TEE_MALLOC_FILL_ZERO);
+-		if (!secretIV) {
+-			EMSG("Failed to allocate memory for secretIV");
+-			res = KM_ERROR_MEMORY_ALLOCATION_FAILED;
+-			goto out;
+-		}
+-		nonce_param = TEE_Malloc(sizeof(keymaster_key_param_t),
+-					 TEE_MALLOC_FILL_ZERO);
+-		if (!nonce_param) {
+-			TEE_Free(secretIV);
+-			EMSG("Failed to allocate memory for parameters");
+-			res = KM_ERROR_MEMORY_ALLOCATION_FAILED;
++	if (!key->no_auth_required) {
++		if (!key->auth_timeout && key->user_secure_id != 0)
++			do_auth = true;
++		if (key->user_secure_id != 0 && key->auth_timeout) {
++			res = TA_check_auth_token(key->user_secure_id,
++						key->user_auth_type, req->auth_token);
++			if (res != KM_ERROR_OK)
++				goto out;
++		} else {
++			res = KM_ERROR_KEY_USER_NOT_AUTHENTICATED;
+ 			goto out;
+ 		}
+-		TEE_GenerateRandom(secretIV, IVsize);
+-		nonce_param->tag = KM_TAG_NONCE;
+-		nonce_param->key_param.blob.data = secretIV;
+-		nonce_param->key_param.blob.data_length = IVsize;
+-		out_params.params = nonce_param;
+-		nonce.data_length = IVsize;
+-		nonce.data = secretIV;
+ 	}
+ 
+-	res = TA_create_operation(operation, obj_h, purpose, algorithm,
+-				  key_size, nonce, digest, mode, padding,
+-				  mac_length);
+-	if (res != KM_ERROR_OK)
++	/* TA_create_operation: an HMAC operation with the key */
++	tee_res = TEE_AllocateOperation(&operation, TEE_ALG_HMAC_SHA256, TEE_MODE_MAC,
++			HMAC_SHA256_KEY_SIZE_BIT);
++	if (tee_res != TEE_SUCCESS) {
++		res = KM_ERROR_UNKNOWN_ERROR;
+ 		goto out;
++	}
++	tee_res = TEE_SetOperationKey(operation, obj_h);
++	if (tee_res != TEE_SUCCESS) {
++		res = KM_ERROR_UNKNOWN_ERROR;
++		goto out;
++	}
++	TEE_MACInit(operation, NULL, 0);
+ 
+ 	TEE_GenerateRandom(&operation_handle, sizeof(operation_handle));
+-	if (purpose == KM_PURPOSE_SIGN || purpose == KM_PURPOSE_VERIFY ||
+-	    (algorithm == KM_ALGORITHM_RSA && padding == KM_PAD_RSA_PSS)) {
+-		res = TA_create_digest_op(digest_op, digest);
+-		if (res != KM_ERROR_OK)
+-			goto out;
+-	}
+ 	res = TA_start_operation(operation_handle, key, min_sec, operation,
+-				 purpose, digest_op, do_auth, padding, mode,
+-				 mac_length, digest, nonce, key_id);
++				 purpose, do_auth);
+ 	if (res != KM_ERROR_OK)
+ 		goto out;
+ 
+ out:
+-	out += TA_serialize_rsp_err(out, out_end, &res, &oob);
+-	if (oob) {
+-		EMSG("Out of output buffer space");
+-		res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-	}
++	resp->error = res;
+ 	if (res == KM_ERROR_OK) {
+-		if (TA_is_out_of_bounds(out, out_end,
+-					sizeof(operation_handle))) {
+-			EMSG("Out of output buffer space");
+-			res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-			goto exit;
+-		}
+-		TEE_MemMove(out, &operation_handle, sizeof(operation_handle));
+-		out += sizeof(operation_handle);
+-		out += TA_serialize_auth_set(out, out_end, &out_params, &oob);
+-		if (oob) {
+-			EMSG("Out of output buffer space");
+-			res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-			goto exit;
+-		}
++		resp->op_handle = operation_handle;
+ 	}
+ 
+-exit:
+-	params[1].memref.size = out - (uint8_t *)params[1].memref.buffer;
+-
+ 	if (obj_h != TEE_HANDLE_NULL)
+ 		TEE_FreeTransientObject(obj_h);
+-	if (key.key_material)
+-		TEE_Free(key.key_material);
+ 	if (res != KM_ERROR_OK) {
+-		if (*digest_op != TEE_HANDLE_NULL)
+-			TEE_FreeOperation(*digest_op);
+-		if (*operation != TEE_HANDLE_NULL)
+-			TEE_FreeOperation(*operation);
+-		TEE_Free(operation);
+-		TEE_Free(digest_op);
++		if (operation != TEE_HANDLE_NULL)
++			TEE_FreeOperation(operation);
+ 	}
+-	if (key_material)
+-		TEE_Free(key_material);
+-	TA_free_params(&in_params);
+-	TA_free_params(&params_t);
+-	TA_free_params(&out_params);
+ 	return res;
+ }
+ 
+ /* Provides data to process in an ongoing operation started with begin */
+-static keymaster_error_t TA_update(TEE_Param params[TEE_NUM_PARAMS])
++static keymaster_error_t TA_update(km_update_request_t *req, km_update_response_t *resp)
+ {
+-	uint8_t *in = NULL;
+-	uint8_t *in_end = NULL;
+-	uint8_t *out = NULL;
+-	uint8_t *out_end = NULL;
+-	size_t out_size = 0;
+ 	keymaster_operation_handle_t operation_handle = 0; /* IN */
+-	keymaster_key_param_set_t in_params = EMPTY_PARAM_SET; /* IN */
+-	keymaster_blob_t input = EMPTY_BLOB; /* IN */
+-	size_t input_consumed = 0; /* OUT */
+-	keymaster_key_param_set_t out_params = EMPTY_PARAM_SET; /* OUT */
+-	keymaster_blob_t output = EMPTY_BLOB; /* OUT */
+-	uint8_t *key_material = NULL;
+-	uint32_t key_size = 0;
+-	uint32_t type = 0;
+-	uint32_t keyblob_out_size = 0;
+-	uint32_t input_provided = 0;
++	keymaster_operation_t operation;
+ 	keymaster_error_t res = KM_ERROR_OK;
+-	keymaster_key_param_set_t params_t = EMPTY_PARAM_SET;
+-	keymaster_operation_t operation = EMPTY_OPERATION;
+-	TEE_ObjectHandle obj_h = TEE_HANDLE_NULL;
+-	bool is_input_ext = false;
+-	bool oob = false; /* out of bounds flag */
+-
+-	DMSG("%s %d", __func__, __LINE__);
+-
+-	in = (uint8_t *)params[0].memref.buffer;
+-	in_end = in + params[0].memref.size;
+-	out = (uint8_t *)params[1].memref.buffer;
+-	out_size = (size_t)params[1].memref.size; /* limited to 8192 */
+-	out_end = out + out_size;
+ 
+-	if (!in || !out) {
+-		EMSG("Unexpected null pointer");
+-		return KM_ERROR_UNEXPECTED_NULL_POINTER;
+-	}
++	operation_handle = req->op_handle;
+ 
+-	if (out_size < KM_RECV_BUF_SIZE) {
+-		EMSG("Insufficient output buffer space!");
+-		return KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-	}
+-
+-	in += TA_deserialize_op_handle(in, in_end, &operation_handle, &res);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+-	in += TA_deserialize_blob_akms(in, in_end, &input, false, &res, true);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+-	in += TA_deserialize_auth_set(in, in_end, &in_params, false, &res);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+-
+-	input_provided = input.data_length;
+ 	res = TA_get_operation(operation_handle, &operation);
+ 	if (res != KM_ERROR_OK)
+ 		goto out;
+-	key_material = TEE_Malloc(operation.key->key_material_size,
+-				  TEE_MALLOC_FILL_ZERO);
+-	res = TA_restore_key(key_material, operation.key, &key_size, &type,
+-			     &obj_h, &params_t);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+ 	if (operation.do_auth) {
+-		res = TA_do_auth(in_params, params_t);
++		res = TA_do_auth(req->auth_token, &operation.key);
+ 		if (res != KM_ERROR_OK) {
+-			EMSG("Authentication failed");
+ 			goto out;
+ 		}
+ 	}
+ 
+-	if (input.data_length != 0 && type == TEE_TYPE_RSA_KEYPAIR)
+-		operation.got_input = true;
+-	keyblob_out_size = TA_possibe_size(type, key_size, input, 0);
+-	output.data = TEE_Malloc(keyblob_out_size, TEE_MALLOC_FILL_ZERO);
+-	if (!output.data) {
+-		EMSG("Failed to allocate memory for output");
+-		res = KM_ERROR_MEMORY_ALLOCATION_FAILED;
+-		goto out;
+-	}
+-	switch (type) {
+-	case TEE_TYPE_AES:
+-		res = TA_aes_update(&operation, &input, &output, &keyblob_out_size,
+-				    input_provided, &input_consumed,
+-				    &in_params, &is_input_ext);
+-		break;
+-	case TEE_TYPE_RSA_KEYPAIR:
+-		res = TA_rsa_update(&operation, &input, &output,
+-				    &keyblob_out_size, key_size,
+-				    &input_consumed, input_provided, obj_h);
+-		break;
+-	case TEE_TYPE_ECDSA_KEYPAIR:
+-		res = TA_ec_update(&operation, &input, &output,
+-				   &input_consumed, input_provided);
+-		break;
+-	default:/* HMAC */
+-		TEE_MACUpdate(*operation.operation, input.data,
+-			      input.data_length);
+-		input_consumed = input_provided;
+-	}
+-	if (res != KM_ERROR_OK) {
+-		EMSG("Update operation failed with error code %x", res);
+-		goto out;
+-	}
+-
+-out:
+-	out += TA_serialize_rsp_err(out, out_end, &res, &oob);
+-	if (oob) {
+-		EMSG("Out of output buffer space");
+-		res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-	}
+-	if (res == KM_ERROR_OK) {
+-		out += TA_serialize_blob_akms(out, out_end, &output, &oob);
+-		if (oob) {
+-			EMSG("Out of output buffer space");
+-			res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-			goto exit;
+-		}
+-		if (TA_is_out_of_bounds(out, out_end, SIZE_LENGTH_AKMS)) {
+-			EMSG("Out of output buffer space");
+-			res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-			goto exit;
+-		}
+-		TEE_MemMove(out, &input_consumed, SIZE_LENGTH_AKMS);
+-		out += SIZE_LENGTH_AKMS;
+-		out += TA_serialize_auth_set(out, out_end, &out_params, &oob);
+-		if (oob) {
+-			EMSG("Out of output buffer space");
+-			res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-			goto exit;
+-		}
+-		TA_update_operation(operation_handle, &operation);
+-	}
++	/* HMAC */
++	TEE_MACUpdate(operation.operation, req->input, 0);
+ 
+-exit:
+-	params[1].memref.size = out - (uint8_t *)params[1].memref.buffer;
++	TA_update_operation(operation_handle, &operation);
+ 
+-	if (input.data && is_input_ext)
+-		TEE_Free(input.data);
+-	if (output.data)
+-		TEE_Free(output.data);
+-	if (obj_h != TEE_HANDLE_NULL)
+-		TEE_FreeTransientObject(obj_h);
+-	if (key_material)
+-		TEE_Free(key_material);
+-	if (res != KM_ERROR_OK)
++out:
++	resp->error = res;
++	if (res != KM_ERROR_OK) {
+ 		TA_abort_operation(operation_handle);
+-	TA_free_params(&params_t);
+-	TA_free_params(&in_params);
+-	TA_free_params(&out_params);
++	}
+ 	return res;
+ }
+ 
+@@ -2699,220 +2330,55 @@
+  * Finishes an ongoing operation started with begin, processing all of the
+  * as-yet-unprocessed data provided by update(s)
+  */
+-static keymaster_error_t TA_finish(TEE_Param params[TEE_NUM_PARAMS])
++static keymaster_error_t TA_finish(km_finish_request_t *req, km_finish_response_t *resp)
+ {
+-	uint8_t *in = NULL;
+-	uint8_t *in_end = NULL;
+-	uint8_t *out = NULL;
+-	uint8_t *out_end = NULL;
+-	size_t out_size = 0;
+ 	keymaster_operation_handle_t operation_handle = 0; /* IN */
+-	keymaster_key_param_set_t in_params = EMPTY_PARAM_SET; /* IN */
+-	keymaster_blob_t input = EMPTY_BLOB; /* IN */
+-	keymaster_blob_t signature = EMPTY_BLOB; /* IN */
+-	keymaster_key_param_set_t out_params = EMPTY_PARAM_SET; /* OUT */
+-	keymaster_blob_t output = EMPTY_BLOB; /* OUT */
+-	uint8_t *key_material = NULL;
+-	uint32_t key_size = 0;
+-	uint32_t type = 0;
+-	uint32_t keyblob_out_size = 0;
+-	uint32_t tag_len = 0;
++	keymaster_operation_t operation;
+ 	keymaster_error_t res = KM_ERROR_OK;
+-	keymaster_key_param_set_t params_t = EMPTY_PARAM_SET;
+-	keymaster_operation_t operation = EMPTY_OPERATION;
+-	TEE_ObjectHandle obj_h = TEE_HANDLE_NULL;
+-	bool is_input_ext = false;
+-	bool oob = false; /* out of bounds flag */
+-
+-	DMSG("%s %d", __func__, __LINE__);
+-
+-	in = (uint8_t *)params[0].memref.buffer;
+-	in_end = in + params[0].memref.size;
+-	out = (uint8_t *)params[1].memref.buffer;
+-	out_size = (size_t)params[1].memref.size; /* limited to 8192 */
+-	out_end = out + out_size;
+-
+-	if (!in || !out) {
+-		EMSG("Unexpected null pointer");
+-		return KM_ERROR_UNEXPECTED_NULL_POINTER;
+-	}
++	TEE_Result tee_res = TEE_SUCCESS;
++	uint32_t out_size = HMAC_SHA256_KEY_SIZE_BYTE;
++	uint8_t output;
+ 
+-	if (out_size < KM_RECV_BUF_SIZE) {
+-		EMSG("Insufficient output buffer space!");
+-		return KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-	}
+-
+-	in += TA_deserialize_op_handle(in, in_end, &operation_handle, &res);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+-	in += TA_deserialize_blob_akms(in, in_end, &signature, false, &res,
+-				       false);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+-	in += TA_deserialize_auth_set(in, in_end, &in_params, false, &res);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+-	in += TA_deserialize_blob_akms(in, in_end, &input, false, &res, true);
+-	if (res != KM_ERROR_OK)
+-		goto out;
++	operation_handle = req->op_handle;
+ 
+ 	res = TA_get_operation(operation_handle, &operation);
+ 	if (res != KM_ERROR_OK)
+ 		goto out;
+-	key_material = TEE_Malloc(operation.key->key_material_size,
+-				  TEE_MALLOC_FILL_ZERO);
+-	res = TA_restore_key(key_material, operation.key, &key_size, &type,
+-			     &obj_h, &params_t);
+-	if (res != KM_ERROR_OK)
+-		goto out;
+ 	if (operation.do_auth) {
+-		res = TA_do_auth(in_params, params_t);
++		res = TA_do_auth(req->auth_token, &operation.key);
+ 		if (res != KM_ERROR_OK) {
+-			EMSG("Authentication failed");
+ 			goto out;
+ 		}
+ 	}
+-	if (type == TEE_TYPE_AES && operation.mode == KM_MODE_GCM)
+-		tag_len = operation.mac_length / 8; /* from bits to bytes */
+ 
+-	keyblob_out_size = TA_possibe_size(type, key_size, input, tag_len);
+-	output.data = TEE_Malloc(keyblob_out_size, TEE_MALLOC_FILL_ZERO);
+-	if (!output.data) {
+-		EMSG("Failed to allocate memory for output");
+-		res = KM_ERROR_MEMORY_ALLOCATION_FAILED;
+-		goto out;
++	/* HMAC */
++	if (operation.purpose == KM_PURPOSE_SIGN) {
++		tee_res = TEE_MACComputeFinal(operation.operation, req->input, 0,
++					&output, &out_size);
++		resp->output = output;
++	} else {/* KM_PURPOSE_VERIFY */
++		tee_res = TEE_MACCompareFinal(operation.operation, req->input, 0,
++					req->signature, 0);
++		if (tee_res == TEE_ERROR_MAC_INVALID)
++			res = KM_ERROR_VERIFICATION_FAILED;
+ 	}
+-	switch (type) {
+-	case TEE_TYPE_AES:
+-		res = TA_aes_finish(&operation, &input, &output,
+-				    &keyblob_out_size, tag_len, &is_input_ext,
+-				    &in_params);
+-		break;
+-	case TEE_TYPE_RSA_KEYPAIR:
+-		res = TA_rsa_finish(&operation, &input, &output,
+-				    &keyblob_out_size, key_size,
+-				    signature, obj_h, &is_input_ext);
+-		break;
+-	case TEE_TYPE_ECDSA_KEYPAIR:
+-		res = TA_ec_finish(&operation, &input, &output, &signature,
+-				   &keyblob_out_size, key_size, &is_input_ext);
+-		break;
+-	default: /* HMAC */
+-		if (operation.purpose == KM_PURPOSE_SIGN) {
+-			TEE_MACComputeFinal(*operation.operation, input.data,
+-					    input.data_length, output.data,
+-					    &keyblob_out_size);
+-			/* Trim out size to KM_TAG_MAC_LENGTH */
+-			if (operation.mac_length != UNDEFINED) {
+-				if (keyblob_out_size >
+-				    operation.mac_length / 8) {
+-					DMSG("Trim HMAC out size to %d",
+-					     operation.mac_length);
+-					keyblob_out_size =
+-						operation.mac_length / 8;
+-				}
+-			}
+-		} else { /* KM_PURPOSE_VERIFY */
+-			res = TEE_MACCompareFinal(*operation.operation,
+-						  input.data,
+-						  input.data_length,
+-						  signature.data,
+-						  signature.data_length);
+-			keyblob_out_size = 0;
+-			/* Convert error code to Android style */
+-			if (res == (int) TEE_ERROR_MAC_INVALID)
+-				res = KM_ERROR_VERIFICATION_FAILED;
+-		}
+-	}
+-	if (res != TEE_SUCCESS) {
+-		EMSG("Finish operation failed with error code %x", res);
+-		goto out;
+-	}
+-	output.data_length = keyblob_out_size;
+ 
+ out:
+-	out += TA_serialize_rsp_err(out, out_end, &res, &oob);
+-	if (oob) {
+-		EMSG("Out of output buffer space");
+-		res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-	}
+-	if (res == KM_ERROR_OK) {
+-		out += TA_serialize_blob_akms(out, out_end, &output, &oob);
+-		if (oob) {
+-			EMSG("Out of output buffer space");
+-			res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-			goto exit;
+-		}
+-		out += TA_serialize_auth_set(out, out_end, &out_params, &oob);
+-		if (oob) {
+-			EMSG("Out of output buffer space");
+-			res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-			goto exit;
+-		}
+-	}
+-
+-exit:
+-	params[1].memref.size = out - (uint8_t *)params[1].memref.buffer;
+-
++	resp->error = res;
+ 	TA_abort_operation(operation_handle);
+-	if (input.data && is_input_ext)
+-		TEE_Free(input.data);
+-	if (output.data)
+-		TEE_Free(output.data);
+-	if (signature.data)
+-		TEE_Free(signature.data);
+-	if (obj_h != TEE_HANDLE_NULL)
+-		TEE_FreeTransientObject(obj_h);
+-	if (key_material)
+-		TEE_Free(key_material);
+-	TA_free_params(&params_t);
+-	TA_free_params(&in_params);
+-	TA_free_params(&out_params);
+ 	return res;
+ }
+ 
+ /* Aborts the in-progress operation */
+-static keymaster_error_t TA_abort(TEE_Param params[TEE_NUM_PARAMS])
++static keymaster_error_t TA_abort(km_abort_request_t *req, km_abort_response_t *resp)
+ {
+-	uint8_t *in = NULL;
+-	uint8_t *in_end = NULL;
+-	uint8_t *out = NULL;
+-	uint8_t *out_end = NULL;
+-	size_t out_size = 0;
+ 	keymaster_error_t res = KM_ERROR_OK;
+ 	keymaster_operation_handle_t operation_handle = 0; /* IN */
+-	bool oob = false; /* out of bounds flag */
+-
+-	DMSG("%s %d", __func__, __LINE__);
+ 
+-	in = (uint8_t *)params[0].memref.buffer;
+-	in_end = in + params[0].memref.size;
+-	out = (uint8_t *)params[1].memref.buffer;
+-	out_size = (size_t)params[1].memref.size; /* limited to 8192 */
+-	out_end = out + out_size;
+-
+-	if (!in || !out) {
+-		EMSG("Unexpected null pointer");
+-		return KM_ERROR_UNEXPECTED_NULL_POINTER;
+-	}
+-
+-	if (out_size < KM_RECV_BUF_SIZE) {
+-		EMSG("Insufficient output buffer space!");
+-		return KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-	}
+-
+-	in += TA_deserialize_op_handle(in, in_end, &operation_handle, &res);
+-	if (res != KM_ERROR_OK)
+-		goto out;
++	operation_handle = req->op_handle;
+ 	res = TA_abort_operation(operation_handle);
+ 
+-out:
+-	out += TA_serialize_rsp_err(out, out_end, &res, &oob);
+-	if (oob) {
+-		EMSG("Out of output buffer space");
+-		res = KM_ERROR_INSUFFICIENT_BUFFER_SPACE;
+-	}
+-	params[1].memref.size = out - (uint8_t *)params[1].memref.buffer;
++	resp->error = res;
+ 	return res;
+ }
+ 
+@@ -2932,67 +2398,18 @@
+ 
+ 	switch(cmd_id) {
+ 	/* Keymaster commands */
+-	case KM_CONFIGURE:
+-		DMSG("KM_CONFIGURE");
+-		return TA_configure(params);
+-	case KM_GET_VERSION:
+-		DMSG("KM_GET_VERSION");
+-		return TA_getVersion(params);
+-	case KM_ADD_RNG_ENTROPY:
+-		DMSG("KM_ADD_RNG_ENTROPY");
+-		return TA_addRngEntropy(params);
+-	case KM_GENERATE_KEY:
+-		DMSG("KM_GENERATE_KEY");
+-		return TA_generateKey(params);
+-	case KM_GET_KEY_CHARACTERISTICS:
+-		DMSG("KM_GET_KEY_CHARACTERISTICS");
+-		return TA_getKeyCharacteristics(params);
+-	case KM_IMPORT_KEY:
+-		DMSG("KM_IMPORT_KEY");
+-		return TA_importKey(params);
+-	case KM_EXPORT_KEY:
+-		DMSG("KM_EXPORT_KEY");
+-		return TA_exportKey(params);
+-	case KM_ATTEST_KEY:
+-		DMSG("KM_ATTEST_KEY");
+-		return TA_attestKey(params);
+-	case KM_UPGRADE_KEY:
+-		DMSG("KM_UPGRADE_KEY");
+-		return TA_upgradeKey(params);
+-	case KM_DELETE_KEY:
+-		DMSG("KM_DELETE_KEY");
+-		return TA_deleteKey(params);
+-	case KM_DELETE_ALL_KEYS:
+-		DMSG("KM_DELETE_ALL_KEYS");
+-		return TA_deleteAllKeys(params);
+-	case KM_DESTROY_ATT_IDS:
+-		DMSG("KM_DESTROY_ATT_IDS");
+-		return TA_destroyAttestationIds(params);
+ 	case KM_BEGIN:
+ 		DMSG("KM_BEGIN");
+-		return TA_begin(params);
++		return TA_begin(params[0].memref.buffer, params[1].memref.buffer);
+ 	case KM_UPDATE:
+ 		DMSG("KM_UPDATE");
+-		return TA_update(params);
++		return TA_update(params[0].memref.buffer, params[1].memref.buffer);
+ 	case KM_FINISH:
+ 		DMSG("KM_FINISH");
+-		return TA_finish(params);
++		return TA_finish(params[0].memref.buffer, params[1].memref.buffer);
+ 	case KM_ABORT:
+ 		DMSG("KM_ABORT");
+-		return TA_abort(params);
+-#ifdef CFG_ATTESTATION_PROVISIONING
+-	/* Provisioning commands */
+-	case KM_SET_ATTESTATION_KEY:
+-		DMSG("KM_SET_ATTESTATION_KEY");
+-		return TA_SetAttestationKey(params);
+-	case KM_APPEND_ATTESTATION_CERT_CHAIN:
+-		DMSG("KM_APPEND_ATTESTATION_CERT_CHAIN");
+-		return TA_AppendAttestationCertKey(params);
+-#endif
+-	/* Gatekeeper commands */
+-	case KM_GET_AUTHTOKEN_KEY:
+-		DMSG("KM_GET_AUTHTOKEN_KEY");
+-		return TA_GetAuthTokenKey(params);
++		return TA_abort(params[0].memref.buffer, params[1].memref.buffer);
+ 
+ 	default:
+ 		DMSG("Unknown command %d",cmd_id);
